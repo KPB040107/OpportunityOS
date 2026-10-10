@@ -4,7 +4,7 @@ A student opportunity agent orchestrated by n8n. AI extracts evidence; determini
 
 ## Current status
 
-Slice 0 foundation is in progress. n8n runs locally with persistent storage and a public webhook-only tunnel. The user reported successful Supabase writes, restart persistence, Gemini generation, outgoing and incoming email, and a Calendar test event. Actual AI quotas and the GitHub backup remain pending. See docs/progress.md for verification details.
+Slice 0 foundation is accepted. n8n runs locally with persistent storage and a public webhook-only tunnel. The user reported successful Supabase writes, restart persistence, Gemini generation, outgoing and incoming email, and a Calendar test event. The private GitHub backup is verified. Gemini free-tier limits were inspected in AI Studio on October 10, 2026: 15 requests/minute, 250,000 input tokens/minute, and 500 requests/day. See docs/progress.md for verification details.
 
 ## Start locally
 

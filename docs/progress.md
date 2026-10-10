@@ -1,6 +1,6 @@
 # Build progress
 
-Current slice: 0 Foundation, in progress.
+Current slice: 0 Foundation, accepted on October 10, 2026. Slice 1 website base is starting.
 
 Prepared: Docker Compose with persistent storage; private encryption-key setup; events migration with read-only per-user access; authenticated foundation workflow; verification script.
 
@@ -18,7 +18,7 @@ Public tunnel: verified Cloudflare executable downloaded; webhook-only gateway a
 
 Gemini setup: user reported that the runtime key and n8n credential setup are done, then reported completing the Gemini connection test. Prepared a manual Basic LLM Chain connection test with no profile data or side effects. Its node versions and parameter names were checked against the installed n8n node definitions; the workflow defaults to models/gemini-3.5-flash-lite. Actual account quotas still need to be recorded. The connection-test result is user-reported, not independently inspected.
 
-Acceptance still pending: runtime account quotas.
+Gemini account quotas: inspected the signed-in AI Studio Rate Limit page for the project linked to the OpportunityOS key on October 10, 2026. Gemini 3.5 Flash Lite is on Free tier with limits of 15 RPM, 250,000 input TPM, and 500 RPD. The table showed peak usage of 1 RPM, 19 TPM, and 1 RPD over the last 28 days; these are historical peaks, not remaining allowance. No billing was enabled. Quotas are per project and can change; recheck before rehearsal. Daily reset follows midnight Pacific time per Google's documentation. See config/ai-quota.json.
 
 Dedicated agent mailbox: opportunityos0001@gmail.com, supplied by the user. Use it for incoming forwarded opportunity emails and outgoing agent notifications; it does not limit opportunity sources to Gmail. Mailbox tests are complete per the user's reports.
 
@@ -36,10 +36,10 @@ Google Calendar API: user reported enabling it. Earlier messages gave different 
 
 Google OAuth consent: user reported completing the configuration and adding opportunityos0001@gmail.com as a test user. Keep the app in Testing mode and reconnect the Calendar credential before the demo if the testing token expires.
 
-Next objective: record actual Gemini account quotas to finish the foundation checklist.
+Next objective: implement Slice 1 authentication, editable profile, text/URL intake, saved processing inbox, and activity with n8n ingestion.
 
 Source control: initialized the local main branch, confirmed .env and runtime files are ignored, scanned source files for common credential tokens, and checked the staged changes for whitespace errors. Committed the 17 foundation files as f57eb06. Created the private https://github.com/KPB040107/OpportunityOS repository, configured origin, and successfully pushed main with upstream tracking.
 
-No slice tag or prototype tag is justified yet. No later slice has begun.
+Foundation accepted using the user-reported integration tests, independently checked restart health and gateway checks, observed Calendar authorization, verified remote backup, and inspected AI account limits. Tag slice-0 records this boundary. Prototype acceptance remains pending.
 
 Initial commit message: `chore: prepare OpportunityOS slice 0 foundation`

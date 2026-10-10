@@ -1,0 +1,13 @@
+{
+  "provider": "gemini",
+  "model": "models/gemini-3.5-flash-lite",
+  "tier": "free",
+  "observedAt": "2026-10-10",
+  "requestsPerMinute": 15,
+  "inputTokensPerMinute": 250000,
+  "requestsPerDay": 500,
+  "dailyResetTimezone": "America/Los_Angeles",
+  "source": "Signed-in Google AI Studio project Rate Limit table",
+  "documentation": "https://ai.google.dev/gemini-api/docs/rate-limits",
+  "note": "Observed limits, not guaranteed capacity. Recheck before the demo. Do not enable paid fallback."
+}
