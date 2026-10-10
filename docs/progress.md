@@ -18,7 +18,7 @@ Public tunnel: verified Cloudflare executable downloaded; webhook-only gateway a
 
 Gemini setup: user reported that the runtime key and n8n credential setup are done, then reported completing the Gemini connection test. Prepared a manual Basic LLM Chain connection test with no profile data or side effects. Its node versions and parameter names were checked against the installed n8n node definitions; the workflow defaults to models/gemini-3.5-flash-lite. Actual account quotas still need to be recorded. The connection-test result is user-reported, not independently inspected.
 
-Acceptance still pending: runtime account quotas; GitHub repository and remote backup.
+Acceptance still pending: runtime account quotas.
 
 Dedicated agent mailbox: opportunityos0001@gmail.com, supplied by the user. Use it for incoming forwarded opportunity emails and outgoing agent notifications; it does not limit opportunity sources to Gmail. Mailbox tests are complete per the user's reports.
 
@@ -36,10 +36,10 @@ Google Calendar API: user reported enabling it. Earlier messages gave different 
 
 Google OAuth consent: user reported completing the configuration and adding opportunityos0001@gmail.com as a test user. Keep the app in Testing mode and reconnect the Calendar credential before the demo if the testing token expires.
 
-Next objective: prepare the GitHub repository and remote backup, then record actual Gemini account quotas to finish the foundation checklist.
+Next objective: record actual Gemini account quotas to finish the foundation checklist.
 
-Source control preparation: initialized the local main branch, confirmed .env and runtime files are ignored, scanned source files for common credential tokens, and checked the staged changes for whitespace errors. Source files are prepared for the initial foundation commit; no GitHub remote exists yet.
+Source control: initialized the local main branch, confirmed .env and runtime files are ignored, scanned source files for common credential tokens, and checked the staged changes for whitespace errors. Committed the 17 foundation files as f57eb06. Created the private https://github.com/KPB040107/OpportunityOS repository, configured origin, and successfully pushed main with upstream tracking.
 
 No slice tag or prototype tag is justified yet. No later slice has begun.
 
-Suggested commit message: `chore: prepare OpportunityOS slice 0 foundation`
+Initial commit message: `chore: prepare OpportunityOS slice 0 foundation`
