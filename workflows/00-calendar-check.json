@@ -1,0 +1,59 @@
+{
+  "name": "OpportunityOS 00 Calendar write check",
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "Asia/Kolkata" },
+  "nodes": [
+    {
+      "id": "manual", "name": "Run one calendar write check",
+      "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1,
+      "position": [0, 0], "parameters": {}
+    },
+    {
+      "id": "create-event", "name": "Create the demo calendar test event",
+      "type": "n8n-nodes-base.googleCalendar", "typeVersion": 1.3,
+      "position": [260, 0], "retryOnFail": false,
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendar": { "__rl": true, "mode": "list", "value": "" },
+        "start": "={{ $now.setZone('Asia/Kolkata').plus({ days: 1 }).startOf('day').plus({ hours: 10 }).toISO() }}",
+        "end": "={{ $now.setZone('Asia/Kolkata').plus({ days: 1 }).startOf('day').plus({ hours: 10, minutes: 15 }).toISO() }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "id": "0000000ca1e0da0001",
+          "summary": "OpportunityOS setup test - calendar",
+          "description": "This is a disposable setup test created by n8n on the OpportunityOS demo calendar. No opportunity was processed and no application was submitted. Delete this event after confirming it appears.",
+          "sendUpdates": "none",
+          "showMeAs": "transparent",
+          "visibility": "private"
+        }
+      }
+    },
+    {
+      "id": "verify", "name": "Confirm Google returned the saved event",
+      "type": "n8n-nodes-base.code", "typeVersion": 2,
+      "position": [520, 0],
+      "parameters": {
+        "jsCode": "const event = $input.first().json; if (event.id !== '0000000ca1e0da0001' || event.status === 'cancelled') throw new Error('Calendar test did not return the expected saved event'); return [{json:{verified:true,message:'Calendar write verified',event_id:event.id,start:event.start,end:event.end,calendar_link:event.htmlLink}}];"
+      }
+    },
+    {
+      "id": "note", "name": "Calendar test instructions",
+      "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
+      "position": [0, -250],
+      "parameters": {
+        "content": "## Slice 0 Calendar write check\nSelect OpportunityOS Calendar credentials AND the separate demo calendar you created. The calendar selector is intentionally empty. Execute once; the test creates a private event tomorrow, 10:00-10:15 IST, with no attendees or reminders. The fixed event ID prevents duplicate events: rerunning may return 409 Already exists. Verify it in Google Calendar and delete it manually afterward. No AI or database calls. Do not publish this test.",
+        "width": 850, "height": 195
+      }
+    }
+  ],
+  "connections": {
+    "Run one calendar write check": {
+      "main": [[{ "node": "Create the demo calendar test event", "type": "main", "index": 0 }]]
+    },
+    "Create the demo calendar test event": {
+      "main": [[{ "node": "Confirm Google returned the saved event", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {}, "tags": []
+}

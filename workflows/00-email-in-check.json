@@ -1,0 +1,53 @@
+{
+  "name": "OpportunityOS 00 Incoming email check",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "receive",
+      "name": "Listen for the plus-addressed setup email",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.2,
+      "position": [0, 0],
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "nothing",
+        "downloadAttachments": false,
+        "format": "simple",
+        "options": {
+          "customEmailConfig": "[\"UNSEEN\",[\"HEADER\",\"TO\",\"opportunityos0001+setupcheck@gmail.com\"],[\"HEADER\",\"SUBJECT\",\"OpportunityOS setup test - incoming email\"]]",
+          "trackLastMessageId": true
+        }
+      }
+    },
+    {
+      "id": "verify",
+      "name": "Confirm incoming email and its routing address",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 0],
+      "parameters": {
+        "jsCode": "const expected = 'opportunityos0001+setupcheck@gmail.com'; const gather = v => typeof v === 'string' ? v : Array.isArray(v) ? v.map(gather).join(' ') : v && typeof v === 'object' ? [v.address, v.text, v.value].map(gather).join(' ') : ''; return $input.all().map(item => { const email = item.json; const subject = email.subject ?? email.metadata?.subject; if (subject !== 'OpportunityOS setup test - incoming email') throw new Error('Unexpected test subject'); const recipients = gather([email.to, email.headers?.to, email.headers?.['delivered-to'], email.metadata?.to, email.metadata?.['delivered-to']]).toLowerCase(); const addresses = recipients.match(/[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+/g) ?? []; if (!addresses.includes(expected)) throw new Error('Plus-address was not preserved in recipient fields. Inspect the IMAP output.'); return {json:{verified:true,message:'Incoming email and plus-address routing verified',recipient:expected}}; });"
+      }
+    },
+    {
+      "id": "note",
+      "name": "Incoming email test instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [0, -260],
+      "parameters": {
+        "content": "## Slice 0 incoming mailbox check\nChoose OpportunityOS Email In. Click Execute workflow, then send a fresh email to opportunityos0001+setupcheck@gmail.com with subject OpportunityOS setup test - incoming email. Do not open it in Gmail before the trigger receives it: the test fetches unread matching mail only. It leaves messages unread, downloads no attachments, makes no AI call, and writes no database record. Do not publish this test. Stop listening after verification.",
+        "width": 760,
+        "height": 200
+      }
+    }
+  ],
+  "connections": {
+    "Listen for the plus-addressed setup email": {
+      "main": [[{ "node": "Confirm incoming email and its routing address", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

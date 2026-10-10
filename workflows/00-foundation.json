@@ -1,0 +1,39 @@
+{
+  "name": "OpportunityOS 00 Foundation connection check",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "foundation-webhook", "name": "Accept an authenticated foundation check",
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2,
+      "position": [0, 0], "webhookId": "opportunityos-foundation",
+      "parameters": { "httpMethod": "POST", "path": "opportunityos-foundation", "authentication": "headerAuth", "responseMode": "responseNode", "options": {} }
+    },
+    {
+      "id": "validate", "name": "Validate the test user identifier",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [240, 0],
+      "parameters": { "jsCode": "const id = $input.first().json.body?.user_id; if (typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) throw new Error('A valid test Auth user UUID is required'); return [{json:{user_id:id}}];" }
+    },
+    {
+      "id": "insert-event", "name": "Persist the foundation event",
+      "type": "n8n-nodes-base.postgres", "typeVersion": 2.6, "position": [480, 0],
+      "parameters": { "operation": "executeQuery", "query": "insert into public.events (user_id, stage, level, message) values ($1::uuid, 'foundation', 'info', 'Public webhook reached Supabase') returning id as event_id;", "options": { "queryReplacement": "={{ [$json.user_id] }}" } }
+    },
+    {
+      "id": "respond", "name": "Confirm the persisted event",
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.4, "position": [720, 0],
+      "parameters": { "respondWith": "json", "responseBody": "={{ { event_id: $json.event_id } }}", "options": { "responseCode": 201 } }
+    },
+    {
+      "id": "note", "name": "Foundation boundary",
+      "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [0, -240],
+      "parameters": { "content": "## Slice 0 connection check\nSelect Header Auth and Postgres credentials before activation. Only the builder uses this endpoint with a test Auth user. Application ingestion will derive ownership from a verified user session. No AI calls or external actions occur here.", "height": 180, "width": 840 }
+    }
+  ],
+  "connections": {
+    "Accept an authenticated foundation check": { "main": [[{ "node": "Validate the test user identifier", "type": "main", "index": 0 }]] },
+    "Validate the test user identifier": { "main": [[{ "node": "Persist the foundation event", "type": "main", "index": 0 }]] },
+    "Persist the foundation event": { "main": [[{ "node": "Confirm the persisted event", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {}, "tags": []
+}

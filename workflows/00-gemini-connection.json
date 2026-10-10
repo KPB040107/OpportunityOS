@@ -1,0 +1,52 @@
+{
+  "name": "OpportunityOS 00 Gemini connection check",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "manual", "name": "Run one AI connection check",
+      "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1,
+      "position": [0, 0], "parameters": {}
+    },
+    {
+      "id": "chain", "name": "Request a harmless connection confirmation",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm", "typeVersion": 1.7,
+      "position": [240, 0],
+      "parameters": {
+        "promptType": "define",
+        "text": "This is a connection test. Reply with exactly CONNECTION_OK and no other text.",
+        "hasOutputParser": false,
+        "needsFallback": false,
+        "batching": { "batchSize": 1 }
+      },
+      "retryOnFail": false
+    },
+    {
+      "id": "gemini", "name": "Use the configured Gemini credential",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", "typeVersion": 1.2,
+      "position": [240, 220],
+      "parameters": { "modelName": "models/gemini-3.5-flash-lite", "options": { "maxOutputTokens": 1024 } }
+    },
+    {
+      "id": "verify", "name": "Verify the AI confirmation",
+      "type": "n8n-nodes-base.code", "typeVersion": 2,
+      "position": [600, 0],
+      "parameters": { "jsCode": "const text = $input.first().json.text; if (typeof text !== 'string' || text.trim() !== 'CONNECTION_OK') throw new Error('Gemini did not return the expected confirmation; inspect the chain output before retrying.'); return [{json:{verified:true,message:'Gemini generation verified'}}];" }
+    },
+    {
+      "id": "note", "name": "Connection test limits",
+      "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
+      "position": [0, -240],
+      "parameters": {
+        "content": "## Slice 0 AI connection test\nSelect OpportunityOS Gemini on the model node. Confirm the account is on the free tier. This workflow runs manually, requests only CONNECTION_OK, does not send profile or opportunity data, and has no side effects. Check the model dropdown if the configured model is unavailable. No automatic retries or fallback. Record actual account quotas separately. Do not publish this test.",
+        "width": 850, "height": 190
+      }
+    }
+  ],
+  "connections": {
+    "Run one AI connection check": { "main": [[{ "node": "Request a harmless connection confirmation", "type": "main", "index": 0 }]] },
+    "Use the configured Gemini credential": { "ai_languageModel": [[{ "node": "Request a harmless connection confirmation", "type": "ai_languageModel", "index": 0 }]] },
+    "Request a harmless connection confirmation": { "main": [[{ "node": "Verify the AI confirmation", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {}, "tags": []
+}
