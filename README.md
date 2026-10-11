@@ -4,7 +4,7 @@ A student opportunity agent orchestrated by n8n. AI extracts evidence; determini
 
 ## Current status
 
-Slice 0 foundation is accepted. n8n runs locally with persistent storage and a public webhook-only tunnel. The user reported successful Supabase writes, restart persistence, Gemini generation, outgoing and incoming email, and a Calendar test event. The private GitHub backup is verified. Gemini free-tier limits were inspected in AI Studio on October 10, 2026: 15 requests/minute, 250,000 input tokens/minute, and 500 requests/day. See docs/progress.md for verification details.
+Slices 0 and 1 are accepted. The website supports authentication, profile editing, text/URL intake, a saved-submission inbox, and activity; the user reported completing signup confirmation. n8n runs locally with persistent storage and a public webhook-only tunnel. The user reported successful Supabase writes, restart persistence, Gemini generation, outgoing and incoming email, and a Calendar test event. The private GitHub backup is verified. Gemini free-tier limits were inspected in AI Studio on October 10, 2026: 15 requests/minute, 250,000 input tokens/minute, and 500 requests/day. See docs/progress.md for verification details. Structured opportunity understanding is next.
 
 ## Start locally
 
@@ -41,7 +41,7 @@ Standing rules, weekly plan, and constrained AI Agent tools remain event additio
 
 ## Website base (Slice 1)
 
-The local website is in `web`. It includes sign-in/sign-up, an editable profile, text or website-link intake, a saved-submission inbox, and activity. Sign-in, profile save, text/URL intake, ownership isolation, and overlapping duplicate requests have been verified. Slice 1 acceptance still requires signup and email confirmation; see docs/progress.md. Structured extraction and decisions arrive in later slices.
+The local website is in `web`. It includes sign-in/sign-up, an editable profile, text or website-link intake, a saved-submission inbox, and activity. Sign-in, profile save, text/URL intake, ownership isolation, and overlapping duplicate requests have been verified. Slice 1 is accepted with user-reported signup confirmation; see docs/progress.md. Structured extraction and decisions arrive in later slices.
 
 1. Apply `supabase/migrations/0002_website_base.sql` after the foundation migration. The checked schema restricts reads by owner and uses transactional functions for writes. Run `supabase/tests/0002_website_base.test.sql` to verify isolation; its temporary data is rolled back.
 2. Copy `web/.env.example` to `web/.env.local` and set the public Supabase project URL and publishable key. No service-role key is used in the website. The local builder's configuration is already set and is ignored by Git.

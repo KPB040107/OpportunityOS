@@ -1,6 +1,6 @@
 # Build progress
 
-Current slice: 1 Website base, implemented and undergoing acceptance. Slice 0 Foundation was accepted on October 10, 2026.
+Current slice: 1 Website base, accepted on October 11, 2026. Slice 0 Foundation was accepted on October 10, 2026. Next: Slice 2 Understand.
 
 Prepared: Docker Compose with persistent storage; private encryption-key setup; events migration with read-only per-user access; authenticated foundation workflow; verification script.
 
@@ -58,4 +58,6 @@ Local website runs at http://localhost:3000 using scripts/start-website.ps1. The
 
 Concurrent ingestion: two independent n8n executions began 74 milliseconds apart and overlapped while the first transaction held its unique-key lock for eight seconds. Both completed successfully and returned the same raw-item ID; exactly one returned was_created=true. The second waited for the first transaction, then returned was_created=false. Activity shows one event for that fixture. The manual-only test workflow is inactive. The inbox contains four clearly labelled setup fixtures (text, stored URL, sequential retry and overlapping transactions); none represents a real opening.
 
-Signup configuration: the Auth Site URL is http://localhost:3000 and the exact http://localhost:3000/auth/callback redirect is allowed. Prepared Gmail SMTP settings for the dedicated agent mailbox; the builder must enter the existing app password and save them. The provider warning describes personal-email deliverability limitations and does not establish successful delivery. A real signup and email-confirmation test, SMTP verification, and final Slice 1 acceptance remain pending. No slice-1 tag is justified until these gates pass.
+Signup configuration: the Auth Site URL is http://localhost:3000 and the exact http://localhost:3000/auth/callback redirect is allowed. Prepared Gmail SMTP settings for the dedicated agent mailbox, with the app password entered by the builder directly in Supabase. On October 11, the user reported completing signup confirmation. Email delivery and confirmation completion are user-reported; credentials and the final SMTP settings were not independently inspected. Existing-account sign-in and authenticated saves were independently verified earlier. The provider warning describes personal-email deliverability limitations; future delivery still requires monitoring.
+
+Slice 1 accepted on October 11, 2026 using the user-reported signup confirmation and independently verified profile, ingestion, ownership, concurrency, and build checks. A fresh health check returned website HTTP 200 and n8n status ok. The source was backed up on slice-1-website-base as b20bc5f; main and tag slice-1 record the accepted boundary after the acceptance documentation commit. The fixture inbox is explicitly test data. Next: Slice 2 cleaning, hashing before AI calls, structured extraction, validation, provenance, and opportunity fingerprint deduplication. Major UI redesign remains later work.
