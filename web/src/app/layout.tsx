@@ -1,0 +1,6 @@
+import type { Metadata } from 'next';
+import './globals.css';
+export const metadata: Metadata = { title:'OpportunityOS', description:'Your student opportunity inbox. Discover, understand, decide, and follow through.' };
+export default function RootLayout({children}:{children:React.ReactNode}) {
+  return <html lang="en"><body className="min-h-screen antialiased">{children}</body></html>;
+}

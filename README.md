@@ -39,6 +39,21 @@ Do not start Slice 1 until the public authenticated webhook persists an event an
 
 Standing rules, weekly plan, and constrained AI Agent tools remain event additions.
 
+## Website base (Slice 1)
+
+The local website is in `web`. It includes sign-in/sign-up, an editable profile, text or website-link intake, a saved-submission inbox, and activity. Sign-in, profile save, text/URL intake, ownership isolation, and overlapping duplicate requests have been verified. Slice 1 acceptance still requires signup and email confirmation; see docs/progress.md. Structured extraction and decisions arrive in later slices.
+
+1. Apply `supabase/migrations/0002_website_base.sql` after the foundation migration. The checked schema restricts reads by owner and uses transactional functions for writes. Run `supabase/tests/0002_website_base.test.sql` to verify isolation; its temporary data is rolled back.
+2. Copy `web/.env.example` to `web/.env.local` and set the public Supabase project URL and publishable key. No service-role key is used in the website. The local builder's configuration is already set and is ignored by Git.
+3. Configure `workflows/01-ingest.json`: select the existing Postgres credential, set the fixed Supabase Auth project URL and public API key in the verification node, then publish it in n8n. The Compose configuration allows only the `url` builtin for the workflow's URL parser. No client-provided ownership claim or remote Auth URL is accepted. Leave execution-data retention disabled.
+4. In `web`, run `pnpm install --frozen-lockfile`, then `pnpm build`. Use Node 20.9+ and pnpm 11.25.0. Run `scripts/start-website.ps1` from the repository to open a background server at http://localhost:3000. For development, use `pnpm dev --hostname 127.0.0.1` in `web` instead.
+5. Sign in with the Supabase test user, or create an account and confirm its email. For signup, set the Auth Site URL to http://localhost:3000 and allow http://localhost:3000/auth/callback in Supabase Auth redirect settings. Configure custom SMTP to deliver confirmations beyond Supabase organization members. For the controlled demo, use the dedicated mailbox, smtp.gmail.com port 465, and its app password entered directly in Supabase. Gmail delivery limits still apply; delivery must be verified. The website uses a separate account password.
+6. Save a profile, paste an opportunity and verify the saved item plus its activity entry. A rejected/uncertain workflow response is shown as an error, never a confirmed save. Retrying unchanged content keeps the same request ID.
+
+Workflow generation: `node scripts/generate-ingest-workflow.mjs` exports a portable JSON with placeholders. `--runtime` creates an ignored `.local/01-ingest.runtime.json` using the public settings and credential references in `web/.env.local`; review this file locally before importing. Never commit runtime exports or execution payloads.
+
+Validation: `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm build` in `web`, and `node --test scripts/ingest-contract.test.mjs scripts/webhook-gateway.test.mjs` from the repository. The initial quota observations are in `config/ai-quota.json`.
+
 ## Public tunnel lifecycle
 
 The tunnel and gateway run in the background; logs and process IDs are in ignored `.local` files. Keep Docker and your computer awake while testing. Run the start helper again after a reboot; it preserves running processes and generates a fresh URL when the tunnel must restart. Always apply any changed URL with `docker compose up -d` before testing.

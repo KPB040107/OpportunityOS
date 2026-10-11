@@ -15,6 +15,8 @@ services:
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_PERSONALIZATION_ENABLED: "false"
+      # Pure URL parsing for the Ingest Code node; no filesystem/network modules.
+      NODE_FUNCTION_ALLOW_BUILTIN: "url"
       EXECUTIONS_DATA_PRUNE: "true"
       EXECUTIONS_DATA_MAX_AGE: "168"
     volumes:

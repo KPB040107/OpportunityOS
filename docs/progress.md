@@ -1,6 +1,6 @@
 # Build progress
 
-Current slice: 0 Foundation, accepted on October 10, 2026. Slice 1 website base is starting.
+Current slice: 1 Website base, implemented and undergoing acceptance. Slice 0 Foundation was accepted on October 10, 2026.
 
 Prepared: Docker Compose with persistent storage; private encryption-key setup; events migration with read-only per-user access; authenticated foundation workflow; verification script.
 
@@ -16,7 +16,7 @@ Restart check: Docker Compose restarted n8n successfully and its health endpoint
 
 Public tunnel: verified Cloudflare executable downloaded; webhook-only gateway and Quick Tunnel started in background; public URL applied to n8n without changing the encryption key. Public checks returned 404 for the root and /rest/settings and 403 for the foundation webhook without credentials. Local n8n remains healthy. Gateway security tests passed. The user reported completion of the authenticated public database-write test.
 
-Gemini setup: user reported that the runtime key and n8n credential setup are done, then reported completing the Gemini connection test. Prepared a manual Basic LLM Chain connection test with no profile data or side effects. Its node versions and parameter names were checked against the installed n8n node definitions; the workflow defaults to models/gemini-3.5-flash-lite. Actual account quotas still need to be recorded. The connection-test result is user-reported, not independently inspected.
+Gemini setup: user reported that the runtime key and n8n credential setup are done, then reported completing the Gemini connection test. Prepared a manual Basic LLM Chain connection test with no profile data or side effects. Its node versions and parameter names were checked against the installed n8n node definitions; the workflow defaults to models/gemini-3.5-flash-lite. Actual account quotas are recorded below. The connection-test result is user-reported, not independently inspected.
 
 Gemini account quotas: inspected the signed-in AI Studio Rate Limit page for the project linked to the OpportunityOS key on October 10, 2026. Gemini 3.5 Flash Lite is on Free tier with limits of 15 RPM, 250,000 input TPM, and 500 RPD. The table showed peak usage of 1 RPM, 19 TPM, and 1 RPD over the last 28 days; these are historical peaks, not remaining allowance. No billing was enabled. Quotas are per project and can change; recheck before rehearsal. Daily reset follows midnight Pacific time per Google's documentation. See config/ai-quota.json.
 
@@ -43,3 +43,19 @@ Source control: initialized the local main branch, confirmed .env and runtime fi
 Foundation accepted using the user-reported integration tests, independently checked restart health and gateway checks, observed Calendar authorization, verified remote backup, and inspected AI account limits. Tag slice-0 records this boundary. Prototype acceptance remains pending.
 
 Initial commit message: `chore: prepare OpportunityOS slice 0 foundation`
+
+## Slice 1 — website base
+
+Implemented: Next.js App Router with TypeScript, Tailwind and shadcn-style components; email/password sign-in and sign-up; cookie session refresh; profile with academic details, skills and experience levels, interests, locations and career goals; text/URL intake; original-submission inbox; activity with Realtime updates and a polling fallback. Only implemented screens appear in navigation. No AI extraction or opportunity decisions run yet.
+
+Database: applied 0002_website_base.sql in Supabase; SQL Editor returned success. Profile saves derive ownership from auth.uid() inside a restricted function. Browser clients can read their own profile, skills, raw items and events but cannot directly write raw items or events. The Ingest workflow verifies the access token against the fixed Supabase Auth endpoint, then calls an atomic insert-and-log function. Unique request IDs make uncertain retries return the existing row; changed content cannot reuse an ID. URLs are stored without fetching. DNS/redirect validation remains Slice 2 work.
+
+n8n: imported and published OpportunityOS 01 Ingest in the existing Personal project, reusing the Postgres credential. Execution payload retention is disabled for this workflow because requests carry access tokens. The live URL test found that the Code sandbox does not expose a global URL constructor; enabled only the pure `url` builtin and explicitly imported it. A public website link now passes syntax checks and reaches authentication validation.
+
+Verification on October 11, 2026: TypeScript, ESLint and production build passed. Seven Node tests passed (intake ownership, invalid/oversized payloads, injection as data, unsafe links and gateway isolation). Reversible SQL tests passed for cross-user ownership of profiles, related skills, raw items and activity; repeated request IDs; changed-content conflicts; and denial of forged activity and direct raw-item writes. The test users and rows were rolled back. Live webhook requests with missing and invalid tokens returned 401; the app intake endpoint also returned 401 without a session.
+
+Local website runs at http://localhost:3000 using scripts/start-website.ps1. The builder signed in successfully. Browser verification confirmed saving the builder's display name, submitting explicitly fictional opportunity text, storing an example.com setup URL, and displaying their persisted activity. Academic facts remain blank until the builder enters them. Cross-site intake requests return 403. The production build and lint passed again after allowing existing shorter sign-in passwords and accepting replay responses for items that have advanced beyond queued.
+
+Concurrent ingestion: two independent n8n executions began 74 milliseconds apart and overlapped while the first transaction held its unique-key lock for eight seconds. Both completed successfully and returned the same raw-item ID; exactly one returned was_created=true. The second waited for the first transaction, then returned was_created=false. Activity shows one event for that fixture. The manual-only test workflow is inactive. The inbox contains four clearly labelled setup fixtures (text, stored URL, sequential retry and overlapping transactions); none represents a real opening.
+
+Signup configuration: the Auth Site URL is http://localhost:3000 and the exact http://localhost:3000/auth/callback redirect is allowed. Prepared Gmail SMTP settings for the dedicated agent mailbox; the builder must enter the existing app password and save them. The provider warning describes personal-email deliverability limitations and does not establish successful delivery. A real signup and email-confirmation test, SMTP verification, and final Slice 1 acceptance remain pending. No slice-1 tag is justified until these gates pass.

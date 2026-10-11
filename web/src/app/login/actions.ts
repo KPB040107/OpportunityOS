@@ -1,0 +1,24 @@
+'use server';
+import { redirect } from 'next/navigation';
+import { z } from 'zod';
+import { createClient } from '@/lib/supabase/server';
+import type { FormState } from '@/lib/types';
+export async function authenticate(_state:FormState,form:FormData):Promise<FormState> {
+  const mode = form.get('mode');
+  const parsed = z.object({email:z.email(),password:z.string().min(mode==='signup'?8:1).max(128)}).safeParse({email:form.get('email'),password:form.get('password')});
+  if(!parsed.success) return {error:mode==='signup'?'Enter a valid email and a password with at least 8 characters.':'Enter your account email and password.'};
+  const supabase = await createClient();
+  if(mode==='signup') {
+    const {data,error} = await supabase.auth.signUp({...parsed.data, options:{emailRedirectTo:`${process.env.APP_ORIGIN || 'http://localhost:3000'}/auth/callback`}});
+    if(error) return {error:error.code==='over_email_send_rate_limit' ? 'Too many confirmation emails. Please wait before trying again.' : 'Could not create your account. Please check the details and try again.'};
+    if(!data.session) return {success:'Check your email to confirm your account, then sign in here.'};
+    redirect('/profile');
+  }
+  const {error} = await supabase.auth.signInWithPassword(parsed.data);
+  if(error) return {error:'Could not sign in. Check your email and password, and confirm your account email first.'};
+  redirect('/inbox');
+}
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut(); redirect('/login');
+}
