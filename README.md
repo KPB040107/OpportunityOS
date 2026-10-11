@@ -4,7 +4,7 @@ A student opportunity agent orchestrated by n8n. AI extracts evidence; determini
 
 ## Current status
 
-Slices 0 and 1 are accepted. The website supports authentication, profile editing, text/URL intake, a saved-submission inbox, and activity; the user reported completing signup confirmation. n8n runs locally with persistent storage and a public webhook-only tunnel. The user reported successful Supabase writes, restart persistence, Gemini generation, outgoing and incoming email, and a Calendar test event. The private GitHub backup is verified. Gemini free-tier limits were inspected in AI Studio on October 10, 2026: 15 requests/minute, 250,000 input tokens/minute, and 500 requests/day. See docs/progress.md for verification details. Structured opportunity understanding is next.
+Slices 0–2 are implemented. The website supports authentication, profile editing, text/URL intake, validated opportunity cards, requirements, source evidence, controlled retries and activity. n8n visibly runs Ingest and Understand. Eligibility, scoring and decisions are next in Slice 3. See docs/progress.md for acceptance evidence and known limitations. The foundation includes local persistent n8n, a temporary webhook-only tunnel, Supabase, Gemini and tested demo email/calendar credentials; some foundation tests are user-reported. Gemini free-tier limits were inspected on October 10, 2026: 15 RPM, 250,000 input TPM and 500 RPD.
 
 ## Start locally
 
@@ -41,11 +41,11 @@ Standing rules, weekly plan, and constrained AI Agent tools remain event additio
 
 ## Website base (Slice 1)
 
-The local website is in `web`. It includes sign-in/sign-up, an editable profile, text or website-link intake, a saved-submission inbox, and activity. Sign-in, profile save, text/URL intake, ownership isolation, and overlapping duplicate requests have been verified. Slice 1 is accepted with user-reported signup confirmation; see docs/progress.md. Structured extraction and decisions arrive in later slices.
+The local website is in `web`. Sign-in, profile save, text/URL intake, ownership isolation, and overlapping duplicate requests have been verified. Slice 1 is accepted with user-reported signup confirmation; see docs/progress.md. Slice 2 adds structured extraction; decisions remain Slice 3 work.
 
 1. Apply `supabase/migrations/0002_website_base.sql` after the foundation migration. The checked schema restricts reads by owner and uses transactional functions for writes. Run `supabase/tests/0002_website_base.test.sql` to verify isolation; its temporary data is rolled back.
 2. Copy `web/.env.example` to `web/.env.local` and set the public Supabase project URL and publishable key. No service-role key is used in the website. The local builder's configuration is already set and is ignored by Git.
-3. Configure `workflows/01-ingest.json`: select the existing Postgres credential, set the fixed Supabase Auth project URL and public API key in the verification node, then publish it in n8n. The Compose configuration allows only the `url` builtin for the workflow's URL parser. No client-provided ownership claim or remote Auth URL is accepted. Leave execution-data retention disabled.
+3. Configure `workflows/01-ingest.json`: select the existing Postgres credential, set the fixed Supabase Auth project URL and public API key in the verification node, then publish it in n8n. No client-provided ownership claim or remote Auth URL is accepted. Leave execution-data retention disabled. Slice 2 adds only the builtin modules required for safe public-page fetching and hashing; filesystem, process and arbitrary external modules remain unavailable.
 4. In `web`, run `pnpm install --frozen-lockfile`, then `pnpm build`. Use Node 20.9+ and pnpm 11.25.0. Run `scripts/start-website.ps1` from the repository to open a background server at http://localhost:3000. For development, use `pnpm dev --hostname 127.0.0.1` in `web` instead.
 5. Sign in with the Supabase test user, or create an account and confirm its email. For signup, set the Auth Site URL to http://localhost:3000 and allow http://localhost:3000/auth/callback in Supabase Auth redirect settings. Configure custom SMTP to deliver confirmations beyond Supabase organization members. For the controlled demo, use the dedicated mailbox, smtp.gmail.com port 465, and its app password entered directly in Supabase. Gmail delivery limits still apply; delivery must be verified. The website uses a separate account password.
 6. Save a profile, paste an opportunity and verify the saved item plus its activity entry. A rejected/uncertain workflow response is shown as an error, never a confirmed save. Retrying unchanged content keeps the same request ID.
@@ -53,6 +53,22 @@ The local website is in `web`. It includes sign-in/sign-up, an editable profile,
 Workflow generation: `node scripts/generate-ingest-workflow.mjs` exports a portable JSON with placeholders. `--runtime` creates an ignored `.local/01-ingest.runtime.json` using the public settings and credential references in `web/.env.local`; review this file locally before importing. Never commit runtime exports or execution payloads.
 
 Validation: `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm build` in `web`, and `node --test scripts/ingest-contract.test.mjs scripts/webhook-gateway.test.mjs` from the repository. The initial quota observations are in `config/ai-quota.json`.
+
+## Understand (Slice 2)
+
+1. Apply migrations `0003_understand.sql` and `0004_source_ambiguities.sql`, once each, in order. Run `supabase/tests/0003_understand.test.sql`; disposable users and rows are rolled back.
+2. Import `workflows/02-understand.json` into the same n8n project. Select the existing Postgres credential on its database nodes and Gemini credential on its model node. Publish it, then import/configure the updated Ingest workflow. Its child workflow reference must point to Understand. The 30-second queue checker also recovers a missed dispatch.
+3. Run `docker compose up -d` after changing the Compose module allowlist. After CLI import/publish, restart n8n to reload its published revision. The editor draft and published revision must match.
+4. Paste an announcement. The worker claims it atomically, prepares text, hashes it before AI, checks its per-user cache, reserves the free budget, extracts through a Basic LLM Chain and Structured Output Parser, validates literal evidence, normalizes facts, and saves cards with provenance. Exact repeated content reuses analysis. Complete identity fingerprints merge different sources while preserving each original submission. Incomplete identities conservatively stay separate.
+5. Open a card to inspect stated requirements, quotes, original text and missing facts. Failures remain visible and require an explicit retry, at most twice; no automatic retry of failed analysis. A source instruction cannot authorize an action.
+
+The reader supports public static HTML/text only, with robots checks, pinned public DNS, revalidated redirects, a 10-second fetch limit, 350 KB raw/decoded response limit and 20,000 prepared characters. Login-only, JavaScript-rendered, PDF, oversized and blocked pages need pasted text. A valid schema can still fail literal-evidence validation; such failures never create unchecked cards. At most five opportunities are extracted per submission. Source citations prove where text came from, not that a posting is genuine or still open.
+
+One extraction runs at a time, at least 60 seconds apart. The installed Gemini SDK may retry up to six times internally, so each extraction reserves seven attempts, capped at 350 reservations per Pacific day (50 extraction starts). This is conservative budgeting, not a provider usage meter. Other users of the same API project can exhaust quota independently; there is no paid fallback. Waiting items remain queued, and failures are preserved for review.
+
+Reproducible generators: `node scripts/generate-understand-workflow.mjs` and `node scripts/generate-ingest-workflow.mjs`. Their `--runtime` variants create ignored local imports using credential references, never credential secrets. `scripts/export-prototype-workflows.mjs` verifies current published snapshots in `.local/ingest-export.json` and `.local/understand-export.json`, strips credential references and replaces account settings with placeholders before writing portable exports.
+
+Checks: `node --test scripts/ingest-contract.test.mjs scripts/understand-contract.test.mjs scripts/safe-source.test.mjs scripts/webhook-gateway.test.mjs`, the SQL test above, and the website checks. `scripts/test-content-race.ps1` uses two overlapping manual executions to verify exactly one content-cache owner; its explicitly disposable fixture is removed afterward. Database helpers require Docker and the existing credential/project references in ignored `web/.env.local`. Full execution logs and database snapshots must stay in ignored `.local` files.
 
 ## Public tunnel lifecycle
 

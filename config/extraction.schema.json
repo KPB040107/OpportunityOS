@@ -1,0 +1,195 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "is_opportunity": {
+      "type": "boolean"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "application_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "internship",
+              "hackathon",
+              "scholarship",
+              "program",
+              "job",
+              "unknown"
+            ]
+          },
+          "requirements": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "cgpa",
+                    "academic_year",
+                    "graduation_year",
+                    "branch",
+                    "degree",
+                    "location",
+                    "skill",
+                    "other"
+                  ]
+                },
+                "value": {
+                  "type": "string"
+                },
+                "mandatory": {
+                  "type": "boolean"
+                },
+                "evidence": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "value",
+                "mandatory",
+                "evidence"
+              ]
+            }
+          },
+          "skills": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "ambiguity_flags": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "maxItems": 40,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "title",
+                    "organization",
+                    "deadline",
+                    "location",
+                    "type",
+                    "application_url",
+                    "description",
+                    "skills"
+                  ]
+                },
+                "quote": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field",
+                "quote"
+              ]
+            }
+          }
+        },
+        "required": [
+          "title",
+          "organization",
+          "deadline",
+          "location",
+          "application_url",
+          "description",
+          "type",
+          "requirements",
+          "skills",
+          "confidence",
+          "ambiguity_flags",
+          "evidence"
+        ]
+      }
+    }
+  },
+  "required": [
+    "is_opportunity",
+    "items"
+  ]
+}

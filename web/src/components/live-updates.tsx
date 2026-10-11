@@ -9,6 +9,7 @@ export function LiveUpdates({userId}:{userId:string}) {
     const refresh=()=>{ clearTimeout(timer); timer=setTimeout(()=>router.refresh(),250); };
     const channel=supabase.channel(`workspace:${userId}`)
       .on('postgres_changes',{event:'*',schema:'public',table:'raw_items',filter:`user_id=eq.${userId}`},refresh)
+      .on('postgres_changes',{event:'*',schema:'public',table:'opportunities',filter:`user_id=eq.${userId}`},refresh)
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'events',filter:`user_id=eq.${userId}`},refresh).subscribe();
     const poll=setInterval(refresh,15000);
     return ()=>{clearInterval(poll);clearTimeout(timer);void supabase.removeChannel(channel);};

@@ -1,0 +1,4 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+function readRun(name){const b=readFileSync(`.local/content-race-${name}.log`);const log=b[0]===255?b.toString('utf16le'):b.toString('utf8');const start=log.search(/^\{\s*$/m);const r=JSON.parse(log.slice(start,log.lastIndexOf('}')+1));const data=r.data.resultData;const output=data.runData[data.lastNodeExecuted][0].data.main[0][0].json.result;return {status:r.status,startedAt:r.startedAt,stoppedAt:r.stoppedAt,route:output.route};}
+const a=readRun('a'),b=readRun('b');assert.equal(a.status,'success');assert.equal(b.status,'success');assert.deepEqual([a.route,b.route].sort(),['new','waiting']);assert.ok(new Date(a.startedAt)<new Date(b.stoppedAt)&&new Date(b.startedAt)<new Date(a.stoppedAt));console.log(JSON.stringify({passed:true,test:'overlapping content cache claims',runs:[a,b]},null,2));

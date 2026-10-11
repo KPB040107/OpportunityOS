@@ -36,7 +36,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const { URL } = require('url'); const validate=function validateIntakeWebhook(body, authorization) {\n  const reject = (status,error) => ({valid:false,http_status:status,error});\n  if (typeof authorization !== 'string' || !/^Bearer [A-Za-z0-9._-]{20,4096}$/.test(authorization)) return reject(401,'Authentication required');\n  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !['request_id','source_type','content'].includes(key))) return reject(400,'Invalid submission fields');\n  if (typeof body.request_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.request_id)) return reject(400,'Invalid request identifier');\n  if (!['text','url'].includes(body.source_type) || typeof body.content !== 'string' || !body.content.trim() || body.content.trim().length > 20000) return reject(400,'Invalid opportunity content');\n  let content=body.content.trim();\n  if(body.source_type==='url') {\n    try {\n      if(content.length>2048) throw new Error('Long URL');\n      const url=new URL(content); const host=url.hostname.toLowerCase();\n      if(!['http:','https:'].includes(url.protocol) || url.username || url.password || (url.port && !['80','443'].includes(url.port)) || !host.includes('.') || host.endsWith('.local') || host.endsWith('.localhost') || host.endsWith('.internal') || host.startsWith('[') || /^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(host)) throw new Error('Invalid URL');\n      url.hash=''; content=url.toString();\n    } catch { return reject(400,'Enter a public website link'); }\n  }\n  return {valid:true,request_id:body.request_id,source_type:body.source_type,content,authorization};\n}; const input=$input.first().json; return [{json:validate(input.body,input.headers?.authorization)}];"
+        "jsCode": "const { URL } = require('url'); const validate=function validateIntakeWebhook(body, authorization) {\r\n  const reject = (status,error) => ({valid:false,http_status:status,error});\r\n  if (typeof authorization !== 'string' || !/^Bearer [A-Za-z0-9._-]{20,4096}$/.test(authorization)) return reject(401,'Authentication required');\r\n  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !['request_id','source_type','content'].includes(key))) return reject(400,'Invalid submission fields');\r\n  if (typeof body.request_id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.request_id)) return reject(400,'Invalid request identifier');\r\n  if (!['text','url'].includes(body.source_type) || typeof body.content !== 'string' || !body.content.trim() || body.content.trim().length > 20000) return reject(400,'Invalid opportunity content');\r\n  let content=body.content.trim();\r\n  if(body.source_type==='url') {\r\n    try {\r\n      if(content.length>2048) throw new Error('Long URL');\r\n      const url=new URL(content); const host=url.hostname.toLowerCase();\r\n      if(!['http:','https:'].includes(url.protocol) || url.username || url.password || (url.port && !['80','443'].includes(url.port)) || !host.includes('.') || host.endsWith('.local') || host.endsWith('.localhost') || host.endsWith('.internal') || host.startsWith('[') || /^\\d+\\.\\d+\\.\\d+\\.\\d+$/.test(host)) throw new Error('Invalid URL');\r\n      url.hash=''; content=url.toString();\r\n    } catch { return reject(400,'Enter a public website link'); }\r\n  }\r\n  return {valid:true,request_id:body.request_id,source_type:body.source_type,content,authorization};\r\n}; const input=$input.first().json; return [{json:validate(input.body,input.headers?.authorization)}];"
       }
     },
     {
@@ -207,8 +207,44 @@
       }
     },
     {
+      "id": "ingest-kick",
+      "name": "Discard session data before analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.first().json.raw_item_id?[{json:{}}]:[];"
+      }
+    },
+    {
+      "id": "ingest-understand",
+      "name": "Start the Understand workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2200,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "opportunityosSlice2Understand",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
       "id": "ingest-note",
-      "name": "Slice 1 boundary",
+      "name": "Ingest boundary",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -216,7 +252,7 @@
         -400
       ],
       "parameters": {
-        "content": "## Ingest — verify → save → confirm\nOwnership comes from Supabase Auth, never the request body. Database writes and activity logging are atomic. Repeated request IDs return the existing item. URLs are stored only; secure fetching and AI extraction arrive in Slice 2. Execution data is not retained because the request contains a user session token. Select your Postgres credential and configure the fixed Supabase Auth URL and public API key before publishing.",
+        "content": "## Ingest — verify → save → confirm → Understand\nOwnership comes from Supabase Auth, never the request body. Database writes and activity logging are atomic. Repeated request IDs return the existing item. Confirm the save before starting asynchronous analysis; its queue checker also recovers a missed dispatch. Session data is removed from the child input. Execution data is not retained because the request contains a user session token. Configure the fixed Supabase Auth URL, public API key and Postgres credential.",
         "height": 260,
         "width": 620
       }
@@ -319,6 +355,28 @@
         [
           {
             "node": "Return confirmed result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return confirmed result": {
+      "main": [
+        [
+          {
+            "node": "Discard session data before analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discard session data before analysis": {
+      "main": [
+        [
+          {
+            "node": "Start the Understand workflow",
             "type": "main",
             "index": 0
           }
