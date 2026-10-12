@@ -5,6 +5,9 @@ const optionalNumber = (min: number, max: number, integer = false) => z.preproce
   (integer ? z.number().int() : z.number()).min(min).max(max).nullable(),
 );
 export const skillSchema = z.object({ name: z.string().trim().min(1).max(80), level: z.enum(['beginner','intermediate','advanced']) }).strict();
+export function splitSkillNames<T extends {name:string}>(entries:T[]):T[]{
+  return entries.flatMap(entry=>entry.name.split(',').map(name=>({...entry,name:name.trim()})).filter(entry=>entry.name.length>0));
+}
 export const profileSchema = z.object({
   display_name: z.string().trim().max(100), degree: z.string().trim().max(100), branch: z.string().trim().max(100),
   academic_year: optionalNumber(1,8,true), graduation_year: optionalNumber(2000,2100,true), cgpa: optionalNumber(0,10),

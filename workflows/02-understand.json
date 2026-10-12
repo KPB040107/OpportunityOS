@@ -349,6 +349,29 @@
       }
     },
     {
+      "id": "evaluate",
+      "name": "Start Evaluate and Decide",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3000,
+        -300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "opportunityosSlice3Evaluate",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
       "id": "defer",
       "name": "Distinguish waiting from quota failure",
       "type": "n8n-nodes-base.code",
@@ -395,6 +418,17 @@
     }
   ],
   "connections": {
+    "Save facts and their provenance": {
+      "main": [
+        [
+          {
+            "node": "Start Evaluate and Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Understand a saved submission": {
       "main": [
         [

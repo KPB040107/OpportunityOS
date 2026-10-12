@@ -4,7 +4,7 @@ A student opportunity agent orchestrated by n8n. AI extracts evidence; determini
 
 ## Current status
 
-Slices 0–2 are implemented. The website supports authentication, profile editing, text/URL intake, validated opportunity cards, requirements, source evidence, controlled retries and activity. n8n visibly runs Ingest and Understand. Eligibility, scoring and decisions are next in Slice 3. See docs/progress.md for acceptance evidence and known limitations. The foundation includes local persistent n8n, a temporary webhook-only tunnel, Supabase, Gemini and tested demo email/calendar credentials; some foundation tests are user-reported. Gemini free-tier limits were inspected on October 10, 2026: 15 RPM, 250,000 input TPM and 500 RPD.
+Slices 0–3 are implemented. The website supports authentication, profile editing, text/URL intake, validated opportunity cards, requirements, evidence, controlled retries, activity, eligibility, match scores, confidence and ACT/ASK/IGNORE decisions. n8n visibly runs Ingest, Understand, and Evaluate and Decide. ACT/ASK are saved decisions; permitted actions and authenticated approvals are Slice 4. See docs/progress.md for acceptance evidence and known limitations. The foundation includes persistent local n8n, a temporary webhook-only tunnel, Supabase, Gemini and tested demo email/calendar credentials; some foundation tests are user-reported. Gemini free-tier limits were inspected on October 10, 2026: 15 RPM, 250,000 input TPM and 500 RPD.
 
 ## Start locally
 
@@ -72,9 +72,27 @@ Reproducible generators: `node scripts/generate-understand-workflow.mjs` and `no
 
 Checks: `node --test scripts/ingest-contract.test.mjs scripts/understand-contract.test.mjs scripts/safe-source.test.mjs scripts/webhook-gateway.test.mjs`, the SQL test above, and the website checks. `scripts/test-content-race.ps1` uses two overlapping manual executions to verify exactly one content-cache owner; its explicitly disposable fixture is removed afterward. Database helpers require Docker and the existing credential/project references in ignored `web/.env.local`. Full execution logs and database snapshots must stay in ignored `.local` files.
 
+## Evaluate and Decide (Slice 3)
+
+Apply migrations 0005 through 0009 in order after Slice 2. They add owned matches, a private fenced queue/cache, shared AI reservations and consistent source comparison. Run supabase/tests/0005_evaluate.test.sql; its users, results and budget changes roll back. Earlier website and Understand SQL tests must still pass.
+
+Import workflows/03-evaluate.json in the existing n8n project, select the existing Postgres and Gemini credentials, and publish it. Import the updated Understand workflow with its Execute Workflow reference to Evaluate and Decide. Restart n8n after CLI publication. The 30-second evaluation checker recovers missed dispatches, profile edits and daily deadline changes.
+
+The shared scripts/decision-contract.mjs factory runs in n8n Code nodes and tests. Basic LLM Chain and Structured Output Parser propose semantic evidence only. Both sides of each quote are checked; code computes eligibility, fixed weighted scores, confidence, reasons and policy. The visible Switch routes saved current ACT, ASK and IGNORE decisions. No action or approval workflow is wired yet. Detailed frozen formulas and conservative UNKNOWN cases are in docs/decision-policy.md.
+
+The profile lets users choose Cautious, Balanced or Autopilot. Comma-separated skills are saved individually with the selected level; each academic fact remains user-entered. Cards show a decision and reason; details show eligibility checks, score components, confidence inputs and matching quotes. Simulated submissions are labelled. Failed evaluation is visible and supports at most two explicit retries. Profile corrections reevaluate their own opportunities; old in-flight results cannot overwrite newer facts.
+
+Matching uses a per-owner cache of minimal facts, profile and model/prompt version. Identity and credentials are excluded from model input. Mode/date-only changes reuse evidence. Missing score components contribute zero without redistributing weights. Expired and ineligible cases skip matching. Extraction and matching share one in-flight AI job, 60-second spacing, and seven conservative attempt reservations per call, capped at 350 per Pacific day (50 combined starts, roughly 25 fresh extraction/matching pairs). There is no paid fallback; reservations are not an actual provider usage meter.
+
+Generate a portable export with node scripts/generate-evaluate-workflow.mjs; --runtime writes ignored credential references. The product exporter also requires .local/evaluate-export.json and checks its current published version. Do not commit runtime imports, logs or private caches.
+
+For the full test suite use Node 24+ (the profile parsing test uses native TypeScript loading) and run node --test scripts/decision-contract.test.mjs scripts/profile-skills.test.mjs scripts/understand-contract.test.mjs scripts/safe-source.test.mjs scripts/ingest-contract.test.mjs scripts/webhook-gateway.test.mjs. Website runtime remains Node 20.9+; run its lint/build checks in web.
+
+The 15 fictional fixtures in testdata/slice3-fixtures.json freeze deterministic decisions. For live matching diagnostics, scripts/prepare-slice3-demo.mjs generates a disposable guide profile and five validated fictional sources with no seeded AI result or decision. Apply its ignored seed SQL using scripts/run-database.ps1. After recording live results, the ignored cleanup SQL removes that exact disposable profile while retaining honest global AI reservations. scripts/run-evaluation-check.ps1 runs the same product nodes in an inactive fixture-only workflow to inspect Switch outputs. It requires completed live fixture proof and the Cautious test mode; diagnostics are excluded from product exports. Automatic email forwarding, real actions, approvals and event additions remain later work.
+
 ## Public tunnel lifecycle
 
-The tunnel and gateway run in the background; logs and process IDs are in ignored `.local` files. Keep Docker and your computer awake while testing. Run the start helper again after a reboot; it preserves running processes and generates a fresh URL when the tunnel must restart. Always apply any changed URL with `docker compose up -d` before testing.
+The tunnel and gateway run in the background; logs and process IDs are in ignored `.local` files. Keep Docker and your computer awake while testing. Run the start helper again after a reboot; it verifies the executable and command line before reusing a PID. If Cloudflare has expired the tunnel with "Tunnel not found", it restarts that verified tunnel and obtains a fresh URL. Always apply any changed URL with `docker compose up -d` before testing.
 
 The executable in ignored `.tools/cloudflared.exe` is Cloudflare release `2026.10.0`, verified against SHA256 `86aee4017b26625cee8484c113558f48effa4cd47f7aa05fcf425604e5d2b23c`. On another computer, obtain that executable from the official Cloudflare GitHub release and verify its checksum before starting it. Quick Tunnels are temporary development endpoints with no uptime guarantee.
 

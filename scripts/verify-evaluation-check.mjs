@@ -1,0 +1,14 @@
+import {readFileSync,writeFileSync,existsSync} from 'node:fs';
+const expected=process.argv[2],names={ACT:'ACT saved for the action slice',ASK:'ASK saved for the approval slice',IGNORE:'IGNORE saved with its reasons'};
+if(!names[expected])throw new Error('Unknown expected branch.');
+const b=readFileSync('.local/slice3-switch-check.log'),s=b[0]===255?b.toString('utf16le'):b.toString();
+const raw=JSON.parse(s.slice(s.search(/^\{\s*$/m),s.lastIndexOf('}')+1)),r=raw.data.resultData;
+if(r.error||r.lastNodeExecuted!==names[expected])throw new Error('The expected final Switch branch was not reached.');
+const codeResult=r.runData['Compute score confidence and policy'][0].data.main[0][0].json.decision;
+if(codeResult.decision!==expected||codeResult.mode!=='cautious')throw new Error('Wrong policy output or mode.');
+const cached=r.runData['Reuse verified matching before AI']?.[0].data.main[0][0].json.result.route;
+if(expected!=='IGNORE'&&cached!=='cached')throw new Error('Mode change did not reuse matching evidence.');
+const proofs=existsSync('.local/slice3-switch-proof.json')?JSON.parse(readFileSync('.local/slice3-switch-proof.json','utf8')):[];
+const proof={decision:expected,last_node:r.lastNodeExecuted,mode:codeResult.mode,score:codeResult.match_score,confidence:codeResult.confidence,reused_matching:cached==='cached',new_ai_calls:!!r.runData['Propose matching evidence only']};
+if(proof.new_ai_calls)throw new Error('Unexpected new AI call in cache verification.');
+proofs.push(proof);writeFileSync('.local/slice3-switch-proof.json',JSON.stringify(proofs,null,2));console.log(JSON.stringify(proof));

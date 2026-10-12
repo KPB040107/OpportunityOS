@@ -1,0 +1,3 @@
+These are explicitly fictional, deterministic Slice 3 fixtures. They are not real openings or the builder's profile. Their clock is frozen at 12 October 2026. The matching outputs are controlled test doubles, not claims about a live AI response. The raw texts provide reusable demo inputs; matching/decision acceptance runs against the structured validated facts.
+
+The pack covers the guide's required Slice 3 scenarios (1–4 and 7), plus missing profile facts, conflicting sources, experience, same-day deadlines, weak fit and junk. Duplicate ingestion and non-opportunity rejection also have separate Slice 1/2 integration tests. Approval, action retry and standing-rule scenarios require later slices and are not claimed complete here. PDF input remains deferred.

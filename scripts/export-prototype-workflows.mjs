@@ -3,6 +3,7 @@ import {readFileSync,writeFileSync} from 'node:fs';
 for(const [source,target,id] of [
   ['.local/ingest-export.json','workflows/01-ingest.json','opportunityosSlice1Ingest'],
   ['.local/understand-export.json','workflows/02-understand.json','opportunityosSlice2Understand'],
+  ['.local/evaluate-export.json','workflows/03-evaluate.json','opportunityosSlice3Evaluate'],
 ]) {
   const exported=JSON.parse(readFileSync(source,'utf8'));
   const workflow=Array.isArray(exported)?exported.find(w=>w.id===id):exported;
