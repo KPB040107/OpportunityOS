@@ -1,0 +1,181 @@
+{
+  "id": "opportunityosSlice5Autopilot",
+  "name": "OpportunityOS 06 Autopilot",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 300,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false
+  },
+  "nodes": [
+    {
+      "id": "schedTrigger",
+      "name": "Daily Autopilot Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "execTrigger",
+      "name": "Execute Autopilot on Demand",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        160
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "getUsers",
+      "name": "Fetch Active Users",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        80
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\n  select user_id from public.profiles\n",
+        "options": {}
+      }
+    },
+    {
+      "id": "scanDeadlines",
+      "name": "Scan Upcoming Deadlines & Followups",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        80
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\n  with deadlines as (\n    select jsonb_agg(d) as items\n    from public.get_upcoming_deadlines($1::uuid, 7) d\n  ),\n  followups as (\n    select jsonb_agg(f) as items\n    from public.claim_due_followups($1::uuid) f\n  )\n  select \n    $1::uuid as user_id,\n    coalesce((select items from deadlines), '[]'::jsonb) as deadlines,\n    coalesce((select items from followups), '[]'::jsonb) as followups\n",
+        "options": {
+          "queryReplacement": "={{ $json.user_id }}"
+        }
+      }
+    },
+    {
+      "id": "formatDigest",
+      "name": "Format Digest and Calculate Heartbeat",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        80
+      ],
+      "parameters": {
+        "jsCode": "\n  const user = $json.user_id;\n  const deadlines = $json.deadlines || [];\n  const followups = $json.followups || [];\n\n  const urgentCount = deadlines.filter(d => (d.days_remaining ?? 99) <= 3).length;\n  const subject = urgentCount > 0\n    ? `[OpportunityOS Alert] ${urgentCount} Upcoming Deadline(s) Need Attention`\n    : `[OpportunityOS] Daily Deadline Digest (${deadlines.length} opportunities)`;\n\n  const totalItems = deadlines.length + followups.length;\n\n  return [{\n    json: {\n      user_id: user,\n      subject,\n      items_count: totalItems,\n      deadlines_count: deadlines.length,\n      followups_count: followups.length,\n      deadlines,\n      followups,\n      next_run: new Date(Date.now() + 24 * 3600000).toISOString()\n    }\n  }];\n"
+      }
+    },
+    {
+      "id": "recordHeartbeat",
+      "name": "Record Agent Heartbeat",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        960,
+        80
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\n  select public.record_agent_heartbeat(\n    $1::uuid,\n    '06-autopilot',\n    'ok',\n    $2::int,\n    $3::timestamptz,\n    null,\n    jsonb_build_object(\n      'deadlines_count', $4::int,\n      'followups_count', $5::int\n    )\n  ) as run_id\n",
+        "options": {
+          "queryReplacement": "={{ $json.user_id }},{{ $json.items_count }},{{ $json.next_run }},{{ $json.deadlines_count }},{{ $json.followups_count }}"
+        }
+      }
+    },
+    {
+      "id": "note",
+      "name": "Slice 5 Autopilot Boundaries",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -220
+      ],
+      "parameters": {
+        "content": "## OpportunityOS 06 Autopilot\nDaily schedule trigger runs background deadline monitoring and claims due followups. Updates agent_runs heartbeat and logs events to activity timeline.",
+        "width": 720,
+        "height": 160
+      }
+    }
+  ],
+  "connections": {
+    "Daily Autopilot Schedule": {
+      "main": [
+        [
+          {
+            "node": "Fetch Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Autopilot on Demand": {
+      "main": [
+        [
+          {
+            "node": "Fetch Active Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Active Users": {
+      "main": [
+        [
+          {
+            "node": "Scan Upcoming Deadlines & Followups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan Upcoming Deadlines & Followups": {
+      "main": [
+        [
+          {
+            "node": "Format Digest and Calculate Heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Digest and Calculate Heartbeat": {
+      "main": [
+        [
+          {
+            "node": "Record Agent Heartbeat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

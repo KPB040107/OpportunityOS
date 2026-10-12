@@ -1,0 +1,96 @@
+{
+  "id": "opportunityosSlice5ErrorHandler",
+  "name": "OpportunityOS 07 Error Handler",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 300,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false
+  },
+  "nodes": [
+    {
+      "id": "errorTrigger",
+      "name": "Global Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "sanitizeError",
+      "name": "Sanitize Error Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\n  const err = $json.execution?.error || {};\n  let msg = err.message || 'Unknown execution error';\n  \n  // Redact JWT tokens\n  msg = msg.replace(/eyJ[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}/g, '[REDACTED_JWT]');\n  // Redact Bearer tokens\n  msg = msg.replace(/Bearer\\s+[a-zA-Z0-9._~+/-]+=*/gi, 'Bearer [REDACTED_TOKEN]');\n  // Redact postgres connection strings\n  msg = msg.replace(/postgres(?:ql)?:\\/\\/[^:]+:[^@]+@[^\\s]+/gi, 'postgres://[REDACTED_DB_CREDENTIALS]');\n\n  const workflowName = $json.workflow?.name || 'Unknown Workflow';\n  const nodeName = err.node?.name || 'Unknown Node';\n  const execId = $json.execution?.id || 'unknown';\n\n  return [{\n    json: {\n      workflow_name: workflowName,\n      node_name: nodeName,\n      execution_id: execId,\n      error_message: msg,\n      summary: `Error in workflow \"${workflowName}\" at node \"${nodeName}\": ${msg}`\n    }\n  }];\n"
+      }
+    },
+    {
+      "id": "recordErrorHeartbeat",
+      "name": "Record Error in Agent Runs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\n  insert into public.agent_runs(workflow, status, items_processed, error_message, details)\n  values(\n    $1,\n    'error',\n    0,\n    $2,\n    jsonb_build_object(\n      'execution_id', $3,\n      'node_name', $4\n    )\n  )\n",
+        "options": {
+          "queryReplacement": "={{ $json.workflow_name }},{{ $json.error_message }},{{ $json.execution_id }},{{ $json.node_name }}"
+        }
+      }
+    },
+    {
+      "id": "note",
+      "name": "Slice 5 Error Handler Boundaries",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        120,
+        -180
+      ],
+      "parameters": {
+        "content": "## OpportunityOS 07 Error Handler\nCatches uncaught errors across workflow executions, sanitizes secrets/JWT tokens, and writes failure records to agent_runs and events.",
+        "width": 520,
+        "height": 140
+      }
+    }
+  ],
+  "connections": {
+    "Global Workflow Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Sanitize Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sanitize Error Message": {
+      "main": [
+        [
+          {
+            "node": "Record Error in Agent Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

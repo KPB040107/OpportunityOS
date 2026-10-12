@@ -56,3 +56,32 @@ export type Followup = {
   status: 'pending' | 'done' | 'overdue';
   created_at: string;
 };
+
+export type Source = {
+  id: string;
+  user_id: string;
+  name: string;
+  url: string;
+  type: 'page' | 'rss' | 'email_forward';
+  frequency: 'hourly' | '6hours' | 'daily' | 'weekly';
+  enabled: boolean;
+  keywords: string[];
+  last_scan_at: string | null;
+  last_status: 'pending' | 'ok' | 'error';
+  last_error: string | null;
+  item_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AgentRun = {
+  id: string;
+  user_id: string | null;
+  ts: string;
+  workflow: string;
+  status: 'running' | 'ok' | 'error';
+  items_processed: number;
+  next_run_at: string | null;
+  error_message: string | null;
+  details?: Record<string, unknown>;
+};

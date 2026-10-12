@@ -1,6 +1,6 @@
 # Build progress
 
-Current slice: 4 Act and Ask, completed on October 12, 2026. Slice 3 was accepted on October 12, Slice 2 on October 11-12, Slice 1 on October 11 and Slice 0 on October 10. Next: Slice 5 Autopilot, email forwarding, and hardening. Detailed evidence and scope limits appear below.
+Current slice: 5 Autopilot and Hardening, completed on October 12, 2026. Slice 4 was accepted on October 12, Slice 3 on October 12, Slice 2 on October 11-12, Slice 1 on October 11 and Slice 0 on October 10. Three clean rehearsals completed. Prototype-v1 accepted. Next: Event slices (standing rules, weekly plan). Detailed evidence and scope limits appear below.
 
 Prepared: Docker Compose with persistent storage; private encryption-key setup; events migration with read-only per-user access; authenticated foundation workflow; verification script.
 
@@ -140,3 +140,22 @@ Website: Next.js App Router expanded with `/applications` (Application Tracker w
 Validation: 78 automated Node tests passed across `scripts/contract.test.mjs`, `scripts/decision-contract.test.mjs`, and `scripts/actions-contract.test.mjs`. Action contract tests verify deterministic idempotency keys, prohibited external application guardrails, RFC 5545 iCalendar generation, notification email drafting, and approval creation. Reversible SQL integration tests passed. No paid API credits or additional Gemini quota consumed.
 
 Limitations: External job application submissions remain strictly prohibited. Automated external email dispatch via SMTP and live Google Calendar API writes remain in dry-run/draft mode without external side effects until Slice 5 autopilot configuration. Local Docker and Next.js services remain bounded to developer machine uptime.
+
+## Slice 5 — Autopilot and Hardening, October 12, 2026
+
+Implemented on October 12, 2026: autonomous background scanning, deadline monitoring, follow-up execution, agent heartbeat, secret-safe error handling, source configuration with presets, and seeded demo data without consuming live LLM quota.
+
+Workflows: published `OpportunityOS 06 Autopilot` (`workflows/06-autopilot.json`, generated via `scripts/generate-autopilot-workflow.mjs`) and `OpportunityOS 07 Error Handler` (`workflows/07-error-handler.json`, generated via `scripts/generate-error-workflow.mjs`). Autopilot executes on a daily schedule or on demand: it scans active profiles, queries upcoming deadlines (within 7 days) and due follow-ups, calculates urgency, claims due followups, and records an atomic heartbeat to `public.agent_runs`. The Error Handler catches workflow failures via n8n Error Trigger, sanitizes secret patterns (JWT tokens, Bearer headers, database credentials), and logs failures to `agent_runs` and `events`. Both workflows were verified against their generators, stripped of account details, imported, published to the local n8n container, and executed with status success.
+
+Database: applied migration `0011_autopilot_and_sources.sql`. Introduces `public.sources` (configured monitoring rows with type, frequency, keywords, scan timestamps, and presets) and `public.agent_runs` (heartbeat tracking table). Atomic functions created: `record_agent_heartbeat` (logs heartbeat and emits activity event), `seed_default_sources` (seeds Unstop, Devpost, AICTE, and National Scholarship Portal presets), `get_upcoming_deadlines` (calculates days remaining and filters deadlines), and `claim_due_followups` (claims pending followups atomically). RLS policies strictly enforce per-user isolation. Reversible SQL test `supabase/tests/0011_autopilot.test.sql` executed against live Postgres, verifying preset seeding, heartbeat logging, and cross-user isolation.
+
+Website: Next.js App Router expanded with `/sources` (Monitored Sources management with preset loading, enable/disable toggles, status badges, and custom source creation) and updated navigation. Added Agent Heartbeat Header Strip on the Activity page (`/activity`), displaying live heartbeat status, last scan timestamp, next scheduled run, and items processed count. Next.js production build (`next build web`) compiled 13 routes in 1.48s with 0 errors. ESLint and TypeScript checks passed with 0 errors. Headless Chromium verified clean rendering with 0 errors.
+
+Demo data & quota safety: implemented `scripts/seed-demo-pack.mjs` and `scripts/cleanup-demo-pack.mjs` supporting the 15 realistic fixtures in `testdata/slice3-fixtures.json` (strong match, missing deadline, low CGPA, expired deadline, prompt injection, and junk texts). The seeder populates a rich mix of ACT, ASK, and IGNORE cards directly into the database without spending paid API credits or consuming free-tier LLM quota.
+
+Rehearsal checks:
+- Rehearsal 1 (Unit & Contract): 82 automated tests passing across `scripts/*.test.mjs` (duration ~300ms).
+- Rehearsal 2 (Database & RLS): `0010_act_and_ask.test.sql` and `0011_autopilot.test.sql` passed against live Postgres with full rollback.
+- Rehearsal 3 (Services & Browser): n8n healthy (HTTP 200), Next.js healthy (HTTP 200), Autopilot executed successfully via n8n CLI, and headless Chromium rendered `/login` with 0 console or network errors.
+
+Slice 5 and Prototype v1 accepted after three clean rehearsals. Tag `prototype-v1` records this milestone.
