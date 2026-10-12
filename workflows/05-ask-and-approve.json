@@ -1,0 +1,329 @@
+{
+  "id": "opportunityosSlice4Ask",
+  "name": "OpportunityOS 05 Ask and approve",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 604800,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  },
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Ask workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "prep-approval",
+      "name": "Extract approval context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst userId = item.user_id || item.input?.profile?.user_id;\nconst matchId = item.match_id || item.id;\nconst opp = item.opportunity || item.input?.opportunity || {};\nconst match = item.match || item.decision || {};\n\nconst reason = match.explanation || 'Uncertain requirements or unverified deadline.';\nconst missing = (opp.ambiguity_flags || []).concat(match.reason_codes || []);\n\nreturn [{\n  json: {\n    ...item,\n    user_id: userId,\n    match_id: matchId,\n    opportunity_id: opp.id,\n    approval_reason: reason,\n    missing_info: missing\n  }\n}];"
+      }
+    },
+    {
+      "id": "create-approval",
+      "name": "Create pending approval record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.create_approval_request($1::uuid, $2::uuid, $3::text, $4::text[], null) as approval_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id, $json.match_id, $json.approval_reason, $json.missing_info] }}"
+        }
+      }
+    },
+    {
+      "id": "log-ask-event",
+      "name": "Log ASK event in events timeline",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        700,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.events(user_id, stage, level, message, related_ids) values($1::uuid, 'ask', 'info', 'Created approval request awaiting student review', jsonb_build_object('match_id', $2::uuid, 'approval_id', $3::uuid));",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id, $json.match_id, $json.approval_id] }}"
+        }
+      }
+    },
+    {
+      "id": "wait-approval",
+      "name": "Wait for human approval or timeout",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        920,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "maxUnit": "days",
+              "maxValue": 7
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "eval-decision",
+      "name": "Parse resume decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst query = item.query || {};\nconst body = item.body || {};\nconst decision = query.decision || body.decision || item.decision || 'approved';\nconst isApproved = decision === 'approve' || decision === 'approved';\n\nreturn [{\n  json: {\n    ...item,\n    is_approved: isApproved,\n    user_decision: isApproved ? 'approved' : 'rejected'\n  }\n}];"
+      }
+    },
+    {
+      "id": "check-approved",
+      "name": "Did user approve?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-approved",
+              "leftValue": "={{ $json.is_approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "resolve-approved",
+      "name": "Mark approval approved",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1580,
+        -100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.resolve_approval($1::uuid, 'approved', 'User approved via email/webhook link') as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.approval_id] }}"
+        }
+      }
+    },
+    {
+      "id": "call-act",
+      "name": "Execute Act Workflow on Approval",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1800,
+        -100
+      ],
+      "parameters": {
+        "workflowId": "opportunityosSlice4Act",
+        "mode": "choose",
+        "data": "passthrough"
+      }
+    },
+    {
+      "id": "resolve-rejected",
+      "name": "Mark approval rejected",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1580,
+        160
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.resolve_approval($1::uuid, 'rejected', 'User rejected via email/webhook link') as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.approval_id] }}"
+        }
+      }
+    },
+    {
+      "id": "summary-ask",
+      "name": "Return ASK execution summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'approved_and_acted',\n    approval_id: $json.approval_id,\n    user_id: $json.user_id,\n    match_id: $json.match_id\n  }\n}];"
+      }
+    },
+    {
+      "id": "note",
+      "name": "Slice 4 Ask and Approve boundaries",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        300,
+        -350
+      ],
+      "parameters": {
+        "content": "## OpportunityOS 05 Ask and Approve Workflow\nPauses execution at the Wait node. When the student clicks `{{ $execution.resumeUrl }}?decision=approve` or resolves it from the Approval Center, execution resumes and calls Workflow 04 Act. If rejected, records feedback and terminates with zero side effects.",
+        "width": 950,
+        "height": 180
+      }
+    }
+  ],
+  "connections": {
+    "Execute Ask workflow": {
+      "main": [
+        [
+          {
+            "node": "Extract approval context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract approval context": {
+      "main": [
+        [
+          {
+            "node": "Create pending approval record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create pending approval record": {
+      "main": [
+        [
+          {
+            "node": "Log ASK event in events timeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log ASK event in events timeline": {
+      "main": [
+        [
+          {
+            "node": "Wait for human approval or timeout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for human approval or timeout": {
+      "main": [
+        [
+          {
+            "node": "Parse resume decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse resume decision": {
+      "main": [
+        [
+          {
+            "node": "Did user approve?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did user approve?": {
+      "main": [
+        [
+          {
+            "node": "Mark approval approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark approval rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark approval approved": {
+      "main": [
+        [
+          {
+            "node": "Execute Act Workflow on Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Act Workflow on Approval": {
+      "main": [
+        [
+          {
+            "node": "Return ASK execution summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

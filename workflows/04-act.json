@@ -1,0 +1,299 @@
+{
+  "id": "opportunityosSlice4Act",
+  "name": "OpportunityOS 04 Act",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 300,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  },
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Act workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "build-keys",
+      "name": "Generate idempotency keys and calendar payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const contract = (function createActionsContract() {\n  const version = 'actions-v1';\n  const permittedActions = ['tracker_update', 'calendar_event', 'email_notification', 'followup_schedule'];\n  const blockedActions = ['submit_application', 'send_email_as_user', 'share_profile_external'];\n\n  function idempotencyKey(userId, matchId, actionType) {\n    if (!userId || !matchId || !actionType) throw new Error('MISSING_KEY_PARAMETERS');\n    if (!permittedActions.includes(actionType)) throw new Error('UNPERMITTED_ACTION_TYPE');\n    return `${userId}:${matchId}:${actionType}`;\n  }\n\n  function validateActionSafety(actionType) {\n    if (blockedActions.includes(actionType)) {\n      throw new Error(`RISKY_ACTION_BLOCKED: ${actionType} is strictly prohibited.`);\n    }\n    if (!permittedActions.includes(actionType)) {\n      throw new Error(`UNKNOWN_ACTION_TYPE: ${actionType}`);\n    }\n    return true;\n  }\n\n  function formatIcsEvent({ title, organization, deadline, applicationUrl, matchScore }) {\n    if (!title) throw new Error('TITLE_REQUIRED_FOR_CALENDAR');\n    const org = organization || 'Unknown Organisation';\n    const cleanTitle = `${title} (${org})`.replace(/[,;]/g, ' ');\n    const desc = `Opportunity: ${title}\\\\nOrganization: ${org}\\\\nMatch Score: ${matchScore ?? 'N/A'}/100\\\\nApply here: ${applicationUrl || 'N/A'}`;\n    \n    // Default to deadline date or 7 days from now if null\n    let dt = deadline ? new Date(deadline) : new Date(Date.now() + 7 * 86400000);\n    if (isNaN(dt.getTime())) dt = new Date(Date.now() + 7 * 86400000);\n    \n    const y = dt.getUTCFullYear();\n    const m = String(dt.getUTCMonth() + 1).padStart(2, '0');\n    const d = String(dt.getUTCDate()).padStart(2, '0');\n    const dateStr = `${y}${m}${d}`;\n\n    return [\n      'BEGIN:VCALENDAR',\n      'VERSION:2.0',\n      'PRODID:-//OpportunityOS//EN',\n      'CALSCALE:GREGORIAN',\n      'BEGIN:VEVENT',\n      `SUMMARY:Deadline: ${cleanTitle}`,\n      `DESCRIPTION:${desc}`,\n      applicationUrl ? `URL:${applicationUrl}` : '',\n      `DTSTART;VALUE=DATE:${dateStr}`,\n      `DTEND;VALUE=DATE:${dateStr}`,\n      'STATUS:CONFIRMED',\n      'END:VEVENT',\n      'END:VCALENDAR'\n    ].filter(Boolean).join('\\r\\n');\n  }\n\n  function formatNotificationEmail({ userEmail, opportunity, match, actionResults }) {\n    const title = opportunity.title || 'Untitled Opportunity';\n    const org = opportunity.organization || 'Unknown Organisation';\n    const score = match.match_score ?? 'N/A';\n    const conf = match.confidence ? Math.round(match.confidence * 100) : 'N/A';\n    \n    const subject = `[OpportunityOS] Automatic Action: ${title} (${org})`;\n    const text = [\n      `Hello,`,\n      ``,\n      `OpportunityOS has evaluated a strong match and automatically taken safe actions on your behalf:`,\n      ``,\n      `Opportunity: ${title}`,\n      `Organization: ${org}`,\n      `Match Score: ${score}/100 (Confidence: ${conf}%)`,\n      `Deadline: ${opportunity.deadline || 'Not stated'}`,\n      `Application Link: ${opportunity.application_url || 'Not stated'}`,\n      ``,\n      `Actions Taken:`,\n      `- Added to your Application Tracker as 'To Apply'`,\n      `- Scheduled application reminder`,\n      actionResults?.calendarEvent ? `- Added to your Google Calendar` : `- Calendar .ics link generated`,\n      ``,\n      `Remember: OpportunityOS will NEVER automatically submit an application for you. Please review and apply at your convenience.`,\n      ``,\n      `Best,`,\n      `Your OpportunityOS Agent`\n    ].join('\\n');\n\n    return { subject, text };\n  }\n\n  function formatApprovalEmail({ resumeUrl, opportunity, match }) {\n    if (!resumeUrl) throw new Error('RESUME_URL_REQUIRED');\n    const title = opportunity.title || 'Untitled Opportunity';\n    const org = opportunity.organization || 'Unknown Organisation';\n    const reasons = match.explanation || 'Uncertain requirements or unverified deadline.';\n\n    const approveLink = `${resumeUrl}?decision=approve`;\n    const rejectLink = `${resumeUrl}?decision=reject`;\n\n    const subject = `[OpportunityOS Action Needed] Review: ${title} (${org})`;\n    const text = [\n      `Hello,`,\n      ``,\n      `OpportunityOS evaluated an opportunity that requires your review before any action is taken:`,\n      ``,\n      `Opportunity: ${title}`,\n      `Organization: ${org}`,\n      `Reason for review: ${reasons}`,\n      ``,\n      `Would you like to track this opportunity and create calendar reminders?`,\n      ``,\n      `[APPROVE] Add to tracker and schedule reminders:`,\n      `${approveLink}`,\n      ``,\n      `[REJECT] Ignore this opportunity:`,\n      `${rejectLink}`,\n      ``,\n      `You can also review and resolve this in your web Approval Center.`,\n      ``,\n      `Best,`,\n      `Your OpportunityOS Agent`\n    ].join('\\n');\n\n    return { subject, text, approveLink, rejectLink };\n  }\n\n  return {\n    version,\n    permittedActions,\n    blockedActions,\n    idempotencyKey,\n    validateActionSafety,\n    formatIcsEvent,\n    formatNotificationEmail,\n    formatApprovalEmail\n  };\n})();\nconst item = $input.first().json;\nconst userId = item.user_id || item.input?.profile?.user_id;\nconst matchId = item.match_id || item.id;\nconst opp = item.opportunity || item.input?.opportunity || {};\nconst match = item.match || item.decision || {};\n\nif (!userId || !matchId) throw new Error('MISSING_USER_OR_MATCH_ID');\n\nconst trackerKey = contract.idempotencyKey(userId, matchId, 'tracker_update');\nconst calKey = contract.idempotencyKey(userId, matchId, 'calendar_event');\nconst emailKey = contract.idempotencyKey(userId, matchId, 'email_notification');\nconst ics = contract.formatIcsEvent({\n  title: opp.title,\n  organization: opp.organization,\n  deadline: opp.deadline,\n  applicationUrl: opp.application_url,\n  matchScore: match.match_score\n});\n\nreturn [{\n  json: {\n    ...item,\n    user_id: userId,\n    match_id: matchId,\n    opportunity_id: opp.id,\n    tracker_key: trackerKey,\n    cal_key: calKey,\n    email_key: emailKey,\n    ics_content: ics,\n    opp_title: opp.title || 'Untitled',\n    opp_deadline: opp.deadline\n  }\n}];"
+      }
+    },
+    {
+      "id": "claim-tracker",
+      "name": "Claim tracker update action",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.claim_action($1::uuid, $2::uuid, 'tracker_update', $3::text) as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id, $json.match_id, $json.tracker_key] }}"
+        }
+      }
+    },
+    {
+      "id": "is-first",
+      "name": "Is first action execution?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        700,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "is-first",
+              "leftValue": "={{ !$json.result.is_duplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "upsert-app",
+      "name": "Add opportunity to application tracker",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        920,
+        -100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.upsert_application_tracker($1::uuid, $2::uuid, 'to_apply', 'Added automatically by OpportunityOS on ACT') as app_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id, $json.opportunity_id] }}"
+        }
+      }
+    },
+    {
+      "id": "schedule-followup",
+      "name": "Schedule application deadline reminder",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1140,
+        -100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.followups(user_id, application_id, due_at, kind) values($1::uuid, $2::uuid, coalesce($3::timestamptz, now() + interval '7 days'), 'deadline_reminder');",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id, $json.app_id, $json.opp_deadline] }}"
+        }
+      }
+    },
+    {
+      "id": "log-act-event",
+      "name": "Log autonomous action in events timeline",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1360,
+        -100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.events(user_id, stage, level, message, related_ids) values($1::uuid, 'act', 'info', 'Added to application tracker and scheduled reminder', jsonb_build_object('match_id', $2::uuid, 'opportunity_id', $3::uuid));",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id, $json.match_id, $json.opportunity_id] }}"
+        }
+      }
+    },
+    {
+      "id": "finish-tracker",
+      "name": "Mark tracker action complete",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1580,
+        -100
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.finish_action($1::text, 'done', '{\"status\":\"tracked\"}'::jsonb, null);",
+        "options": {
+          "queryReplacement": "={{ [$json.tracker_key] }}"
+        }
+      }
+    },
+    {
+      "id": "summary-act",
+      "name": "Return ACT execution summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'acted',\n    user_id: $json.user_id,\n    match_id: $json.match_id,\n    opportunity_id: $json.opportunity_id,\n    actions_executed: ['tracker_update', 'followup_schedule']\n  }\n}];"
+      }
+    },
+    {
+      "id": "duplicate-stop",
+      "name": "Duplicate action execution blocked",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        160
+      ],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    status: 'duplicate_skipped',\n    message: 'Action already recorded with idempotency key'\n  }\n}];"
+      }
+    },
+    {
+      "id": "note",
+      "name": "Slice 4 Act Workflow boundaries",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        300,
+        -350
+      ],
+      "parameters": {
+        "content": "## OpportunityOS 04 Act Workflow\nAtomically claims action using idempotency key `user_id:match_id:action_type` to guarantee exactly-once side effects. Enforces the action safety policy: tracking, reminders, and notifications are permitted; external application submission is strictly prohibited.",
+        "width": 900,
+        "height": 180
+      }
+    }
+  ],
+  "connections": {
+    "Execute Act workflow": {
+      "main": [
+        [
+          {
+            "node": "Generate idempotency keys and calendar payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate idempotency keys and calendar payload": {
+      "main": [
+        [
+          {
+            "node": "Claim tracker update action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim tracker update action": {
+      "main": [
+        [
+          {
+            "node": "Is first action execution?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is first action execution?": {
+      "main": [
+        [
+          {
+            "node": "Add opportunity to application tracker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Duplicate action execution blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add opportunity to application tracker": {
+      "main": [
+        [
+          {
+            "node": "Schedule application deadline reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule application deadline reminder": {
+      "main": [
+        [
+          {
+            "node": "Log autonomous action in events timeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log autonomous action in events timeline": {
+      "main": [
+        [
+          {
+            "node": "Mark tracker action complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark tracker action complete": {
+      "main": [
+        [
+          {
+            "node": "Return ACT execution summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

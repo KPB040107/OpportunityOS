@@ -41,6 +41,10 @@ pg('save','Save only a current decision',3800,-360,'select public.finish_evaluat
 code('current','Stop if profile facts changed',4020,-360,'const r=$input.first().json.result;return r.saved?[{json:r}]:[];');
 add('switch','Route ACT ASK or IGNORE visibly','switch',3.3,4240,-360,{mode:'rules',rules:{values:['ACT','ASK','IGNORE'].map(v=>({conditions:{options:{caseSensitive:true,leftValue:'',typeValidation:'strict',version:2},conditions:[{id:v,leftValue:'={{ $json.decision }}',rightValue:v,operator:{type:'string',operation:'equals'}}],combinator:'and'},renameOutput:true,outputKey:v}))},options:{}});
 for(const [i,name] of ['ACT saved for the action slice','ASK saved for the approval slice','IGNORE saved with its reasons'].entries()) {code('route-'+i,name,4480,-540+i*180,`return $input.all();`);link('Route ACT ASK or IGNORE visibly',name,i);}
+add('call-act', 'Trigger autonomous Act workflow', 'executeWorkflow', 1.2, 4740, -540, { workflowId: 'opportunityosSlice4Act', mode: 'choose', data: 'passthrough' });
+link('ACT saved for the action slice', 'Trigger autonomous Act workflow');
+add('call-ask', 'Trigger Ask and Approve workflow', 'executeWorkflow', 1.2, 4740, -360, { workflowId: 'opportunityosSlice4Ask', mode: 'choose', data: 'passthrough' });
+link('ASK saved for the approval slice', 'Trigger Ask and Approve workflow');
 code('cache-failure','Expose an earlier matching failure',1780,280,"const r=$input.first().json.result;return r.route==='failed'?[{json:{...$('Check hard eligibility in code').first().json,error_code:r.error_code||'AI_UNAVAILABLE'}}]:[];");
 code('quota-failure','Expose exhausted quota without retrying',2220,320,"return $input.first().json.result.reason==='QUOTA_LIMIT'?[{json:{...$('Check hard eligibility in code').first().json,error_code:'QUOTA_LIMIT'}}]:[];");
 pg('fail','Record evaluation errors without a decision',3800,300,'select public.fail_evaluation($1::uuid,$2::uuid,$3::text,$4::text) as result;','={{ [$json.match_id,$json.claim_token,$json.cache_key,$json.error_code] }}');

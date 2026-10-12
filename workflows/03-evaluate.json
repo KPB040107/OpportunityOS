@@ -630,6 +630,36 @@
       }
     },
     {
+      "id": "call-act",
+      "name": "Trigger autonomous Act workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        4740,
+        -540
+      ],
+      "parameters": {
+        "workflowId": "opportunityosSlice4Act",
+        "mode": "choose",
+        "data": "passthrough"
+      }
+    },
+    {
+      "id": "call-ask",
+      "name": "Trigger Ask and Approve workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        4740,
+        -360
+      ],
+      "parameters": {
+        "workflowId": "opportunityosSlice4Ask",
+        "mode": "choose",
+        "data": "passthrough"
+      }
+    },
+    {
       "id": "cache-failure",
       "name": "Expose an earlier matching failure",
       "type": "n8n-nodes-base.code",
@@ -708,6 +738,28 @@
         [
           {
             "node": "IGNORE saved with its reasons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ACT saved for the action slice": {
+      "main": [
+        [
+          {
+            "node": "Trigger autonomous Act workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ASK saved for the approval slice": {
+      "main": [
+        [
+          {
+            "node": "Trigger Ask and Approve workflow",
             "type": "main",
             "index": 0
           }

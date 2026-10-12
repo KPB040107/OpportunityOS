@@ -1,5 +1,58 @@
 export type Skill = { name: string; level: 'beginner' | 'intermediate' | 'advanced' };
 export type Profile = { display_name: string; degree: string; branch: string; academic_year: number | null; graduation_year: number | null; cgpa: number | null; career_goals: string; interest_types: string[]; preferred_locations: string[]; autonomy_mode: string };
-export type RawItem = { id: string; source_type: 'text' | 'url'; raw_content: string; status: string; error_code: string | null; created_at: string; is_opportunity:boolean|null; duplicate_of:string|null; retry_count:number };
-export type Activity = { id: string; stage: string; level: string; message: string; ts: string; metadata: Record<string,unknown> };
+export type RawItem = { id: string; source_type: 'text' | 'url'; raw_content: string; status: string; error_code: string | null; created_at: string; is_opportunity: boolean | null; duplicate_of: string | null; retry_count: number };
+export type Activity = { id: string; stage: string; level: string; message: string; ts: string; metadata: Record<string, unknown> };
 export type FormState = { error?: string; success?: string };
+
+export type ApplicationStatus = 'saved' | 'to_apply' | 'applied' | 'assessment' | 'interview' | 'offer' | 'rejected';
+
+export type Application = {
+  id: string;
+  user_id: string;
+  opportunity_id: string;
+  status: ApplicationStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  opportunity?: {
+    id: string;
+    title: string;
+    organization: string;
+    deadline: string | null;
+    application_url: string | null;
+    location: string | null;
+    type: string;
+  };
+};
+
+export type Approval = {
+  id: string;
+  user_id: string;
+  match_id: string;
+  reason: string;
+  missing_info: string[];
+  status: 'pending' | 'approved' | 'rejected';
+  resume_url: string | null;
+  decided_at: string | null;
+  created_at: string;
+  opportunity?: {
+    id: string;
+    title: string;
+    organization: string;
+    deadline: string | null;
+  };
+  match?: {
+    match_score: number | null;
+    confidence: number | null;
+  };
+};
+
+export type Followup = {
+  id: string;
+  user_id: string;
+  application_id: string;
+  due_at: string;
+  kind: string;
+  status: 'pending' | 'done' | 'overdue';
+  created_at: string;
+};
