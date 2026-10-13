@@ -23,6 +23,37 @@ export function createUnderstandContract({hash, URL}) {
     const fail=()=>{throw new Error('INVALID_EXTRACTION');};
     if(!output||typeof output!=='object'||Array.isArray(output)||Object.keys(output).some(k=>!['is_opportunity','items'].includes(k))||typeof output.is_opportunity!=='boolean'||!Array.isArray(output.items)||output.items.length>5||output.is_opportunity!==(output.items.length>0)) fail();
     const sourceFlat=clean(source).replace(/\s+/g,' '),original=canon(sourceFlat); const items=[];
+    // Email announcements commonly declare mandatory status once in a heading.
+    // Keep that heading and its contiguous list as literal source evidence;
+    // never infer mandatory status across a blank line or another heading.
+    function mandatoryEvidence(quote) {
+      if(/\b(preferred|optional|nice[- ]to[- ]have|not (?:required|mandatory))\b/i.test(quote))return null;
+      const isHeading=line=>/^(?:mandatory (?:eligibility )?requirements|eligibility (?:requirements|criteria)|required (?:skills|qualifications)(?:[ \t]*\([^\n]*\))?)[ \t]*:?$/i.test(line.trim());
+      const literal=original.includes(canon(quote));
+      if(literal&&/\b(minimum|min\.?|must|required|mandatory|only|eligible|at least|eligibility)\b/i.test(quote)) return quote;
+      let heading=null,bullet=quote;
+      if(!literal) {
+        // Repair only a real section heading joined to a real later bullet.
+        // Both fragments must exist in this same section; fill every intervening
+        // source line rather than accepting the model's non-contiguous quote.
+        const split=quote.indexOf('\n');
+        if(split<0||!isHeading(quote.slice(0,split)))return null;
+        heading=quote.slice(0,split);bullet=quote.slice(split+1).trim();
+        if(!/^[-*•][ \t]+/.test(bullet)||!original.includes(canon(bullet)))return null;
+      }
+      const lines=clean(source).split('\n');
+      for(let i=0;i<lines.length;i++) {
+        if(!isHeading(lines[i])||(heading&&canon(lines[i])!==canon(heading)))continue;
+        let section=lines[i];
+        for(let j=i+1;j<lines.length&&lines[j].trim();j++) {
+          if(/^(?:preferred|optional|nice[- ]to[- ]have|about|responsibilities|learning outcomes|location|duration|how to apply|required|mandatory|eligibility)\b/i.test(lines[j].trim()))break;
+          section+='\n'+lines[j];
+          if(section.length>2000)break;
+          if(canon(section).includes(canon(bullet)))return section;
+        }
+      }
+      return null;
+    }
     for(const raw of output.items) {
       const fields=['title','organization','deadline','location','type','application_url','description','requirements','skills','confidence','ambiguity_flags','evidence'];
       if(!raw||typeof raw!=='object'||fields.some(k=>!(k in raw))||Object.keys(raw).some(k=>!fields.includes(k))) fail();
@@ -64,14 +95,15 @@ export function createUnderstandContract({hash, URL}) {
       }
       if(raw.application_url!==null) { try{publicLink(raw.application_url);}catch{fail();} }
       const requirements=raw.requirements.map(r=>{
-        if(!r||Object.keys(r).some(k=>!['kind','value','mandatory','evidence'].includes(k))||!['cgpa','academic_year','graduation_year','branch','degree','location','skill','other'].includes(r.kind)||typeof r.value!=='string'||!r.value.trim()||r.value.length>500||typeof r.mandatory!=='boolean'||typeof r.evidence!=='string'||!r.evidence.trim()||r.evidence.length>2000||!original.includes(canon(r.evidence))||!canon(r.evidence).includes(canon(r.value))) fail();
-        if(r.mandatory&&!/\b(minimum|min\.?|must|required|mandatory|only|eligible|at least|eligibility)\b/i.test(r.evidence)) fail();
+        if(!r||Object.keys(r).some(k=>!['kind','value','mandatory','evidence'].includes(k))||!['cgpa','academic_year','graduation_year','branch','degree','location','skill','other'].includes(r.kind)||typeof r.value!=='string'||!r.value.trim()||r.value.length>500||typeof r.mandatory!=='boolean'||typeof r.evidence!=='string'||!r.evidence.trim()||r.evidence.length>2000||!canon(r.evidence).includes(canon(r.value))) fail();
+        const evidence=r.mandatory?mandatoryEvidence(r.evidence):r.evidence;
+        if(!evidence||!original.includes(canon(evidence)))fail();
         let normalized_value=null;
         if(r.kind==='skill'||r.kind==='location') normalized_value={name:normalize(r.value)};
         if(r.kind==='cgpa') {const n=Number(r.value);if(Number.isFinite(n)&&n>=0&&n<=10&&/cgpa|gpa/i.test(r.evidence)&&/minimum|min\.?|at least/i.test(r.evidence)&&!/out of\s*[45]|\/\s*[45]\b|[45][ -]point/i.test(r.evidence)) normalized_value={minimum:n,scale:10};}
         if(r.kind==='graduation_year'&&/^20\d{2}$/.test(r.value)) normalized_value={allowed:[Number(r.value)]};
         if(r.kind==='academic_year'&&/^[1-8]$/.test(r.value)) normalized_value={allowed:[Number(r.value)]};
-        return {...r,normalized_value};
+        return {...r,evidence,normalized_value};
       });
       // A validated skill requirement also supplies literal skill evidence.
       // Do not require the model to duplicate that same quote in two arrays.

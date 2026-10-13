@@ -18,6 +18,42 @@ test('unknown deadlines do not display unrelated publication-date evidence',()=>
 test('explicit Job Title context supplies source-backed type evidence',()=>{const f=fixture();f.items[0].type='job';f.items[0].evidence=f.items[0].evidence.filter(e=>e.field!=='type');const item=contract.validate(f,source+' Job Title: Software Internship.').items[0];assert.ok(item.evidence.some(e=>e.field==='type'&&e.quote==='Job Title: Software Internship'));assert.throws(()=>contract.validate(f,source),/INVALID_EXTRACTION/);});
 test('opposing remote-work statements remain a visible conflict with both quotes',()=>{const item=contract.validate(fixture(),source+' Fully remote. No telecommuting.').items[0];assert.ok(item.ambiguity_flags.includes('contradictory_remote_policy'));assert.ok(item.evidence.some(e=>e.quote==='Fully remote'));assert.ok(item.evidence.some(e=>e.quote==='No telecommuting'));});
 test('preferences cannot become mandatory rules',()=>{const f=fixture();f.items[0].requirements=[{kind:'skill',value:'Python',mandatory:true,evidence:'Python is preferred.'}];assert.throws(()=>contract.validate(f,source+' Python is preferred.'),/INVALID_EXTRACTION/);});
+test('mandatory email list headings provide continuous source evidence',()=>{
+  const f=fixture();f.items[0].requirements=[{kind:'degree',value:'B.Tech or B.E.',mandatory:true,evidence:'- Degree: B.Tech or B.E.'},{kind:'branch',value:'Computer Science or Information Technology',mandatory:true,evidence:'- Branch: Computer Science or\nInformation Technology'}];
+  const announcement=source+'\n\nMandatory eligibility requirements\n- Degree: B.Tech or B.E.\n- Branch: Computer Science or\nInformation Technology\n\nPreferred skills\n- Rust';
+  const r=contract.validate(f,announcement).items[0].requirements;
+  assert.equal(r[0].evidence,'Mandatory eligibility requirements\n- Degree: B.Tech or B.E.');
+  assert.equal(r[1].evidence,'Mandatory eligibility requirements\n- Degree: B.Tech or B.E.\n- Branch: Computer Science or\nInformation Technology');
+});
+test('required headings cannot authorize a later preferred or unrelated block',()=>{
+  const f=fixture();f.items[0].requirements=[{kind:'skill',value:'Rust',mandatory:true,evidence:'- Rust'}];
+  for(const separation of ['\n\n','\nPreferred skills\n','\nOptional skills\n'])assert.throws(()=>contract.validate(f,source+'\n\nRequired skills\n- Python'+separation+'- Rust'),/INVALID_EXTRACTION/);
+  assert.throws(()=>contract.validate(f,source+'\n\nRequired skills\n- Python\n\nResponsibilities\n- Rust'),/INVALID_EXTRACTION/);
+});
+test('an explicitly preferred bullet stays optional even inside a required heading',()=>{
+  for(const phrase of ['- Rust is preferred','- Rust is optional','- Rust is not mandatory','- Rust is not required']) {
+    const f=fixture();f.items[0].requirements=[{kind:'skill',value:'Rust',mandatory:true,evidence:phrase}];
+    assert.throws(()=>contract.validate(f,source+'\n\nRequired skills\n'+phrase),/INVALID_EXTRACTION/);
+  }
+});
+test('mandatory list context cannot rescue fabricated evidence',()=>{
+  const f=fixture();f.items[0].requirements=[{kind:'degree',value:'B.Tech',mandatory:true,evidence:'- Degree: B.Tech'}];
+  assert.throws(()=>contract.validate(f,source+'\n\nMandatory eligibility requirements\n- Degree: M.Tech'),/INVALID_EXTRACTION/);
+});
+test('a real heading joined to a later real bullet is repaired into continuous evidence',()=>{
+  const f=fixture();f.items[0].requirements=[{kind:'graduation_year',value:'2028',mandatory:true,evidence:'Mandatory eligibility requirements\n- Graduation year: 2028'}];
+  const announcement=source+'\n\nMandatory eligibility requirements\n- Degree: B.Tech\n- Graduation year: 2028\n\nPreferred skills\n- Rust';
+  assert.equal(contract.validate(f,announcement).items[0].requirements[0].evidence,'Mandatory eligibility requirements\n- Degree: B.Tech\n- Graduation year: 2028');
+  f.items[0].requirements=[{kind:'skill',value:'Rust',mandatory:true,evidence:'Mandatory eligibility requirements\n- Rust'}];
+  assert.throws(()=>contract.validate(f,announcement),/INVALID_EXTRACTION/);
+});
+test('joined requirement evidence cannot invent a heading, bullet, or arbitrary passage',()=>{
+  const announcement=source+'\n\nMandatory eligibility requirements\n- Degree: B.Tech\n- Graduation year: 2028';
+  for(const evidence of ['Required qualifications\n- Graduation year: 2028','Mandatory eligibility requirements\n- Graduation year: 2029','Mandatory eligibility requirements\nGraduation year: 2028','Mandatory eligibility requirements\n- Degree: B.Tech\n- Invented graduation year: 2028']) {
+    const f=fixture();f.items[0].requirements=[{kind:'graduation_year',value:'2028',mandatory:true,evidence}];
+    assert.throws(()=>contract.validate(f,announcement),/INVALID_EXTRACTION/);
+  }
+});
 test('a different GPA scale remains uncheckable',()=>{const f=fixture();f.items[0].requirements=[{kind:'cgpa',value:'3.5',mandatory:true,evidence:'Minimum GPA: 3.5 out of 4.'}];const r=contract.validate(f,source+' Minimum GPA: 3.5 out of 4.').items[0];assert.equal(r.requirements[0].normalized_value,null);assert.ok(r.ambiguity_flags.includes('requirements_need_interpretation'));});
 test('contradictory CGPA facts are flagged rather than resolved',()=>{const f=fixture();f.items[0].requirements.push({kind:'cgpa',value:'8.0',mandatory:true,evidence:'Minimum CGPA: 8.0.'});assert.ok(contract.validate(f,source+' Minimum CGPA: 8.0.').items[0].ambiguity_flags.includes('contradictory_cgpa'));});
 test('unsafe application links fail even with real source evidence',()=>{const f=fixture();f.items[0].application_url='http://127.0.0.1/admin';f.items[0].evidence.find(e=>e.field==='application_url').quote=f.items[0].application_url;assert.throws(()=>contract.validate(f,source+' http://127.0.0.1/admin'),/INVALID_EXTRACTION/);});
