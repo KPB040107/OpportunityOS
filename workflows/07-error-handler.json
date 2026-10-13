@@ -4,15 +4,16 @@
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "executionTimeout": 300,
+    "executionTimeout": 480,
     "saveDataSuccessExecution": "none",
     "saveDataErrorExecution": "none",
-    "saveManualExecutions": false
+    "saveManualExecutions": false,
+    "timezone": "Asia/Kolkata"
   },
   "nodes": [
     {
-      "id": "errorTrigger",
-      "name": "Global Workflow Error Trigger",
+      "id": "trigger",
+      "name": "Catch an uncaught workflow error",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
       "position": [
@@ -22,68 +23,68 @@
       "parameters": {}
     },
     {
-      "id": "sanitizeError",
-      "name": "Sanitize Error Message",
+      "id": "sanitize",
+      "name": "Remove secrets with the shared sanitizer",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        240,
+        250,
         0
       ],
       "parameters": {
-        "jsCode": "\n  const err = $json.execution?.error || {};\n  let msg = err.message || 'Unknown execution error';\n  \n  // Redact JWT tokens\n  msg = msg.replace(/eyJ[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}/g, '[REDACTED_JWT]');\n  // Redact Bearer tokens\n  msg = msg.replace(/Bearer\\s+[a-zA-Z0-9._~+/-]+=*/gi, 'Bearer [REDACTED_TOKEN]');\n  // Redact postgres connection strings\n  msg = msg.replace(/postgres(?:ql)?:\\/\\/[^:]+:[^@]+@[^\\s]+/gi, 'postgres://[REDACTED_DB_CREDENTIALS]');\n\n  const workflowName = $json.workflow?.name || 'Unknown Workflow';\n  const nodeName = err.node?.name || 'Unknown Node';\n  const execId = $json.execution?.id || 'unknown';\n\n  return [{\n    json: {\n      workflow_name: workflowName,\n      node_name: nodeName,\n      execution_id: execId,\n      error_message: msg,\n      summary: `Error in workflow \"${workflowName}\" at node \"${nodeName}\": ${msg}`\n    }\n  }];\n"
+        "jsCode": "const c=(function createAutopilotContract() {\n  const version = 'autopilot-v1';\n\n  function calculateNextRun(now = new Date(), intervalHours = 24) {\n    const d = new Date(now.getTime() + intervalHours * 3600000);\n    return d.toISOString();\n  }\n\n  function categorizeDeadlineUrgency(daysRemaining) {\n    if (daysRemaining <= 1) return 'critical';\n    if (daysRemaining <= 3) return 'urgent';\n    return 'upcoming';\n  }\n\n  function formatDeadlineReminderEmail({ userEmail, deadlines = [] }) {\n    if (!deadlines.length) {\n      return {\n        subject: '[OpportunityOS] Daily Scan: All Caught Up',\n        text: 'Hello,\\n\\nOpportunityOS ran your daily background scan. No immediate deadlines are due in the next 7 days.\\n\\nBest,\\nYour OpportunityOS Agent'\n      };\n    }\n\n    const urgentCount = deadlines.filter(d => (d.days_remaining ?? 99) <= 3).length;\n    const subject = urgentCount > 0\n      ? `[OpportunityOS Alert] ${urgentCount} Upcoming Deadline(s) Need Attention`\n      : `[OpportunityOS] Daily Deadline Digest (${deadlines.length} opportunities)`;\n\n    const itemsText = deadlines.map(d => {\n      const urgency = categorizeDeadlineUrgency(d.days_remaining ?? 7);\n      const daysText = d.days_remaining === 0 ? 'TODAY' : d.days_remaining === 1 ? 'TOMORROW' : `in ${d.days_remaining} days`;\n      return [\n        `• [${urgency.toUpperCase()}] ${d.title} (${d.organization || 'Unknown Org'})`,\n        `  Deadline: ${d.deadline} (${daysText})`,\n        `  Status: ${d.status || 'to_apply'}`,\n        d.application_url ? `  Apply Link: ${d.application_url}` : null\n      ].filter(Boolean).join('\\n');\n    }).join('\\n\\n');\n\n    const text = [\n      `Hello,`,\n      ``,\n      `Here is your OpportunityOS automated deadline briefing:`,\n      ``,\n      itemsText,\n      ``,\n      `Remember: OpportunityOS will NEVER automatically submit an application for you. Please review and apply at your convenience.`,\n      ``,\n      `Best,`,\n      `Your OpportunityOS Agent`\n    ].join('\\n');\n\n    return { subject, text };\n  }\n\n  function sanitizeErrorMessage(rawError) {\n    if (!rawError) return 'Unknown error occurred';\n    let str = typeof rawError === 'string' ? rawError : (rawError.message || JSON.stringify(rawError));\n    \n    // Redact JWT tokens (eyJ...)\n    str = str.replace(/eyJ[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}\\.[a-zA-Z0-9_-]{10,}/g, '[REDACTED_JWT]');\n    \n    // Redact Bearer tokens\n    str = str.replace(/Bearer\\s+[a-zA-Z0-9._~+/-]+=*/gi, 'Bearer [REDACTED_TOKEN]');\n    \n    // Redact postgres connection strings\n    str = str.replace(/postgres(?:ql)?:\\/\\/[^:]+:[^@]+@[^\\s]+/gi, 'postgres://[REDACTED_DB_CREDENTIALS]');\n    \n    // Redact API keys matching common patterns\n    str = str.replace(/((?:api[_-]?key|key|secret|password|token)[\"']?\\s*[:=]\\s*)[\"']?[^\\s,\"'&}]{8,}[\"']?/gi, '$1[REDACTED]');\n    str = str.replace(/AIza[A-Za-z0-9_-]{25,}|sb_secret_[A-Za-z0-9_-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}/g,'[REDACTED_KEY]');\n\n    return str.slice(0,1000);\n  }\n\n  return {\n    version,\n    calculateNextRun,\n    categorizeDeadlineUrgency,\n    formatDeadlineReminderEmail,\n    sanitizeErrorMessage\n  };\n})();return $input.all().map(i=>{const r=i.json,e=r.execution?.error||r.trigger?.error||{};return {json:{execution_id:r.execution?.id||'',workflow:r.workflow?.name||'Unknown workflow',node:r.execution?.lastNodeExecuted||e.node?.name||(r.trigger?'Trigger':'Unknown node'),message:c.sanitizeErrorMessage(e.message||e.cause?.message||'Workflow failed')}};});"
       }
     },
     {
-      "id": "recordErrorHeartbeat",
-      "name": "Record Error in Agent Runs",
+      "id": "log",
+      "name": "Log owned failure and queue its notification",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        480,
+        500,
         0
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "\n  insert into public.agent_runs(workflow, status, items_processed, error_message, details)\n  values(\n    $1,\n    'error',\n    0,\n    $2,\n    jsonb_build_object(\n      'execution_id', $3,\n      'node_name', $4\n    )\n  )\n",
+        "query": "select public.worker_record_error($1::text,$2::text,$3::text,$4::text) as result;",
         "options": {
-          "queryReplacement": "={{ $json.workflow_name }},{{ $json.error_message }},{{ $json.execution_id }},{{ $json.node_name }}"
+          "queryReplacement": "={{ [$json.execution_id,$json.workflow,$json.node,$json.message] }}"
         }
       }
     },
     {
       "id": "note",
-      "name": "Slice 5 Error Handler Boundaries",
+      "name": "Error ownership boundary",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        120,
-        -180
+        200,
+        -230
       ],
       "parameters": {
-        "content": "## OpportunityOS 07 Error Handler\nCatches uncaught errors across workflow executions, sanitizes secrets/JWT tokens, and writes failure records to agent_runs and events.",
-        "width": 520,
-        "height": 140
+        "content": "## Error → shared redaction → private execution ownership → owned activity\nUnattributed system errors stay inaccessible to users. Matching/action errors are mapped to their owner, logged and queued for notification through the Act worker. No raw credentials or execution inputs are copied. This workflow never recursively invokes itself.",
+        "width": 1000,
+        "height": 170
       }
     }
   ],
   "connections": {
-    "Global Workflow Error Trigger": {
+    "Catch an uncaught workflow error": {
       "main": [
         [
           {
-            "node": "Sanitize Error Message",
+            "node": "Remove secrets with the shared sanitizer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Sanitize Error Message": {
+    "Remove secrets with the shared sanitizer": {
       "main": [
         [
           {
-            "node": "Record Error in Agent Runs",
+            "node": "Log owned failure and queue its notification",
             "type": "main",
             "index": 0
           }

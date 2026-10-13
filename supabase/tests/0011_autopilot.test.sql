@@ -90,8 +90,8 @@ begin
     raise exception 'Expected 1 claimed followup, got %', v_claimed_count;
   end if;
 
-  if not exists (select 1 from public.followups where id = v_followup and status = 'done') then
-    raise exception 'Followup was not marked done';
+  if not exists (select 1 from public.followups where id = v_followup and status = 'pending') then
+    raise exception 'Followup was falsely marked delivered before an effect succeeded';
   end if;
 
   -- 4. Verify RLS cross-user isolation

@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
+import {publicUrl} from '@/lib/validation';
+import {z} from 'zod';
 
 export async function toggleSource(sourceId: string, currentEnabled: boolean) {
   const { supabase, user } = await requireUser();
@@ -20,9 +22,9 @@ export async function toggleSource(sourceId: string, currentEnabled: boolean) {
 }
 
 export async function seedPresetsAction() {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
 
-  const { error } = await supabase.rpc('seed_default_sources', { p_user: user.id });
+  const { error } = await supabase.rpc('seed_my_sources');
 
   if (error) {
     throw new Error('Failed to seed preset sources: ' + error.message);
@@ -35,7 +37,7 @@ export async function addCustomSource(formData: FormData) {
   const { supabase, user } = await requireUser();
 
   const name = formData.get('name') as string;
-  const url = formData.get('url') as string;
+  const url = publicUrl(String(formData.get('url')||''));
   const type = (formData.get('type') as string) || 'page';
   const frequency = (formData.get('frequency') as string) || 'daily';
   const keywordsStr = (formData.get('keywords') as string) || '';
@@ -43,6 +45,7 @@ export async function addCustomSource(formData: FormData) {
   if (!name || !url) {
     throw new Error('Name and URL are required');
   }
+  if(!z.string().trim().min(1).max(100).safeParse(name).success||!['page','rss'].includes(type)||!['hourly','6hours','daily','weekly'].includes(frequency))throw new Error('Check the source settings');
 
   const keywords = keywordsStr
     .split(',')

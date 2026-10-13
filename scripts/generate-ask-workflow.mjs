@@ -1,186 +1,23 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { createActionsContract } from './actions-contract.mjs';
-
-const runtime = process.argv.includes('--runtime');
-const config = runtime
-  ? Object.fromEntries(
-      readFileSync(new URL('../web/.env.local', import.meta.url), 'utf8')
-        .split(/\r?\n/)
-        .filter(l => l.includes('='))
-        .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])
-    )
-  : {};
-
-const db = runtime
-  ? { postgres: { id: config.N8N_POSTGRES_CREDENTIAL_ID, name: config.N8N_POSTGRES_CREDENTIAL_NAME } }
-  : undefined;
-
-const nodes = [], connections = {};
-
-function add(id, name, type, version, x, y, parameters, extra = {}) {
-  nodes.push({
-    id,
-    name,
-    type: type.includes('.') ? type : 'n8n-nodes-base.' + type,
-    typeVersion: version,
-    position: [x, y],
-    parameters,
-    ...extra
-  });
-}
-
-function link(a, b, index = 0, type = 'main') {
-  connections[a] ??= {};
-  connections[a][type] ??= [];
-  connections[a][type][index] ??= [];
-  connections[a][type][index].push({ node: b, type, index: 0 });
-}
-
-function pg(id, name, x, y, query, values) {
-  add(id, name, 'postgres', 2.6, x, y, {
-    operation: 'executeQuery',
-    query,
-    options: values ? { queryReplacement: values } : {}
-  }, db ? { credentials: db } : {});
-}
-
-function code(id, name, x, y, jsCode) {
-  add(id, name, 'code', 2, x, y, { jsCode });
-}
-
-function branch(id, name, x, y, expression) {
-  add(id, name, 'if', 2.2, x, y, {
-    conditions: {
-      options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
-      conditions: [{ id, leftValue: expression, rightValue: true, operator: { type: 'boolean', operation: 'true', singleValue: true } }],
-      combinator: 'and'
-    },
-    options: {}
-  });
-}
-
-add('trigger', 'Execute Ask workflow', 'executeWorkflowTrigger', 1.1, 0, 0, { inputSource: 'passthrough' });
-
-code('prep-approval', 'Extract approval context', 240, 0, `const item = $input.first().json;
-const userId = item.user_id || item.input?.profile?.user_id;
-const matchId = item.match_id || item.id;
-const opp = item.opportunity || item.input?.opportunity || {};
-const match = item.match || item.decision || {};
-
-const reason = match.explanation || 'Uncertain requirements or unverified deadline.';
-const missing = (opp.ambiguity_flags || []).concat(match.reason_codes || []);
-
-return [{
-  json: {
-    ...item,
-    user_id: userId,
-    match_id: matchId,
-    opportunity_id: opp.id,
-    approval_reason: reason,
-    missing_info: missing
-  }
-}];`);
-
-pg('create-approval', 'Create pending approval record', 480, 0,
-  'select public.create_approval_request($1::uuid, $2::uuid, $3::text, $4::text[], null) as approval_id;',
-  '={{ [$json.user_id, $json.match_id, $json.approval_reason, $json.missing_info] }}'
-);
-
-pg('log-ask-event', 'Log ASK event in events timeline', 700, 0,
-  'insert into public.events(user_id, stage, level, message, related_ids) values($1::uuid, \'ask\', \'info\', \'Created approval request awaiting student review\', jsonb_build_object(\'match_id\', $2::uuid, \'approval_id\', $3::uuid));',
-  '={{ [$json.user_id, $json.match_id, $json.approval_id] }}'
-);
-
-add('wait-approval', 'Wait for human approval or timeout', 'wait', 1.1, 920, 0, {
-  resume: 'webhook',
-  options: {
-    limitWaitTime: {
-      values: {
-        maxUnit: 'days',
-        maxValue: 7
-      }
-    }
-  }
-});
-
-code('eval-decision', 'Parse resume decision', 1140, 0, `const item = $input.first().json;
-const query = item.query || {};
-const body = item.body || {};
-const decision = query.decision || body.decision || item.decision || 'approved';
-const isApproved = decision === 'approve' || decision === 'approved';
-
-return [{
-  json: {
-    ...item,
-    is_approved: isApproved,
-    user_decision: isApproved ? 'approved' : 'rejected'
-  }
-}];`);
-
-branch('check-approved', 'Did user approve?', 1360, 0, '={{ $json.is_approved }}');
-
-pg('resolve-approved', 'Mark approval approved', 1580, -100,
-  'select public.resolve_approval($1::uuid, \'approved\', \'User approved via email/webhook link\') as result;',
-  '={{ [$json.approval_id] }}'
-);
-
-add('call-act', 'Execute Act Workflow on Approval', 'executeWorkflow', 1.2, 1800, -100, {
-  workflowId: 'opportunityosSlice4Act',
-  mode: 'choose',
-  data: 'passthrough'
-});
-
-pg('resolve-rejected', 'Mark approval rejected', 1580, 160,
-  'select public.resolve_approval($1::uuid, \'rejected\', \'User rejected via email/webhook link\') as result;',
-  '={{ [$json.approval_id] }}'
-);
-
-code('summary-ask', 'Return ASK execution summary', 2020, -100, `return [{
-  json: {
-    status: 'approved_and_acted',
-    approval_id: $json.approval_id,
-    user_id: $json.user_id,
-    match_id: $json.match_id
-  }
-}];`);
-
-add('note', 'Slice 4 Ask and Approve boundaries', 'stickyNote', 1, 300, -350, {
-  content: '## OpportunityOS 05 Ask and Approve Workflow\nPauses execution at the Wait node. When the student clicks `{{ $execution.resumeUrl }}?decision=approve` or resolves it from the Approval Center, execution resumes and calls Workflow 04 Act. If rejected, records feedback and terminates with zero side effects.',
-  width: 950,
-  height: 180
-});
-
-link('Execute Ask workflow', 'Extract approval context');
-link('Extract approval context', 'Create pending approval record');
-link('Create pending approval record', 'Log ASK event in events timeline');
-link('Log ASK event in events timeline', 'Wait for human approval or timeout');
-link('Wait for human approval or timeout', 'Parse resume decision');
-link('Parse resume decision', 'Did user approve?');
-link('Did user approve?', 'Mark approval approved', 0);
-link('Did user approve?', 'Mark approval rejected', 1);
-link('Mark approval approved', 'Execute Act Workflow on Approval');
-link('Execute Act Workflow on Approval', 'Return ASK execution summary');
-
-const workflow = {
-  id: 'opportunityosSlice4Ask',
-  name: 'OpportunityOS 05 Ask and approve',
-  active: false,
-  settings: {
-    executionOrder: 'v1',
-    executionTimeout: 86400 * 7,
-    saveDataErrorExecution: 'none',
-    saveDataSuccessExecution: 'none',
-    saveManualExecutions: false
-  },
-  nodes,
-  connections,
-  pinData: {},
-  tags: []
-};
-
-writeFileSync(
-  new URL(runtime ? '../.local/05-ask.runtime.json' : '../workflows/05-ask-and-approve.json', import.meta.url),
-  JSON.stringify(workflow, null, 2) + '\n'
-);
-
-console.log('Successfully generated Workflow 05 Ask and approve: workflows/05-ask-and-approve.json');
+import {workflowBuilder} from './workflow-builder.mjs';
+const b=workflowBuilder('opportunityosSlice4Ask','OpportunityOS 05 Ask and Approve');
+const {add,pg,code,branch,link,child,credentials}=b;
+const resumeCredentials=credentials('httpHeaderAuth','N8N_RESUME_CREDENTIAL_ID','N8N_RESUME_CREDENTIAL_NAME');
+add('trigger','Ask about the saved match','executeWorkflowTrigger',1.1,0,0,{inputSource:'passthrough'});
+add('review-recovery','Recover saved ASK decisions without a review','scheduleTrigger',1.2,0,-180,{rule:{interval:[{field:'seconds',secondsInterval:5}]}});
+pg('review-candidate','Find one current missing review',250,-180,"select m.id as match_id from public.matches m join public.opportunities o on o.id=m.opportunity_id and o.user_id=m.user_id where m.status='complete' and m.decision='ASK' and (o.deadline is null or o.deadline>(now() at time zone 'Asia/Kolkata')::date) and not exists(select 1 from public.approvals a where a.match_id=m.id and a.match_revision=m.revision) order by m.updated_at limit 1;");
+pg('review-context','Load current owned review context',250,0,"select public.worker_match_context($1::uuid,$2::text,'05-ask') as result;",'={{ [$json.match_id,$execution.id] }}');
+pg('approval','Bind the private waiting execution',460,0,'select public.worker_create_approval($1::uuid,$2::text,$3::text) as result;','={{ [$json.result.match_id,$execution.id,$execution.resumeUrl.replace(/^https?:[/][/][^/]+/,"http://localhost:5678")] }}');
+code('unpack','Stop duplicate approval executions',500,0,'const c=$input.first().json.result;return c?.created?[{json:c}]:[];');
+add('wait','Wait for authenticated confirmation','wait',1.1,750,0,{resume:'webhook',incomingAuthentication:'headerAuth',httpMethod:'POST',responseMode:'onReceived',options:{},limitWaitTime:true,limitType:'atSpecifiedTime',maxDateAndTime:'={{ $json.expires_at }}'},{credentials:resumeCredentials});
+code('resume-body','Require the private resume nonce',1000,0,"const body=$input.first().json.body;return body&&/^[0-9a-f-]{36}$/.test(body.approval_id)&&/^[0-9a-f-]{36}$/.test(body.nonce)?[{json:body}]:[];");
+pg('consume','Check saved outcome revision and eligibility',1250,0,'select public.worker_consume_resume($1::uuid,$2::text,$3::uuid) as result;','={{ [$json.approval_id,$execution.id,$json.nonce] }}');
+code('approved','Continue only verified permitted approval',1500,0,'const r=$input.first().json.result;return r.approved?[{json:{match_id:r.match_id}}]:[];');
+child('act','Resume permitted actions',1750,0,'opportunityosSlice4Act');
+add('poll','Recover pending confirmation deliveries','scheduleTrigger',1.2,0,240,{rule:{interval:[{field:'seconds',secondsInterval:5}]}});
+pg('resume-claim','Claim one pending private resume',250,240,'select public.worker_claim_resume() as result;');
+code('resume-unpack','Keep resume capabilities server side',500,240,'const r=$input.first().json.result;return r.claimed?[{json:r}]:[];');
+add('resume-http','Resume the same authenticated Wait execution','httpRequest',4.2,750,240,{method:'POST',url:'={{ $json.url }}',authentication:'genericCredentialType',genericAuthType:'httpHeaderAuth',sendBody:true,specifyBody:'json',jsonBody:'={{ JSON.stringify({approval_id:$json.approval_id,nonce:$json.nonce}) }}',options:{timeout:5000,redirect:{redirect:{followRedirects:false}},response:{response:{fullResponse:true,neverError:true,responseFormat:'json'}}}},{credentials:resumeCredentials,onError:'continueRegularOutput',retryOnFail:false});
+pg('resume-result','Record delivery attempt without claiming completion',1000,240,'select public.worker_resume_attempt($1::uuid,$2::boolean);','={{ [$("Keep resume capabilities server side").first().json.approval_id,$json.statusCode === 200] }}');
+for(const [from,to]of [['Ask about the saved match','Load current owned review context'],['Recover saved ASK decisions without a review','Find one current missing review'],['Find one current missing review','Load current owned review context'],['Load current owned review context','Bind the private waiting execution'],['Bind the private waiting execution','Stop duplicate approval executions'],['Stop duplicate approval executions','Wait for authenticated confirmation'],['Wait for authenticated confirmation','Require the private resume nonce'],['Require the private resume nonce','Check saved outcome revision and eligibility'],['Check saved outcome revision and eligibility','Continue only verified permitted approval'],['Continue only verified permitted approval','Resume permitted actions'],['Recover pending confirmation deliveries','Claim one pending private resume'],['Claim one pending private resume','Keep resume capabilities server side'],['Keep resume capabilities server side','Resume the same authenticated Wait execution'],['Resume the same authenticated Wait execution','Record delivery attempt without claiming completion']])link(from,to);
+add('note','Authenticated approval boundary','stickyNote',1,280,-280,{content:'## Review → explicit signed-in confirmation → private resume → reevaluation gate\nEmail points to an authenticated confirmation page, never a resume URL. UNKNOWN requires corrected facts and reevaluation. Approval expires at 48 hours or the deadline, whichever is first. Revision changes, replay, rejection and timeout cannot authorize actions. The resume nonce and Header Auth credential stay server-side; only the waiting execution can consume the decision. Queued resume is not displayed as completed.',width:1200,height:190});
+b.save('05-ask-and-approve.json',{executionTimeout:172900});

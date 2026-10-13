@@ -1,0 +1,10 @@
+import Link from 'next/link';
+import {requireUser} from '@/lib/auth';
+import {Card} from './ui/card';
+import {RetryWork} from './retry-work';
+export async function ActionStatus({matchId,opportunityId}:{matchId?:string;opportunityId:string}){
+ const {supabase,user}=await requireUser();if(!matchId)return null;
+ const [{data,error},tasks]=await Promise.all([supabase.from('actions').select('id,type,status,error,result').eq('user_id',user.id).eq('match_id',matchId).order('created_at'),supabase.from('tasks').select('id,title,due_at,status').eq('user_id',user.id).eq('opportunity_id',opportunityId)]);if(error||tasks.error)throw new Error('Action results unavailable');
+ if(!data?.length)return null;
+ return <><Card className="mt-5"><h2 className="text-xl font-semibold">Actions and results</h2><ul className="mt-3 space-y-3">{data.map(a=><li key={a.id} className="text-sm"><strong>{a.type.replaceAll('_',' ')}</strong> · {a.status}{(a.type.includes('notification')||a.type==='deadline_reminder')&&a.status==='done'?' (SMTP accepted; delivery needs mailbox confirmation)':''}{a.error&&<p className="text-red-800">{a.error==='DELIVERY_UNCERTAIN'?'Delivery is uncertain. Check your mailbox; this email will not be automatically resent.':a.error}</p>}{a.type==='calendar_link'&&a.status==='done'&&<Link className="ml-3 text-primary underline" href={`/api/calendar/${a.id}`}>Download calendar file</Link>}{a.result?.calendar_link&&<a href={a.result.calendar_link} target="_blank" rel="noopener noreferrer" className="ml-3 text-primary underline">Open demo calendar event</a>}{['failed','blocked'].includes(a.status)&&['tracker_update','task_create','calendar_link','calendar_event','followup_schedule'].includes(a.type)&&<RetryWork id={a.id} kind="action"/>}</li>)}</ul></Card>{!!tasks.data?.length&&<Card className="mt-5"><h2 className="text-xl font-semibold">Your next steps</h2><ul className="mt-3 space-y-3">{tasks.data.map(t=><li key={t.id}><p className="font-medium">{t.title}</p><p className="mt-1 text-sm text-muted-foreground">{t.status} · Due {t.due_at||'date not stated'}</p></li>)}</ul></Card>}</>;
+}

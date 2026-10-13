@@ -69,9 +69,10 @@ export function createAutopilotContract() {
     str = str.replace(/postgres(?:ql)?:\/\/[^:]+:[^@]+@[^\s]+/gi, 'postgres://[REDACTED_DB_CREDENTIALS]');
     
     // Redact API keys matching common patterns
-    str = str.replace(/(?:key|secret|password|token)=['"]?[a-zA-Z0-9_.-]{16,}['"]?/gi, '$1=[REDACTED]');
+    str = str.replace(/((?:api[_-]?key|key|secret|password|token)["']?\s*[:=]\s*)["']?[^\s,"'&}]{8,}["']?/gi, '$1[REDACTED]');
+    str = str.replace(/AIza[A-Za-z0-9_-]{25,}|sb_secret_[A-Za-z0-9_-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}/g,'[REDACTED_KEY]');
 
-    return str;
+    return str.slice(0,1000);
   }
 
   return {

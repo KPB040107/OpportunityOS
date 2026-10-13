@@ -1,183 +1,45 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { createActionsContract } from './actions-contract.mjs';
-
-const runtime = process.argv.includes('--runtime');
-const config = runtime
-  ? Object.fromEntries(
-      readFileSync(new URL('../web/.env.local', import.meta.url), 'utf8')
-        .split(/\r?\n/)
-        .filter(l => l.includes('='))
-        .map(l => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim()])
-    )
-  : {};
-
-const db = runtime
-  ? { postgres: { id: config.N8N_POSTGRES_CREDENTIAL_ID, name: config.N8N_POSTGRES_CREDENTIAL_NAME } }
-  : undefined;
-
-const nodes = [], connections = {};
-
-function add(id, name, type, version, x, y, parameters, extra = {}) {
-  nodes.push({
-    id,
-    name,
-    type: type.includes('.') ? type : 'n8n-nodes-base.' + type,
-    typeVersion: version,
-    position: [x, y],
-    parameters,
-    ...extra
-  });
-}
-
-function link(a, b, index = 0, type = 'main') {
-  connections[a] ??= {};
-  connections[a][type] ??= [];
-  connections[a][type][index] ??= [];
-  connections[a][type][index].push({ node: b, type, index: 0 });
-}
-
-function pg(id, name, x, y, query, values) {
-  add(id, name, 'postgres', 2.6, x, y, {
-    operation: 'executeQuery',
-    query,
-    options: values ? { queryReplacement: values } : {}
-  }, db ? { credentials: db } : {});
-}
-
-function code(id, name, x, y, jsCode) {
-  add(id, name, 'code', 2, x, y, { jsCode });
-}
-
-function branch(id, name, x, y, expression) {
-  add(id, name, 'if', 2.2, x, y, {
-    conditions: {
-      options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 },
-      conditions: [{ id, leftValue: expression, rightValue: true, operator: { type: 'boolean', operation: 'true', singleValue: true } }],
-      combinator: 'and'
-    },
-    options: {}
-  });
-}
-
-const contractCode = `const contract = (${createActionsContract.toString()})();`;
-
-add('trigger', 'Execute Act workflow', 'executeWorkflowTrigger', 1.1, 0, 0, { inputSource: 'passthrough' });
-
-code('build-keys', 'Generate idempotency keys and calendar payload', 240, 0, `${contractCode}
-const item = $input.first().json;
-const userId = item.user_id || item.input?.profile?.user_id;
-const matchId = item.match_id || item.id;
-const opp = item.opportunity || item.input?.opportunity || {};
-const match = item.match || item.decision || {};
-
-if (!userId || !matchId) throw new Error('MISSING_USER_OR_MATCH_ID');
-
-const trackerKey = contract.idempotencyKey(userId, matchId, 'tracker_update');
-const calKey = contract.idempotencyKey(userId, matchId, 'calendar_event');
-const emailKey = contract.idempotencyKey(userId, matchId, 'email_notification');
-const ics = contract.formatIcsEvent({
-  title: opp.title,
-  organization: opp.organization,
-  deadline: opp.deadline,
-  applicationUrl: opp.application_url,
-  matchScore: match.match_score
-});
-
-return [{
-  json: {
-    ...item,
-    user_id: userId,
-    match_id: matchId,
-    opportunity_id: opp.id,
-    tracker_key: trackerKey,
-    cal_key: calKey,
-    email_key: emailKey,
-    ics_content: ics,
-    opp_title: opp.title || 'Untitled',
-    opp_deadline: opp.deadline
-  }
-}];`);
-
-pg('claim-tracker', 'Claim tracker update action', 480, 0,
-  'select public.claim_action($1::uuid, $2::uuid, \'tracker_update\', $3::text) as result;',
-  '={{ [$json.user_id, $json.match_id, $json.tracker_key] }}'
-);
-
-branch('is-first', 'Is first action execution?', 700, 0, '={{ !$json.result.is_duplicate }}');
-
-pg('upsert-app', 'Add opportunity to application tracker', 920, -100,
-  'select public.upsert_application_tracker($1::uuid, $2::uuid, \'to_apply\', \'Added automatically by OpportunityOS on ACT\') as app_id;',
-  '={{ [$json.user_id, $json.opportunity_id] }}'
-);
-
-pg('schedule-followup', 'Schedule application deadline reminder', 1140, -100,
-  'insert into public.followups(user_id, application_id, due_at, kind) values($1::uuid, $2::uuid, coalesce($3::timestamptz, now() + interval \'7 days\'), \'deadline_reminder\');',
-  '={{ [$json.user_id, $json.app_id, $json.opp_deadline] }}'
-);
-
-pg('log-act-event', 'Log autonomous action in events timeline', 1360, -100,
-  'insert into public.events(user_id, stage, level, message, related_ids) values($1::uuid, \'act\', \'info\', \'Added to application tracker and scheduled reminder\', jsonb_build_object(\'match_id\', $2::uuid, \'opportunity_id\', $3::uuid));',
-  '={{ [$json.user_id, $json.match_id, $json.opportunity_id] }}'
-);
-
-pg('finish-tracker', 'Mark tracker action complete', 1580, -100,
-  'select public.finish_action($1::text, \'done\', \'{"status":"tracked"}\'::jsonb, null);',
-  '={{ [$json.tracker_key] }}'
-);
-
-code('summary-act', 'Return ACT execution summary', 1800, -100, `return [{
-  json: {
-    status: 'acted',
-    user_id: $json.user_id,
-    match_id: $json.match_id,
-    opportunity_id: $json.opportunity_id,
-    actions_executed: ['tracker_update', 'followup_schedule']
-  }
-}];`);
-
-code('duplicate-stop', 'Duplicate action execution blocked', 920, 160, `return [{
-  json: {
-    status: 'duplicate_skipped',
-    message: 'Action already recorded with idempotency key'
-  }
-}];`);
-
-add('note', 'Slice 4 Act Workflow boundaries', 'stickyNote', 1, 300, -350, {
-  content: '## OpportunityOS 04 Act Workflow\nAtomically claims action using idempotency key `user_id:match_id:action_type` to guarantee exactly-once side effects. Enforces the action safety policy: tracking, reminders, and notifications are permitted; external application submission is strictly prohibited.',
-  width: 900,
-  height: 180
-});
-
-link('Execute Act workflow', 'Generate idempotency keys and calendar payload');
-link('Generate idempotency keys and calendar payload', 'Claim tracker update action');
-link('Claim tracker update action', 'Is first action execution?');
-link('Is first action execution?', 'Add opportunity to application tracker', 0);
-link('Is first action execution?', 'Duplicate action execution blocked', 1);
-link('Add opportunity to application tracker', 'Schedule application deadline reminder');
-link('Schedule application deadline reminder', 'Log autonomous action in events timeline');
-link('Log autonomous action in events timeline', 'Mark tracker action complete');
-link('Mark tracker action complete', 'Return ACT execution summary');
-
-const workflow = {
-  id: 'opportunityosSlice4Act',
-  name: 'OpportunityOS 04 Act',
-  active: false,
-  settings: {
-    executionOrder: 'v1',
-    executionTimeout: 300,
-    saveDataErrorExecution: 'none',
-    saveDataSuccessExecution: 'none',
-    saveManualExecutions: false
-  },
-  nodes,
-  connections,
-  pinData: {},
-  tags: []
-};
-
-writeFileSync(
-  new URL(runtime ? '../.local/04-act.runtime.json' : '../workflows/04-act.json', import.meta.url),
-  JSON.stringify(workflow, null, 2) + '\n'
-);
-
-console.log('Successfully generated Workflow 04 Act: workflows/04-act.json');
+import {workflowBuilder} from './workflow-builder.mjs';
+import {createActionsContract} from './actions-contract.mjs';
+const b=workflowBuilder('opportunityosSlice4Act','OpportunityOS 04 Act');
+const {add,pg,code,branch,link,config,credentials}=b;
+const smtp=credentials('smtp','N8N_SMTP_CREDENTIAL_ID','N8N_SMTP_CREDENTIAL_NAME');
+const cal=credentials('googleCalendarOAuth2Api','N8N_CALENDAR_CREDENTIAL_ID','N8N_CALENDAR_CREDENTIAL_NAME');
+const calendar={__rl:true,value:config.N8N_DEMO_CALENDAR_ID||'YOUR-DEMO-CALENDAR-ID',mode:'id'};
+const contract=`const contract=(${createActionsContract.toString()})();`;
+add('trigger','Act on the saved match','executeWorkflowTrigger',1.1,0,0,{inputSource:'passthrough'});
+add('schedule','Recover queued actions','scheduleTrigger',1.2,0,160,{rule:{interval:[{field:'seconds',secondsInterval:5}]}});
+pg('context','Load current owned action context',230,0,'select public.worker_match_context($1::uuid,$2::text,\'04-act\') as result;','={{ [$json.match_id,$execution.id] }}');
+code('policy','Check the code action boundary',460,0,`${contract} const c=$input.first().json.result;if(!c)return [];if(c.match.eligibility_status!=='ELIGIBLE'||!c.opportunity.deadline||c.opportunity.deadline<=contract.day())return [];for(const type of ['tracker_update','task_create','calendar_link','followup_schedule','calendar_event','email_notification'])contract.validateActionSafety(type);return [{json:c}];`);
+pg('plan','Queue permitted actions atomically',700,0,'select public.worker_plan_actions($1::uuid) as result;','={{ [$json.match_id] }}');
+pg('claim','Claim one recoverable action',930,0,"with claimed as materialized(select public.worker_claim_action() as result),registered as(insert into opportunityos_private.execution_owners(execution_id,user_id,match_id,workflow) select $1::text,(result->>'user_id')::uuid,(result->>'match_id')::uuid,'04-act' from claimed where (result->>'claimed')::boolean on conflict do nothing) select result from claimed;",'={{ [$execution.id] }}');
+code('prepare','Prepare the claimed action',1160,0,`${contract}
+ const c=$input.first().json.result;if(!c?.claimed)return [];contract.authorize(c);
+ const crypto=require('crypto'),event_id=crypto.createHash('sha256').update(c.idempotency_key).digest('hex');
+ const route=['tracker_update','task_create','followup_schedule'].includes(c.type)?'internal':c.type==='calendar_link'?'link':c.type==='calendar_event'?'calendar':'email';
+ const out={...c,route,event_id};
+ if(['link','calendar'].includes(route)){out.ics=contract.formatIcsEvent({...c.opportunity,applicationUrl:c.opportunity.application_url,matchScore:c.match.match_score,uid:event_id});out.start=c.opportunity.deadline+'T10:00:00+05:30';out.end=c.opportunity.deadline+'T10:15:00+05:30';}
+ if(route==='email'){
+ const email=c.type==='approval_notification'?contract.formatApprovalEmail({confirmationUrl:${JSON.stringify(config.APP_ORIGIN||'http://localhost:3000')}+'/approvals/'+c.approval_id+'?revision='+c.revision,opportunity:c.opportunity,match:c.match,requiresInformation:c.requires_information}):contract.formatNotificationEmail({opportunity:c.opportunity,match:c.match,actionResults:{completed:c.completed_actions||[]}});
+ out.subject=(c.demo_calendar?'[DEMO TEST] ':'')+(c.type==='deadline_reminder'?'[Deadline reminder] ':c.type==='followup_notification'?'[Follow-up] ':c.type==='error_notification'?'[Action needs attention] ':'')+email.subject;out.text=c.type==='error_notification'?c.error_summary:email.text;
+ }
+ return [{json:out}];`);
+add('switch','Route the permitted action','switch',3.3,1390,0,{mode:'rules',rules:{values:['internal','link','calendar','email'].map(v=>({conditions:{options:{caseSensitive:true,typeValidation:'strict',version:2},conditions:[{id:v,leftValue:'={{ $json.route }}',rightValue:v,operator:{type:'string',operation:'equals'}}],combinator:'and'},renameOutput:true,outputKey:v}))},options:{}});
+pg('internal','Apply tracker tasks and follow-ups',1640,-300,'select public.worker_apply_internal_action($1::uuid,$2::uuid) as result;','={{ [$json.action_id,$json.claim_token] }}');
+code('link','Create the owned calendar download',1640,-140,"const c=$input.first().json;return [{json:{status:'done',result:{ics:c.ics}}}];");
+add('get-event','Reconcile the stable calendar event', 'httpRequest',4.2,1640,80,{method:'GET',url:'=https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(calendar.value)+'/events/{{ $json.event_id }}',authentication:'predefinedCredentialType',nodeCredentialType:'googleCalendarOAuth2Api',options:{timeout:10000,redirect:{redirect:{followRedirects:false}},response:{response:{fullResponse:true,neverError:true,responseFormat:'json'}}}},{credentials:cal,onError:'continueRegularOutput',retryOnFail:false});
+code('calendar-check','Distinguish missing event from integration failure',1860,80,"const r=$input.first().json,c=$('Prepare the claimed action').first().json;return [{json:{...c,event_exists:r.statusCode===200&&r.body?.id===c.event_id,event_missing:r.statusCode===404}}];");
+branch('exists','Calendar event already exists?',2080,80,'={{ $json.event_exists }}');
+branch('missing','Calendar event is confirmed absent?',2300,160,'={{ $json.event_missing }}');
+const common={resource:'event',calendar};
+add('calendar-create','Create the demo account event','googleCalendar',1.3,2520,160,{...common,operation:'create',start:'={{ $json.start }}',end:'={{ $json.end }}',useDefaultReminders:false,additionalFields:{id:'={{ $json.event_id }}',summary:'={{ "[DEMO TEST] " + $json.opportunity.title }}',description:'={{ "OpportunityOS deadline reminder. Review and apply yourself: " + ($json.opportunity.application_url || "Not stated") }}',sendUpdates:'none',visibility:'private'}},{credentials:cal,onError:'continueRegularOutput',retryOnFail:false});
+add('calendar-update','Update the existing event without duplication','googleCalendar',1.3,2520,-10,{...common,operation:'update',eventId:'={{ $json.event_id }}',updateFields:{start:'={{ $json.start }}',end:'={{ $json.end }}',summary:'={{ "[DEMO TEST] " + $json.opportunity.title }}',sendUpdates:'none'}},{credentials:cal,onError:'continueRegularOutput',retryOnFail:false});
+code('calendar-result','Verify the real calendar result',2740,80,"const r=$input.first().json,c=$('Prepare the claimed action').first().json;return [{json:r.id===c.event_id&&r.status!=='cancelled'?{status:'done',result:{event_id:r.id,calendar_link:r.htmlLink}}:{status:'failed',result:{error_code:'CALENDAR_RESULT_UNCERTAIN'}}}];");
+code('calendar-fail','Record calendar read failure',2520,330,"return [{json:{status:'failed',result:{error_code:'CALENDAR_READ_FAILED'}}}];");
+add('mail','Send from the agent mailbox','emailSend',2.1,1640,470,{resource:'email',operation:'send',fromEmail:'opportunityos0001@gmail.com',toEmail:'={{ $json.recipient }}',subject:'={{ $json.subject }}',emailFormat:'text',text:'={{ $json.text }}',options:{appendAttribution:false,allowUnauthorizedCerts:false}},{credentials:smtp,onError:'continueRegularOutput',retryOnFail:false});
+code('mail-result','Record SMTP acceptance or uncertainty',1860,470,"const r=$input.first().json;return [{json:r.messageId&&!r.error?{status:'done',result:{message_id:r.messageId,delivery:'SMTP accepted; inbox delivery not independently proven'}}:{status:'uncertain',result:{error_code:'DELIVERY_UNCERTAIN'}}}];");
+pg('finish','Save the fenced action result',3000,0,'select public.worker_finish_action($1::uuid,$2::uuid,$3::text,$4::jsonb) as saved;','={{ [$("Prepare the claimed action").first().json.action_id,$("Prepare the claimed action").first().json.claim_token,$json.status,JSON.stringify($json.result)] }}');
+link('Act on the saved match','Load current owned action context');link('Load current owned action context','Check the code action boundary');link('Check the code action boundary','Queue permitted actions atomically');link('Queue permitted actions atomically','Claim one recoverable action');link('Recover queued actions','Claim one recoverable action');link('Claim one recoverable action','Prepare the claimed action');link('Prepare the claimed action','Route the permitted action');
+for(const [i,to]of ['Apply tracker tasks and follow-ups','Create the owned calendar download','Reconcile the stable calendar event','Send from the agent mailbox'].entries())link('Route the permitted action',to,i);
+link('Create the owned calendar download','Save the fenced action result');link('Reconcile the stable calendar event','Distinguish missing event from integration failure');link('Distinguish missing event from integration failure','Calendar event already exists?');link('Calendar event already exists?','Update the existing event without duplication');link('Calendar event already exists?','Calendar event is confirmed absent?',1);link('Calendar event is confirmed absent?','Create the demo account event');link('Calendar event is confirmed absent?','Record calendar read failure',1);for(const n of ['Create the demo account event','Update the existing event without duplication'])link(n,'Verify the real calendar result');for(const n of ['Verify the real calendar result','Record calendar read failure','Record SMTP acceptance or uncertainty'])link(n,'Save the fenced action result');link('Send from the agent mailbox','Record SMTP acceptance or uncertainty');
+add('note','Safe action contract','stickyNote',1,450,-520,{content:'## Deterministic policy → durable action → actual result\nNo application submission, impersonation or external profile sharing. Internal writes finish atomically. Calendar uses one stable event ID and reconciles before creating. Email has no blind retries after uncertainty. Only the connected demo user writes the separate demo calendar; every eligible user gets an owned .ics file. Credentials stay in n8n.',width:1100,height:180});
+b.save('04-act.json');

@@ -11,7 +11,7 @@ export function Navigation({ email }: { email: string }) {
     { href: '/inbox', name: 'Opportunity inbox', icon: Inbox },
     { href: '/applications', name: 'Applications tracker', icon: Briefcase },
     { href: '/approvals', name: 'Approval center', icon: CheckCircle2 },
-    { href: '/sources', name: 'Monitored sources', icon: Globe },
+    { href: '/sources', name: 'Saved sources', icon: Globe },
     { href: '/profile', name: 'My profile', icon: UserRound },
     { href: '/activity', name: 'Activity', icon: Activity }
   ];

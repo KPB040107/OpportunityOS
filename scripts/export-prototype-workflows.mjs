@@ -1,17 +1,25 @@
 // Export only reviewed product workflows; local snapshots may contain credentials.
 import {readFileSync,writeFileSync} from 'node:fs';
-for(const [source,target,id] of [
-  ['.local/ingest-export.json','workflows/01-ingest.json','opportunityosSlice1Ingest'],
-  ['.local/understand-export.json','workflows/02-understand.json','opportunityosSlice2Understand'],
-  ['.local/evaluate-export.json','workflows/03-evaluate.json','opportunityosSlice3Evaluate'],
+const current=JSON.parse(readFileSync('.local/prototype-live-export.json','utf8'));
+for(const [target,id] of [
+  ['workflows/01-ingest.json','opportunityosSlice1Ingest'],
+  ['workflows/02-understand.json','opportunityosSlice2Understand'],
+  ['workflows/03-evaluate.json','opportunityosSlice3Evaluate'],
+  ['workflows/04-act.json','opportunityosSlice4Act'],
+  ['workflows/05-ask-and-approve.json','opportunityosSlice4Ask'],
+  ['workflows/06-autopilot.json','opportunityosSlice5Autopilot'],
+  ['workflows/07-error-handler.json','opportunityosSlice5ErrorHandler'],
 ]) {
-  const exported=JSON.parse(readFileSync(source,'utf8'));
+  const exported=current;
   const workflow=Array.isArray(exported)?exported.find(w=>w.id===id):exported;
   if(workflow?.id!==id||!workflow.active||workflow.activeVersionId!==workflow.versionId)throw new Error('Export must be the current published product workflow.');
   const template=JSON.parse(readFileSync(target,'utf8'));
   const nodes=structuredClone(workflow.nodes);
   for(const node of nodes) {
     delete node.credentials;
+    const reference=template.nodes.find(n=>n.id===node.id);
+    if(node.parameters.calendar)node.parameters.calendar=structuredClone(reference.parameters.calendar);
+    if(node.id==='get-event')node.parameters.url=reference.parameters.url;
     if(node.id==='ingest-auth') {
       node.parameters.url='https://YOUR-PROJECT.supabase.co/auth/v1/user';
       node.parameters.headerParameters.parameters.find(h=>h.name==='apikey').value='YOUR-PUBLIC-PUBLISHABLE-KEY';

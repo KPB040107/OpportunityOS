@@ -6,7 +6,8 @@
     "executionOrder": "v1",
     "saveDataErrorExecution": "none",
     "saveDataSuccessExecution": "none",
-    "saveManualExecutions": false
+    "saveManualExecutions": false,
+    "errorWorkflow": "opportunityosSlice5ErrorHandler"
   },
   "nodes": [
     {
@@ -256,6 +257,68 @@
         "height": 260,
         "width": 620
       }
+    },
+    {
+      "id": "forward-trigger",
+      "name": "Read forwarded announcements from the agent mailbox",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "nothing",
+        "downloadAttachments": false,
+        "format": "simple",
+        "options": {
+          "trackLastMessageId": true
+        }
+      }
+    },
+    {
+      "id": "forward-parse",
+      "name": "Validate the personal forwarding alias before AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const crypto=require('crypto');const c=(function createForwardContract({hash}){\n const gather=v=>typeof v==='string'?v:Array.isArray(v)?v.map(gather).join(' '):v&&typeof v==='object'?[v.address,v.text,v.value].map(gather).join(' '):'';\n function parse(email){\n  const recipients=gather([email.to,email.headers?.to,email.headers?.['delivered-to'],email.metadata?.to,email.metadata?.['delivered-to']]).toLowerCase();\n  const aliases=[...new Set([...recipients.matchAll(/opportunityos0001\\+([a-f0-9]{32})@gmail\\.com/g)].map(m=>m[1]))];\n  if(aliases.length!==1)return null;\n  const raw=String(email.textPlain||email.text||email.textHtml||email.html||'');\n  if(!raw.trim()||raw.length>20000)return null;\n  const subject=String(email.subject||email.metadata?.subject||'').slice(0,300);\n  if(!/internship|scholarship|hackathon|fellowship|applications?|apply|deadline|opportunit|program|vacanc|hiring|\\bjob\\b/i.test(subject+' '+raw))return null;\n  const text=subject+'\\n'+raw;if(text.length>20000)return null;\n  const key=hash(aliases[0]+'\\n'+String(email.messageId||email.metadata?.['message-id']||'')+'\\n'+text).slice(0,32);\n  const request_id=key.slice(0,8)+'-'+key.slice(8,12)+'-5'+key.slice(13,16)+'-a'+key.slice(17,20)+'-'+key.slice(20);\n  return {alias:aliases[0],request_id,text};\n }\n return {parse};\n})({hash:v=>crypto.createHash('sha256').update(v).digest('hex')});return $input.all().flatMap(i=>{const r=c.parse(i.json);return r?[{json:r}]:[];});"
+      }
+    },
+    {
+      "id": "forward-save",
+      "name": "Resolve alias ownership and save forwarded text",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        500,
+        400
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with saved as materialized (select public.worker_ingest_email($1::text,$2::uuid,$3::text) as result), registered as (insert into opportunityos_private.execution_owners(execution_id,user_id,workflow) select $4::text,r.user_id,'01-ingest' from saved s join public.raw_items r on r.id=(s.result->>'raw_item_id')::uuid where (s.result->>'accepted')::boolean on conflict do nothing) select result from saved;",
+        "options": {
+          "queryReplacement": "={{ [$json.alias,$json.request_id,$json.text,$execution.id] }}"
+        }
+      }
+    },
+    {
+      "id": "forward-accepted",
+      "name": "Continue only owned saved mail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        400
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().flatMap(i=>i.json.result.accepted?[{json:{}}]:[]);"
+      }
     }
   ],
   "connections": {
@@ -373,6 +436,50 @@
       ]
     },
     "Discard session data before analysis": {
+      "main": [
+        [
+          {
+            "node": "Start the Understand workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read forwarded announcements from the agent mailbox": {
+      "main": [
+        [
+          {
+            "node": "Validate the personal forwarding alias before AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate the personal forwarding alias before AI": {
+      "main": [
+        [
+          {
+            "node": "Resolve alias ownership and save forwarded text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve alias ownership and save forwarded text": {
+      "main": [
+        [
+          {
+            "node": "Continue only owned saved mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue only owned saved mail": {
       "main": [
         [
           {

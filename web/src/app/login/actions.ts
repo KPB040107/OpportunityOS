@@ -16,7 +16,7 @@ export async function authenticate(_state:FormState,form:FormData):Promise<FormS
   }
   const {error} = await supabase.auth.signInWithPassword(parsed.data);
   if(error) return {error:'Could not sign in. Check your email and password, and confirm your account email first.'};
-  redirect('/inbox');
+  const next=String(form.get('next')||'');redirect(/^\/approvals\/[0-9a-f-]{36}\?revision=\d+$/.test(next)?next:'/inbox');
 }
 export async function signOut() {
   const supabase = await createClient();

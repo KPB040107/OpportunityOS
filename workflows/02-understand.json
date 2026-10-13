@@ -7,7 +7,8 @@
     "executionTimeout": 480,
     "saveDataErrorExecution": "none",
     "saveDataSuccessExecution": "none",
-    "saveManualExecutions": false
+    "saveManualExecutions": false,
+    "errorWorkflow": "opportunityosSlice5ErrorHandler"
   },
   "nodes": [
     {
@@ -65,8 +66,10 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "select public.claim_understand_item() as result;",
-        "options": {}
+        "query": "with claimed as materialized(select public.claim_understand_item() as result),registered as(insert into opportunityos_private.execution_owners(execution_id,user_id,workflow) select $1::text,(result->>'user_id')::uuid,'02-understand' from claimed where (result->>'claimed')::boolean on conflict do nothing) select result from claimed;",
+        "options": {
+          "queryReplacement": "={{ [$execution.id] }}"
+        }
       }
     },
     {

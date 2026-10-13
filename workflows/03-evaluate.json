@@ -7,7 +7,8 @@
     "executionTimeout": 480,
     "saveDataErrorExecution": "none",
     "saveDataSuccessExecution": "none",
-    "saveManualExecutions": false
+    "saveManualExecutions": false,
+    "errorWorkflow": "opportunityosSlice5ErrorHandler"
   },
   "nodes": [
     {
@@ -65,9 +66,9 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "select public.claim_evaluation($1::uuid) as result;",
+        "query": "with claimed as materialized(select public.claim_evaluation($1::uuid) as result),registered as (insert into opportunityos_private.execution_owners(execution_id,user_id,match_id,workflow) select $2::text,(result->>'user_id')::uuid,(result->>'match_id')::uuid,'03-evaluate' from claimed where (result->>'claimed')::boolean on conflict do nothing) select result from claimed;",
         "options": {
-          "queryReplacement": "={{ [$json.opportunity_id || null] }}"
+          "queryReplacement": "={{ [$json.opportunity_id || null,$execution.id] }}"
         }
       }
     },
@@ -633,30 +634,44 @@
       "id": "call-act",
       "name": "Trigger autonomous Act workflow",
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
+      "typeVersion": 1.3,
       "position": [
         4740,
         -540
       ],
       "parameters": {
-        "workflowId": "opportunityosSlice4Act",
-        "mode": "choose",
-        "data": "passthrough"
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "opportunityosSlice4Act",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
       }
     },
     {
       "id": "call-ask",
       "name": "Trigger Ask and Approve workflow",
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
+      "typeVersion": 1.3,
       "position": [
         4740,
         -360
       ],
       "parameters": {
-        "workflowId": "opportunityosSlice4Ask",
-        "mode": "choose",
-        "data": "passthrough"
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "opportunityosSlice4Ask",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
       }
     },
     {

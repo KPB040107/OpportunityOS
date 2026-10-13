@@ -4,15 +4,17 @@
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "executionTimeout": 300,
-    "saveDataErrorExecution": "none",
+    "executionTimeout": 480,
     "saveDataSuccessExecution": "none",
-    "saveManualExecutions": false
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "timezone": "Asia/Kolkata",
+    "errorWorkflow": "opportunityosSlice5ErrorHandler"
   },
   "nodes": [
     {
       "id": "trigger",
-      "name": "Execute Act workflow",
+      "name": "Act on the saved match",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
@@ -24,56 +26,308 @@
       }
     },
     {
-      "id": "build-keys",
-      "name": "Generate idempotency keys and calendar payload",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "schedule",
+      "name": "Recover queued actions",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
       "position": [
-        240,
-        0
+        0,
+        160
       ],
       "parameters": {
-        "jsCode": "const contract = (function createActionsContract() {\n  const version = 'actions-v1';\n  const permittedActions = ['tracker_update', 'calendar_event', 'email_notification', 'followup_schedule'];\n  const blockedActions = ['submit_application', 'send_email_as_user', 'share_profile_external'];\n\n  function idempotencyKey(userId, matchId, actionType) {\n    if (!userId || !matchId || !actionType) throw new Error('MISSING_KEY_PARAMETERS');\n    if (!permittedActions.includes(actionType)) throw new Error('UNPERMITTED_ACTION_TYPE');\n    return `${userId}:${matchId}:${actionType}`;\n  }\n\n  function validateActionSafety(actionType) {\n    if (blockedActions.includes(actionType)) {\n      throw new Error(`RISKY_ACTION_BLOCKED: ${actionType} is strictly prohibited.`);\n    }\n    if (!permittedActions.includes(actionType)) {\n      throw new Error(`UNKNOWN_ACTION_TYPE: ${actionType}`);\n    }\n    return true;\n  }\n\n  function formatIcsEvent({ title, organization, deadline, applicationUrl, matchScore }) {\n    if (!title) throw new Error('TITLE_REQUIRED_FOR_CALENDAR');\n    const org = organization || 'Unknown Organisation';\n    const cleanTitle = `${title} (${org})`.replace(/[,;]/g, ' ');\n    const desc = `Opportunity: ${title}\\\\nOrganization: ${org}\\\\nMatch Score: ${matchScore ?? 'N/A'}/100\\\\nApply here: ${applicationUrl || 'N/A'}`;\n    \n    // Default to deadline date or 7 days from now if null\n    let dt = deadline ? new Date(deadline) : new Date(Date.now() + 7 * 86400000);\n    if (isNaN(dt.getTime())) dt = new Date(Date.now() + 7 * 86400000);\n    \n    const y = dt.getUTCFullYear();\n    const m = String(dt.getUTCMonth() + 1).padStart(2, '0');\n    const d = String(dt.getUTCDate()).padStart(2, '0');\n    const dateStr = `${y}${m}${d}`;\n\n    return [\n      'BEGIN:VCALENDAR',\n      'VERSION:2.0',\n      'PRODID:-//OpportunityOS//EN',\n      'CALSCALE:GREGORIAN',\n      'BEGIN:VEVENT',\n      `SUMMARY:Deadline: ${cleanTitle}`,\n      `DESCRIPTION:${desc}`,\n      applicationUrl ? `URL:${applicationUrl}` : '',\n      `DTSTART;VALUE=DATE:${dateStr}`,\n      `DTEND;VALUE=DATE:${dateStr}`,\n      'STATUS:CONFIRMED',\n      'END:VEVENT',\n      'END:VCALENDAR'\n    ].filter(Boolean).join('\\r\\n');\n  }\n\n  function formatNotificationEmail({ userEmail, opportunity, match, actionResults }) {\n    const title = opportunity.title || 'Untitled Opportunity';\n    const org = opportunity.organization || 'Unknown Organisation';\n    const score = match.match_score ?? 'N/A';\n    const conf = match.confidence ? Math.round(match.confidence * 100) : 'N/A';\n    \n    const subject = `[OpportunityOS] Automatic Action: ${title} (${org})`;\n    const text = [\n      `Hello,`,\n      ``,\n      `OpportunityOS has evaluated a strong match and automatically taken safe actions on your behalf:`,\n      ``,\n      `Opportunity: ${title}`,\n      `Organization: ${org}`,\n      `Match Score: ${score}/100 (Confidence: ${conf}%)`,\n      `Deadline: ${opportunity.deadline || 'Not stated'}`,\n      `Application Link: ${opportunity.application_url || 'Not stated'}`,\n      ``,\n      `Actions Taken:`,\n      `- Added to your Application Tracker as 'To Apply'`,\n      `- Scheduled application reminder`,\n      actionResults?.calendarEvent ? `- Added to your Google Calendar` : `- Calendar .ics link generated`,\n      ``,\n      `Remember: OpportunityOS will NEVER automatically submit an application for you. Please review and apply at your convenience.`,\n      ``,\n      `Best,`,\n      `Your OpportunityOS Agent`\n    ].join('\\n');\n\n    return { subject, text };\n  }\n\n  function formatApprovalEmail({ resumeUrl, opportunity, match }) {\n    if (!resumeUrl) throw new Error('RESUME_URL_REQUIRED');\n    const title = opportunity.title || 'Untitled Opportunity';\n    const org = opportunity.organization || 'Unknown Organisation';\n    const reasons = match.explanation || 'Uncertain requirements or unverified deadline.';\n\n    const approveLink = `${resumeUrl}?decision=approve`;\n    const rejectLink = `${resumeUrl}?decision=reject`;\n\n    const subject = `[OpportunityOS Action Needed] Review: ${title} (${org})`;\n    const text = [\n      `Hello,`,\n      ``,\n      `OpportunityOS evaluated an opportunity that requires your review before any action is taken:`,\n      ``,\n      `Opportunity: ${title}`,\n      `Organization: ${org}`,\n      `Reason for review: ${reasons}`,\n      ``,\n      `Would you like to track this opportunity and create calendar reminders?`,\n      ``,\n      `[APPROVE] Add to tracker and schedule reminders:`,\n      `${approveLink}`,\n      ``,\n      `[REJECT] Ignore this opportunity:`,\n      `${rejectLink}`,\n      ``,\n      `You can also review and resolve this in your web Approval Center.`,\n      ``,\n      `Best,`,\n      `Your OpportunityOS Agent`\n    ].join('\\n');\n\n    return { subject, text, approveLink, rejectLink };\n  }\n\n  return {\n    version,\n    permittedActions,\n    blockedActions,\n    idempotencyKey,\n    validateActionSafety,\n    formatIcsEvent,\n    formatNotificationEmail,\n    formatApprovalEmail\n  };\n})();\nconst item = $input.first().json;\nconst userId = item.user_id || item.input?.profile?.user_id;\nconst matchId = item.match_id || item.id;\nconst opp = item.opportunity || item.input?.opportunity || {};\nconst match = item.match || item.decision || {};\n\nif (!userId || !matchId) throw new Error('MISSING_USER_OR_MATCH_ID');\n\nconst trackerKey = contract.idempotencyKey(userId, matchId, 'tracker_update');\nconst calKey = contract.idempotencyKey(userId, matchId, 'calendar_event');\nconst emailKey = contract.idempotencyKey(userId, matchId, 'email_notification');\nconst ics = contract.formatIcsEvent({\n  title: opp.title,\n  organization: opp.organization,\n  deadline: opp.deadline,\n  applicationUrl: opp.application_url,\n  matchScore: match.match_score\n});\n\nreturn [{\n  json: {\n    ...item,\n    user_id: userId,\n    match_id: matchId,\n    opportunity_id: opp.id,\n    tracker_key: trackerKey,\n    cal_key: calKey,\n    email_key: emailKey,\n    ics_content: ics,\n    opp_title: opp.title || 'Untitled',\n    opp_deadline: opp.deadline\n  }\n}];"
-      }
-    },
-    {
-      "id": "claim-tracker",
-      "name": "Claim tracker update action",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        480,
-        0
-      ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "select public.claim_action($1::uuid, $2::uuid, 'tracker_update', $3::text) as result;",
-        "options": {
-          "queryReplacement": "={{ [$json.user_id, $json.match_id, $json.tracker_key] }}"
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 5
+            }
+          ]
         }
       }
     },
     {
-      "id": "is-first",
-      "name": "Is first action execution?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
+      "id": "context",
+      "name": "Load current owned action context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        230,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_match_context($1::uuid,$2::text,'04-act') as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.match_id,$execution.id] }}"
+        }
+      }
+    },
+    {
+      "id": "policy",
+      "name": "Check the code action boundary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const contract=(function createActionsContract(){\n const version='actions-v3';\n const permittedActions=['tracker_update','calendar_event','calendar_link','email_notification','task_create','followup_schedule','approval_notification','deadline_reminder','followup_notification','error_notification'];\n const blockedActions=['submit_application','send_email_as_user','share_profile_external'];\n function validateActionSafety(type){if(blockedActions.includes(type))throw new Error('RISKY_ACTION_BLOCKED');if(!permittedActions.includes(type))throw new Error('UNKNOWN_ACTION_TYPE');return true;}\n function idempotencyKey(user,match,type){if(!user||!match||!type)throw new Error('MISSING_KEY_PARAMETERS');if(!permittedActions.includes(type))throw new Error('UNPERMITTED_ACTION_TYPE');return `${user}:${match}:${type}`;}\n function day(now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);}\n function authorize(c,now=new Date()){\n  validateActionSafety(c.type);if(!c.user_id||(!c.match_id&&c.type!=='error_notification')||!c.action_id||!c.claim_token)throw new Error('UNVERIFIED_ACTION_CONTEXT');\n  if(c.type==='error_notification'&&!c.match_id&&(c.claimed!==true||c.email_enabled!==true))throw new Error('UNVERIFIED_ACTION_CONTEXT');\n  if(['approval_notification','error_notification'].includes(c.type))return true;\n  if(c.match?.status!=='complete'||!['ACT','ASK'].includes(c.match.decision)||c.match.eligibility_status!=='ELIGIBLE'||c.match.evaluation_day!==day(now)||!c.opportunity?.deadline||c.opportunity.deadline<=day(now))throw new Error('POLICY_CHANGED');\n  return true; // Atomic database claims also enforce ACT/approved permission and revision.\n }\n function calendarDate(value){if(typeof value!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)throw new Error('VALID_DEADLINE_REQUIRED');return new Date(value+'T00:00:00Z');}\n const esc=value=>String(value||'').replace(/\\\\/g,'\\\\\\\\').replace(/\\r?\\n/g,'\\\\n').replace(/;/g,'\\\\;').replace(/,/g,'\\\\,');\n function formatIcsEvent({title,organization,deadline,applicationUrl,matchScore,uid='opportunityos-event',now=new Date()}){\n  if(!title)throw new Error('TITLE_REQUIRED_FOR_CALENDAR');const start=calendarDate(deadline),end=new Date(start.getTime()+86400000),date=d=>d.toISOString().slice(0,10).replaceAll('-','');\n  if(applicationUrl&&!/^https?:\\/\\//i.test(applicationUrl))throw new Error('UNSAFE_APPLICATION_URL');\n  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//OpportunityOS//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT',`UID:${esc(uid)}@opportunityos.local`,`DTSTAMP:${now.toISOString().replace(/[-:]/g,'').replace(/\\.\\d{3}/,'')}`,`SUMMARY:Deadline: ${esc(title)} (${esc(organization||'Unknown Organisation')})`,`DESCRIPTION:${esc(`Opportunity: ${title}\\nOrganization: ${organization||'Unknown Organisation'}\\nMatch Score: ${matchScore??'N/A'}/100\\nApply here: ${applicationUrl||'Not stated'}`)}`,applicationUrl?`URL:${esc(applicationUrl)}`:'',`DTSTART;VALUE=DATE:${date(start)}`,`DTEND;VALUE=DATE:${date(end)}`,'END:VEVENT','END:VCALENDAR'].filter(Boolean);\n  return lines.map(line=>{const out=[];let chunk='',size=0;for(const char of line){const bytes=unescape(encodeURIComponent(char)).length;if(size+bytes>73){out.push(chunk);chunk=' '+char;size=1+bytes;}else{chunk+=char;size+=bytes;}}out.push(chunk);return out.join('\\r\\n');}).join('\\r\\n')+'\\r\\n';\n }\n function formatNotificationEmail({opportunity,match,actionResults={}}){\n  const subject=`[OpportunityOS] ${opportunity.title||'Opportunity'} (${opportunity.organization||'Unknown Organisation'})`.replace(/[\\r\\n]/g,' ');\n  const text=[`Opportunity: ${opportunity.title}`,`Match Score: ${match.match_score??'N/A'}/100 (Confidence: ${Math.round((match.confidence||0)*100)}%)`,`Deadline: ${opportunity.deadline||'Not stated'}`,`Application Link: ${opportunity.application_url||'Not stated'}`,`Completed actions: ${(actionResults.completed||[]).join(', ')||'Check your activity for current action results.'}`,'OpportunityOS will NEVER automatically submit an application for you.'].join('\\n');return {subject,text};\n }\n function formatApprovalEmail({confirmationUrl,opportunity,match,requiresInformation=false}){\n  if(!confirmationUrl||!/\\/approvals\\/[0-9a-f-]{36}\\?revision=\\d+$/i.test(confirmationUrl))throw new Error('AUTHENTICATED_CONFIRMATION_URL_REQUIRED');\n  return {subject:`[OpportunityOS Action Needed] Review: ${opportunity.title}`.replace(/[\\r\\n]/g,' '),text:[opportunity.title,match.explanation||'Review required.',requiresInformation?'Correct the missing facts and reevaluate before approval.':'Sign in and explicitly approve or reject on the confirmation page.',confirmationUrl,'Opening this link does not approve anything.'].join('\\n'),confirmationUrl};\n }\n return {version,permittedActions,blockedActions,idempotencyKey,validateActionSafety,authorize,day,formatIcsEvent,formatNotificationEmail,formatApprovalEmail};\n})(); const c=$input.first().json.result;if(!c)return [];if(c.match.eligibility_status!=='ELIGIBLE'||!c.opportunity.deadline||c.opportunity.deadline<=contract.day())return [];for(const type of ['tracker_update','task_create','calendar_link','followup_schedule','calendar_event','email_notification'])contract.validateActionSafety(type);return [{json:c}];"
+      }
+    },
+    {
+      "id": "plan",
+      "name": "Queue permitted actions atomically",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
       "position": [
         700,
         0
       ],
       "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_plan_actions($1::uuid) as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.match_id] }}"
+        }
+      }
+    },
+    {
+      "id": "claim",
+      "name": "Claim one recoverable action",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        930,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with claimed as materialized(select public.worker_claim_action() as result),registered as(insert into opportunityos_private.execution_owners(execution_id,user_id,match_id,workflow) select $1::text,(result->>'user_id')::uuid,(result->>'match_id')::uuid,'04-act' from claimed where (result->>'claimed')::boolean on conflict do nothing) select result from claimed;",
+        "options": {
+          "queryReplacement": "={{ [$execution.id] }}"
+        }
+      }
+    },
+    {
+      "id": "prepare",
+      "name": "Prepare the claimed action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const contract=(function createActionsContract(){\n const version='actions-v3';\n const permittedActions=['tracker_update','calendar_event','calendar_link','email_notification','task_create','followup_schedule','approval_notification','deadline_reminder','followup_notification','error_notification'];\n const blockedActions=['submit_application','send_email_as_user','share_profile_external'];\n function validateActionSafety(type){if(blockedActions.includes(type))throw new Error('RISKY_ACTION_BLOCKED');if(!permittedActions.includes(type))throw new Error('UNKNOWN_ACTION_TYPE');return true;}\n function idempotencyKey(user,match,type){if(!user||!match||!type)throw new Error('MISSING_KEY_PARAMETERS');if(!permittedActions.includes(type))throw new Error('UNPERMITTED_ACTION_TYPE');return `${user}:${match}:${type}`;}\n function day(now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);}\n function authorize(c,now=new Date()){\n  validateActionSafety(c.type);if(!c.user_id||(!c.match_id&&c.type!=='error_notification')||!c.action_id||!c.claim_token)throw new Error('UNVERIFIED_ACTION_CONTEXT');\n  if(c.type==='error_notification'&&!c.match_id&&(c.claimed!==true||c.email_enabled!==true))throw new Error('UNVERIFIED_ACTION_CONTEXT');\n  if(['approval_notification','error_notification'].includes(c.type))return true;\n  if(c.match?.status!=='complete'||!['ACT','ASK'].includes(c.match.decision)||c.match.eligibility_status!=='ELIGIBLE'||c.match.evaluation_day!==day(now)||!c.opportunity?.deadline||c.opportunity.deadline<=day(now))throw new Error('POLICY_CHANGED');\n  return true; // Atomic database claims also enforce ACT/approved permission and revision.\n }\n function calendarDate(value){if(typeof value!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)throw new Error('VALID_DEADLINE_REQUIRED');return new Date(value+'T00:00:00Z');}\n const esc=value=>String(value||'').replace(/\\\\/g,'\\\\\\\\').replace(/\\r?\\n/g,'\\\\n').replace(/;/g,'\\\\;').replace(/,/g,'\\\\,');\n function formatIcsEvent({title,organization,deadline,applicationUrl,matchScore,uid='opportunityos-event',now=new Date()}){\n  if(!title)throw new Error('TITLE_REQUIRED_FOR_CALENDAR');const start=calendarDate(deadline),end=new Date(start.getTime()+86400000),date=d=>d.toISOString().slice(0,10).replaceAll('-','');\n  if(applicationUrl&&!/^https?:\\/\\//i.test(applicationUrl))throw new Error('UNSAFE_APPLICATION_URL');\n  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//OpportunityOS//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT',`UID:${esc(uid)}@opportunityos.local`,`DTSTAMP:${now.toISOString().replace(/[-:]/g,'').replace(/\\.\\d{3}/,'')}`,`SUMMARY:Deadline: ${esc(title)} (${esc(organization||'Unknown Organisation')})`,`DESCRIPTION:${esc(`Opportunity: ${title}\\nOrganization: ${organization||'Unknown Organisation'}\\nMatch Score: ${matchScore??'N/A'}/100\\nApply here: ${applicationUrl||'Not stated'}`)}`,applicationUrl?`URL:${esc(applicationUrl)}`:'',`DTSTART;VALUE=DATE:${date(start)}`,`DTEND;VALUE=DATE:${date(end)}`,'END:VEVENT','END:VCALENDAR'].filter(Boolean);\n  return lines.map(line=>{const out=[];let chunk='',size=0;for(const char of line){const bytes=unescape(encodeURIComponent(char)).length;if(size+bytes>73){out.push(chunk);chunk=' '+char;size=1+bytes;}else{chunk+=char;size+=bytes;}}out.push(chunk);return out.join('\\r\\n');}).join('\\r\\n')+'\\r\\n';\n }\n function formatNotificationEmail({opportunity,match,actionResults={}}){\n  const subject=`[OpportunityOS] ${opportunity.title||'Opportunity'} (${opportunity.organization||'Unknown Organisation'})`.replace(/[\\r\\n]/g,' ');\n  const text=[`Opportunity: ${opportunity.title}`,`Match Score: ${match.match_score??'N/A'}/100 (Confidence: ${Math.round((match.confidence||0)*100)}%)`,`Deadline: ${opportunity.deadline||'Not stated'}`,`Application Link: ${opportunity.application_url||'Not stated'}`,`Completed actions: ${(actionResults.completed||[]).join(', ')||'Check your activity for current action results.'}`,'OpportunityOS will NEVER automatically submit an application for you.'].join('\\n');return {subject,text};\n }\n function formatApprovalEmail({confirmationUrl,opportunity,match,requiresInformation=false}){\n  if(!confirmationUrl||!/\\/approvals\\/[0-9a-f-]{36}\\?revision=\\d+$/i.test(confirmationUrl))throw new Error('AUTHENTICATED_CONFIRMATION_URL_REQUIRED');\n  return {subject:`[OpportunityOS Action Needed] Review: ${opportunity.title}`.replace(/[\\r\\n]/g,' '),text:[opportunity.title,match.explanation||'Review required.',requiresInformation?'Correct the missing facts and reevaluate before approval.':'Sign in and explicitly approve or reject on the confirmation page.',confirmationUrl,'Opening this link does not approve anything.'].join('\\n'),confirmationUrl};\n }\n return {version,permittedActions,blockedActions,idempotencyKey,validateActionSafety,authorize,day,formatIcsEvent,formatNotificationEmail,formatApprovalEmail};\n})();\n const c=$input.first().json.result;if(!c?.claimed)return [];contract.authorize(c);\n const crypto=require('crypto'),event_id=crypto.createHash('sha256').update(c.idempotency_key).digest('hex');\n const route=['tracker_update','task_create','followup_schedule'].includes(c.type)?'internal':c.type==='calendar_link'?'link':c.type==='calendar_event'?'calendar':'email';\n const out={...c,route,event_id};\n if(['link','calendar'].includes(route)){out.ics=contract.formatIcsEvent({...c.opportunity,applicationUrl:c.opportunity.application_url,matchScore:c.match.match_score,uid:event_id});out.start=c.opportunity.deadline+'T10:00:00+05:30';out.end=c.opportunity.deadline+'T10:15:00+05:30';}\n if(route==='email'){\n const email=c.type==='approval_notification'?contract.formatApprovalEmail({confirmationUrl:\"http://localhost:3000\"+'/approvals/'+c.approval_id+'?revision='+c.revision,opportunity:c.opportunity,match:c.match,requiresInformation:c.requires_information}):contract.formatNotificationEmail({opportunity:c.opportunity,match:c.match,actionResults:{completed:c.completed_actions||[]}});\n out.subject=(c.demo_calendar?'[DEMO TEST] ':'')+(c.type==='deadline_reminder'?'[Deadline reminder] ':c.type==='followup_notification'?'[Follow-up] ':c.type==='error_notification'?'[Action needs attention] ':'')+email.subject;out.text=c.type==='error_notification'?c.error_summary:email.text;\n }\n return [{json:out}];"
+      }
+    },
+    {
+      "id": "switch",
+      "name": "Route the permitted action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        1390,
+        0
+      ],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "internal",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "internal",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "internal"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "link",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "link",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "link"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "calendar",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "calendar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "calendar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "email",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "email",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "email"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "internal",
+      "name": "Apply tracker tasks and follow-ups",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1640,
+        -300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_apply_internal_action($1::uuid,$2::uuid) as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.action_id,$json.claim_token] }}"
+        }
+      }
+    },
+    {
+      "id": "link",
+      "name": "Create the owned calendar download",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1640,
+        -140
+      ],
+      "parameters": {
+        "jsCode": "const c=$input.first().json;return [{json:{status:'done',result:{ics:c.ics}}}];"
+      }
+    },
+    {
+      "id": "get-event",
+      "name": "Reconcile the stable calendar event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1640,
+        80
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/calendar/v3/calendars/YOUR-DEMO-CALENDAR-ID/events/{{ $json.event_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleCalendarOAuth2Api",
+        "options": {
+          "timeout": 10000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "calendar-check",
+      "name": "Distinguish missing event from integration failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const r=$input.first().json,c=$('Prepare the claimed action').first().json;return [{json:{...c,event_exists:r.statusCode===200&&r.body?.id===c.event_id,event_missing:r.statusCode===404}}];"
+      }
+    },
+    {
+      "id": "exists",
+      "name": "Calendar event already exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        80
+      ],
+      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
-            "leftValue": "",
             "typeValidation": "strict",
             "version": 2
           },
           "conditions": [
             {
-              "id": "is-first",
-              "leftValue": "={{ !$json.result.is_duplicate }}",
+              "id": "exists",
+              "leftValue": "={{ $json.event_exists }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -88,205 +342,433 @@
       }
     },
     {
-      "id": "upsert-app",
-      "name": "Add opportunity to application tracker",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
+      "id": "missing",
+      "name": "Calendar event is confirmed absent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
       "position": [
-        920,
-        -100
-      ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "select public.upsert_application_tracker($1::uuid, $2::uuid, 'to_apply', 'Added automatically by OpportunityOS on ACT') as app_id;",
-        "options": {
-          "queryReplacement": "={{ [$json.user_id, $json.opportunity_id] }}"
-        }
-      }
-    },
-    {
-      "id": "schedule-followup",
-      "name": "Schedule application deadline reminder",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        1140,
-        -100
-      ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "insert into public.followups(user_id, application_id, due_at, kind) values($1::uuid, $2::uuid, coalesce($3::timestamptz, now() + interval '7 days'), 'deadline_reminder');",
-        "options": {
-          "queryReplacement": "={{ [$json.user_id, $json.app_id, $json.opp_deadline] }}"
-        }
-      }
-    },
-    {
-      "id": "log-act-event",
-      "name": "Log autonomous action in events timeline",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        1360,
-        -100
-      ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "insert into public.events(user_id, stage, level, message, related_ids) values($1::uuid, 'act', 'info', 'Added to application tracker and scheduled reminder', jsonb_build_object('match_id', $2::uuid, 'opportunity_id', $3::uuid));",
-        "options": {
-          "queryReplacement": "={{ [$json.user_id, $json.match_id, $json.opportunity_id] }}"
-        }
-      }
-    },
-    {
-      "id": "finish-tracker",
-      "name": "Mark tracker action complete",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        1580,
-        -100
-      ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "select public.finish_action($1::text, 'done', '{\"status\":\"tracked\"}'::jsonb, null);",
-        "options": {
-          "queryReplacement": "={{ [$json.tracker_key] }}"
-        }
-      }
-    },
-    {
-      "id": "summary-act",
-      "name": "Return ACT execution summary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1800,
-        -100
-      ],
-      "parameters": {
-        "jsCode": "return [{\n  json: {\n    status: 'acted',\n    user_id: $json.user_id,\n    match_id: $json.match_id,\n    opportunity_id: $json.opportunity_id,\n    actions_executed: ['tracker_update', 'followup_schedule']\n  }\n}];"
-      }
-    },
-    {
-      "id": "duplicate-stop",
-      "name": "Duplicate action execution blocked",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        920,
+        2300,
         160
       ],
       "parameters": {
-        "jsCode": "return [{\n  json: {\n    status: 'duplicate_skipped',\n    message: 'Action already recorded with idempotency key'\n  }\n}];"
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "missing",
+              "leftValue": "={{ $json.event_missing }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "calendar-create",
+      "name": "Create the demo account event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        2520,
+        160
+      ],
+      "parameters": {
+        "resource": "event",
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR-DEMO-CALENDAR-ID",
+          "mode": "id"
+        },
+        "operation": "create",
+        "start": "={{ $json.start }}",
+        "end": "={{ $json.end }}",
+        "useDefaultReminders": false,
+        "additionalFields": {
+          "id": "={{ $json.event_id }}",
+          "summary": "={{ \"[DEMO TEST] \" + $json.opportunity.title }}",
+          "description": "={{ \"OpportunityOS deadline reminder. Review and apply yourself: \" + ($json.opportunity.application_url || \"Not stated\") }}",
+          "sendUpdates": "none",
+          "visibility": "private"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "calendar-update",
+      "name": "Update the existing event without duplication",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        2520,
+        -10
+      ],
+      "parameters": {
+        "resource": "event",
+        "calendar": {
+          "__rl": true,
+          "value": "YOUR-DEMO-CALENDAR-ID",
+          "mode": "id"
+        },
+        "operation": "update",
+        "eventId": "={{ $json.event_id }}",
+        "updateFields": {
+          "start": "={{ $json.start }}",
+          "end": "={{ $json.end }}",
+          "summary": "={{ \"[DEMO TEST] \" + $json.opportunity.title }}",
+          "sendUpdates": "none"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "calendar-result",
+      "name": "Verify the real calendar result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2740,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const r=$input.first().json,c=$('Prepare the claimed action').first().json;return [{json:r.id===c.event_id&&r.status!=='cancelled'?{status:'done',result:{event_id:r.id,calendar_link:r.htmlLink}}:{status:'failed',result:{error_code:'CALENDAR_RESULT_UNCERTAIN'}}}];"
+      }
+    },
+    {
+      "id": "calendar-fail",
+      "name": "Record calendar read failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2520,
+        330
+      ],
+      "parameters": {
+        "jsCode": "return [{json:{status:'failed',result:{error_code:'CALENDAR_READ_FAILED'}}}];"
+      }
+    },
+    {
+      "id": "mail",
+      "name": "Send from the agent mailbox",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1640,
+        470
+      ],
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "opportunityos0001@gmail.com",
+        "toEmail": "={{ $json.recipient }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.text }}",
+        "options": {
+          "appendAttribution": false,
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "mail-result",
+      "name": "Record SMTP acceptance or uncertainty",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
+        470
+      ],
+      "parameters": {
+        "jsCode": "const r=$input.first().json;return [{json:r.messageId&&!r.error?{status:'done',result:{message_id:r.messageId,delivery:'SMTP accepted; inbox delivery not independently proven'}}:{status:'uncertain',result:{error_code:'DELIVERY_UNCERTAIN'}}}];"
+      }
+    },
+    {
+      "id": "finish",
+      "name": "Save the fenced action result",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        3000,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_finish_action($1::uuid,$2::uuid,$3::text,$4::jsonb) as saved;",
+        "options": {
+          "queryReplacement": "={{ [$(\"Prepare the claimed action\").first().json.action_id,$(\"Prepare the claimed action\").first().json.claim_token,$json.status,JSON.stringify($json.result)] }}"
+        }
       }
     },
     {
       "id": "note",
-      "name": "Slice 4 Act Workflow boundaries",
+      "name": "Safe action contract",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        300,
-        -350
+        450,
+        -520
       ],
       "parameters": {
-        "content": "## OpportunityOS 04 Act Workflow\nAtomically claims action using idempotency key `user_id:match_id:action_type` to guarantee exactly-once side effects. Enforces the action safety policy: tracking, reminders, and notifications are permitted; external application submission is strictly prohibited.",
-        "width": 900,
+        "content": "## Deterministic policy → durable action → actual result\nNo application submission, impersonation or external profile sharing. Internal writes finish atomically. Calendar uses one stable event ID and reconciles before creating. Email has no blind retries after uncertainty. Only the connected demo user writes the separate demo calendar; every eligible user gets an owned .ics file. Credentials stay in n8n.",
+        "width": 1100,
         "height": 180
       }
     }
   ],
   "connections": {
-    "Execute Act workflow": {
+    "Act on the saved match": {
       "main": [
         [
           {
-            "node": "Generate idempotency keys and calendar payload",
+            "node": "Load current owned action context",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generate idempotency keys and calendar payload": {
+    "Load current owned action context": {
       "main": [
         [
           {
-            "node": "Claim tracker update action",
+            "node": "Check the code action boundary",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claim tracker update action": {
+    "Check the code action boundary": {
       "main": [
         [
           {
-            "node": "Is first action execution?",
+            "node": "Queue permitted actions atomically",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Is first action execution?": {
+    "Queue permitted actions atomically": {
       "main": [
         [
           {
-            "node": "Add opportunity to application tracker",
+            "node": "Claim one recoverable action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recover queued actions": {
+      "main": [
+        [
+          {
+            "node": "Claim one recoverable action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim one recoverable action": {
+      "main": [
+        [
+          {
+            "node": "Prepare the claimed action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare the claimed action": {
+      "main": [
+        [
+          {
+            "node": "Route the permitted action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route the permitted action": {
+      "main": [
+        [
+          {
+            "node": "Apply tracker tasks and follow-ups",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Duplicate action execution blocked",
+            "node": "Create the owned calendar download",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reconcile the stable calendar event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send from the agent mailbox",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Add opportunity to application tracker": {
+    "Create the owned calendar download": {
       "main": [
         [
           {
-            "node": "Schedule application deadline reminder",
+            "node": "Save the fenced action result",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Schedule application deadline reminder": {
+    "Reconcile the stable calendar event": {
       "main": [
         [
           {
-            "node": "Log autonomous action in events timeline",
+            "node": "Distinguish missing event from integration failure",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log autonomous action in events timeline": {
+    "Distinguish missing event from integration failure": {
       "main": [
         [
           {
-            "node": "Mark tracker action complete",
+            "node": "Calendar event already exists?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mark tracker action complete": {
+    "Calendar event already exists?": {
       "main": [
         [
           {
-            "node": "Return ACT execution summary",
+            "node": "Update the existing event without duplication",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Calendar event is confirmed absent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calendar event is confirmed absent?": {
+      "main": [
+        [
+          {
+            "node": "Create the demo account event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record calendar read failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create the demo account event": {
+      "main": [
+        [
+          {
+            "node": "Verify the real calendar result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update the existing event without duplication": {
+      "main": [
+        [
+          {
+            "node": "Verify the real calendar result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify the real calendar result": {
+      "main": [
+        [
+          {
+            "node": "Save the fenced action result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record calendar read failure": {
+      "main": [
+        [
+          {
+            "node": "Save the fenced action result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record SMTP acceptance or uncertainty": {
+      "main": [
+        [
+          {
+            "node": "Save the fenced action result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send from the agent mailbox": {
+      "main": [
+        [
+          {
+            "node": "Record SMTP acceptance or uncertainty",
             "type": "main",
             "index": 0
           }

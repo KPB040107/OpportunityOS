@@ -29,6 +29,7 @@ on conflict(user_id, opportunity_id) do update set
   confidence = excluded.confidence,
   status = excluded.status;
 
+update public.matches set explanation='DEMO schema test review',eligibility_status='UNKNOWN' where user_id=current_setting('opportunityos.act_b')::uuid;
 select set_config('opportunityos.match_a', (select id::text from public.matches where user_id = current_setting('opportunityos.act_a')::uuid), true);
 select set_config('opportunityos.match_b', (select id::text from public.matches where user_id = current_setting('opportunityos.act_b')::uuid), true);
 
@@ -71,7 +72,7 @@ begin
   end if;
 
   -- 3. Create approval request
-  approval_id := public.create_approval_request(b, match_b, 'Deadline unknown in posting', array['deadline'], 'https://resume.example.com/test');
+  approval_id := (public.worker_create_approval(match_b,'99999010','http://localhost:5678/webhook-waiting/99999010')->>'approval_id')::uuid;
   if (select status from public.approvals where id = approval_id) <> 'pending' then
     raise exception 'Approval not created as pending';
   end if;
@@ -106,31 +107,10 @@ end; $$;
 
 reset role;
 
--- 6. Approval resolution flow
-do $$
-declare
-  b uuid := current_setting('opportunityos.act_b')::uuid;
-  approval_id uuid := (select id from public.approvals where user_id = b);
-  res jsonb;
-begin
-  res := public.resolve_approval(approval_id, 'approved', 'User approved via link');
-  if not (res->>'success')::boolean then
-    raise exception 'Approval resolution failed';
-  end if;
-
-  if (select status from public.approvals where id = approval_id) <> 'approved' then
-    raise exception 'Approval status not changed to approved';
-  end if;
-
-  if (select count(*) from public.applications where user_id = b) <> 1 then
-    raise exception 'Approved opportunity not converted to application tracker';
-  end if;
-
-  if (select count(*) from public.user_feedback where user_id = b) <> 1 then
-    raise exception 'User feedback was not recorded on approval';
-  end if;
+-- 6. Legacy confirmation must remain retired; the authenticated bridge is tested in 0013_operations.test.sql.
+do $$ declare approval_id uuid := (select id from public.approvals where user_id=current_setting('opportunityos.act_b')::uuid);begin
+ begin perform public.resolve_approval(approval_id,'approved','Unsafe legacy link');raise exception 'Retired approval resolver accepted a decision';exception when others then if sqlerrm='Retired approval resolver accepted a decision' then raise;end if;end;
+ if exists(select 1 from public.applications where user_id=current_setting('opportunityos.act_b')::uuid) then raise exception 'Legacy approval performed actions';end if;
 end; $$;
-
 rollback;
-
-select 'PASS: Slice 4 Act & Ask schema, idempotency, RLS, and approval resolution' as test_result;
+select 'PASS: legacy schema isolation and retired approval resolver; current bridge covered separately' as test_result;

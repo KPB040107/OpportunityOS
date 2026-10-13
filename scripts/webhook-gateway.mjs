@@ -3,11 +3,13 @@ import { pathToFileURL } from 'node:url';
 
 export function createGateway({ targetPort = 5678, timeoutMs = 30000, maxBytes = 1048576 } = {}) {
   return http.createServer((req, res) => {
-    const path = req.url.split('?')[0];
-    if (!/^\/(webhook|webhook-waiting)\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*\/?$/.test(path)) {
+    const path = req.url.split('?')[0].replace(/\/$/, '');
+    // Only the two public intake interfaces cross this boundary. Wait resumes
+    // stay on the internal bridge; diagnostic/new webhook paths stay private.
+    if (!['/webhook/opportunityos-foundation', '/webhook/opportunityos-ingest'].includes(path)) {
       res.writeHead(404).end('Not found'); return;
     }
-    if (!['GET', 'POST', 'HEAD'].includes(req.method)) { res.writeHead(405).end(); return; }
+    if (req.method !== 'POST') { res.writeHead(405).end(); return; }
     if (Number(req.headers['content-length'] || 0) > maxBytes) { res.writeHead(413).end(); req.resume(); return; }
     let size = 0;
     const chunks = [];

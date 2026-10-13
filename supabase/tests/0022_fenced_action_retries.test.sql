@@ -1,0 +1,43 @@
+-- No external integrations run; every fixture and mutation is rolled back.
+begin;
+select set_config('opportunityos.retry_u',gen_random_uuid()::text,true);
+select set_config('opportunityos.retry_b',gen_random_uuid()::text,true);
+insert into auth.users(id,email) values(current_setting('opportunityos.retry_u')::uuid,'retry-'||current_setting('opportunityos.retry_u')||'@example.invalid'),(current_setting('opportunityos.retry_b')::uuid,'retry-b-'||current_setting('opportunityos.retry_b')||'@example.invalid');
+insert into public.profiles(user_id,notifications_enabled) values(current_setting('opportunityos.retry_u')::uuid,true),(current_setting('opportunityos.retry_b')::uuid,false);
+update opportunityos_private.settings set value=current_setting('opportunityos.retry_u') where key='demo_user_id';
+insert into public.opportunities(user_id,fingerprint,title,deadline,type,extracted_json,extraction_confidence,extraction_version) values(current_setting('opportunityos.retry_u')::uuid,repeat('c',64),'DEMO Retry',(now() at time zone 'Asia/Kolkata')::date+7,'internship','{}',.9,'extract-v1');
+update public.matches set status='complete',decision='ACT',eligibility_status='ELIGIBLE',evaluation_day=(now() at time zone 'Asia/Kolkata')::date where user_id=current_setting('opportunityos.retry_u')::uuid;
+select set_config('opportunityos.retry_action',(select public.worker_queue_action(id,'calendar_event')::text from public.matches where user_id=current_setting('opportunityos.retry_u')::uuid),true);
+select set_config('opportunityos.retry_mail',(select public.worker_queue_action(id,'email_notification')::text from public.matches where user_id=current_setting('opportunityos.retry_u')::uuid),true);
+update public.actions set status='failed' where id=current_setting('opportunityos.retry_action')::uuid;
+update public.actions set status='uncertain' where id=current_setting('opportunityos.retry_mail')::uuid;
+update public.matches set revision=revision+1 where user_id=current_setting('opportunityos.retry_u')::uuid;
+set local role authenticated;
+select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('opportunityos.retry_b'))::text,true);
+do $$ begin if public.retry_my_action(current_setting('opportunityos.retry_action')::uuid) then raise exception 'Cross-user retry accepted';end if;end; $$;
+select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('opportunityos.retry_u'))::text,true);
+do $$ begin
+ if not public.retry_my_action(current_setting('opportunityos.retry_action')::uuid) then raise exception 'Fresh policy did not permit stale-revision safe retry';end if;
+ if public.retry_my_action(current_setting('opportunityos.retry_action')::uuid) then raise exception 'Pending retry replay accepted';end if;
+ if public.retry_my_action(current_setting('opportunityos.retry_mail')::uuid) then raise exception 'Uncertain email retry accepted';end if;
+end; $$;
+reset role;
+do $$ declare a public.actions%rowtype;m public.matches%rowtype;s opportunityos_private.action_state%rowtype;begin
+ select * into a from public.actions where id=current_setting('opportunityos.retry_action')::uuid;
+ select * into m from public.matches where id=a.match_id;
+ select * into s from opportunityos_private.action_state where action_id=a.id;
+ if a.revision<>m.revision or (s.payload->>'revision')::bigint<>m.revision or s.payload->'match'->>'decision'<>'ACT' then raise exception 'Retry payload did not refresh current policy';end if;
+ if a.idempotency_key<>a.user_id::text||':'||a.match_id::text||':calendar_event' then raise exception 'Stable retry key changed';end if;
+ update public.actions set status='blocked' where id=a.id;
+ update public.matches set eligibility_status='UNKNOWN' where id=m.id;
+end; $$;
+set local role authenticated;
+select set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('opportunityos.retry_u'))::text,true);
+do $$ begin if public.retry_my_action(current_setting('opportunityos.retry_action')::uuid) then raise exception 'UNKNOWN bypassed by retry';end if;end; $$;
+reset role;
+update public.matches set eligibility_status='ELIGIBLE',decision='ASK' where user_id=current_setting('opportunityos.retry_u')::uuid;
+set local role authenticated;
+do $$ begin if public.retry_my_action(current_setting('opportunityos.retry_action')::uuid) then raise exception 'Unapproved ASK bypassed by retry';end if;end; $$;
+reset role;
+rollback;
+select 'PASS: owned current-revision safe action retry' as test_result;

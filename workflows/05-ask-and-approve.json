@@ -1,18 +1,20 @@
 {
   "id": "opportunityosSlice4Ask",
-  "name": "OpportunityOS 05 Ask and approve",
+  "name": "OpportunityOS 05 Ask and Approve",
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "executionTimeout": 604800,
-    "saveDataErrorExecution": "none",
+    "executionTimeout": 172900,
     "saveDataSuccessExecution": "none",
-    "saveManualExecutions": false
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "timezone": "Asia/Kolkata",
+    "errorWorkflow": "opportunityosSlice5ErrorHandler"
   },
   "nodes": [
     {
       "id": "trigger",
-      "name": "Execute Ask workflow",
+      "name": "Ask about the saved match",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1.1,
       "position": [
@@ -24,299 +26,438 @@
       }
     },
     {
-      "id": "prep-approval",
-      "name": "Extract approval context",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "id": "review-recovery",
+      "name": "Recover saved ASK decisions without a review",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
       "position": [
-        240,
-        0
+        0,
+        -180
       ],
       "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst userId = item.user_id || item.input?.profile?.user_id;\nconst matchId = item.match_id || item.id;\nconst opp = item.opportunity || item.input?.opportunity || {};\nconst match = item.match || item.decision || {};\n\nconst reason = match.explanation || 'Uncertain requirements or unverified deadline.';\nconst missing = (opp.ambiguity_flags || []).concat(match.reason_codes || []);\n\nreturn [{\n  json: {\n    ...item,\n    user_id: userId,\n    match_id: matchId,\n    opportunity_id: opp.id,\n    approval_reason: reason,\n    missing_info: missing\n  }\n}];"
-      }
-    },
-    {
-      "id": "create-approval",
-      "name": "Create pending approval record",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        480,
-        0
-      ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "select public.create_approval_request($1::uuid, $2::uuid, $3::text, $4::text[], null) as approval_id;",
-        "options": {
-          "queryReplacement": "={{ [$json.user_id, $json.match_id, $json.approval_reason, $json.missing_info] }}"
-        }
-      }
-    },
-    {
-      "id": "log-ask-event",
-      "name": "Log ASK event in events timeline",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        700,
-        0
-      ],
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "insert into public.events(user_id, stage, level, message, related_ids) values($1::uuid, 'ask', 'info', 'Created approval request awaiting student review', jsonb_build_object('match_id', $2::uuid, 'approval_id', $3::uuid));",
-        "options": {
-          "queryReplacement": "={{ [$json.user_id, $json.match_id, $json.approval_id] }}"
-        }
-      }
-    },
-    {
-      "id": "wait-approval",
-      "name": "Wait for human approval or timeout",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        920,
-        0
-      ],
-      "parameters": {
-        "resume": "webhook",
-        "options": {
-          "limitWaitTime": {
-            "values": {
-              "maxUnit": "days",
-              "maxValue": 7
-            }
-          }
-        }
-      }
-    },
-    {
-      "id": "eval-decision",
-      "name": "Parse resume decision",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1140,
-        0
-      ],
-      "parameters": {
-        "jsCode": "const item = $input.first().json;\nconst query = item.query || {};\nconst body = item.body || {};\nconst decision = query.decision || body.decision || item.decision || 'approved';\nconst isApproved = decision === 'approve' || decision === 'approved';\n\nreturn [{\n  json: {\n    ...item,\n    is_approved: isApproved,\n    user_decision: isApproved ? 'approved' : 'rejected'\n  }\n}];"
-      }
-    },
-    {
-      "id": "check-approved",
-      "name": "Did user approve?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        1360,
-        0
-      ],
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
+        "rule": {
+          "interval": [
             {
-              "id": "check-approved",
-              "leftValue": "={{ $json.is_approved }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
+              "field": "seconds",
+              "secondsInterval": 5
             }
-          ],
-          "combinator": "and"
-        },
+          ]
+        }
+      }
+    },
+    {
+      "id": "review-candidate",
+      "name": "Find one current missing review",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        250,
+        -180
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select m.id as match_id from public.matches m join public.opportunities o on o.id=m.opportunity_id and o.user_id=m.user_id where m.status='complete' and m.decision='ASK' and (o.deadline is null or o.deadline>(now() at time zone 'Asia/Kolkata')::date) and not exists(select 1 from public.approvals a where a.match_id=m.id and a.match_revision=m.revision) order by m.updated_at limit 1;",
         "options": {}
       }
     },
     {
-      "id": "resolve-approved",
-      "name": "Mark approval approved",
+      "id": "review-context",
+      "name": "Load current owned review context",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1580,
-        -100
+        250,
+        0
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "select public.resolve_approval($1::uuid, 'approved', 'User approved via email/webhook link') as result;",
+        "query": "select public.worker_match_context($1::uuid,$2::text,'05-ask') as result;",
         "options": {
-          "queryReplacement": "={{ [$json.approval_id] }}"
+          "queryReplacement": "={{ [$json.match_id,$execution.id] }}"
         }
       }
     },
     {
-      "id": "call-act",
-      "name": "Execute Act Workflow on Approval",
-      "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.2,
-      "position": [
-        1800,
-        -100
-      ],
-      "parameters": {
-        "workflowId": "opportunityosSlice4Act",
-        "mode": "choose",
-        "data": "passthrough"
-      }
-    },
-    {
-      "id": "resolve-rejected",
-      "name": "Mark approval rejected",
+      "id": "approval",
+      "name": "Bind the private waiting execution",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1580,
-        160
+        460,
+        0
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "select public.resolve_approval($1::uuid, 'rejected', 'User rejected via email/webhook link') as result;",
+        "query": "select public.worker_create_approval($1::uuid,$2::text,$3::text) as result;",
         "options": {
-          "queryReplacement": "={{ [$json.approval_id] }}"
+          "queryReplacement": "={{ [$json.result.match_id,$execution.id,$execution.resumeUrl.replace(/^https?:[/][/][^/]+/,\"http://localhost:5678\")] }}"
         }
       }
     },
     {
-      "id": "summary-ask",
-      "name": "Return ASK execution summary",
+      "id": "unpack",
+      "name": "Stop duplicate approval executions",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2020,
-        -100
+        500,
+        0
       ],
       "parameters": {
-        "jsCode": "return [{\n  json: {\n    status: 'approved_and_acted',\n    approval_id: $json.approval_id,\n    user_id: $json.user_id,\n    match_id: $json.match_id\n  }\n}];"
+        "jsCode": "const c=$input.first().json.result;return c?.created?[{json:c}]:[];"
+      }
+    },
+    {
+      "id": "wait",
+      "name": "Wait for authenticated confirmation",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        750,
+        0
+      ],
+      "parameters": {
+        "resume": "webhook",
+        "incomingAuthentication": "headerAuth",
+        "httpMethod": "POST",
+        "responseMode": "onReceived",
+        "options": {},
+        "limitWaitTime": true,
+        "limitType": "atSpecifiedTime",
+        "maxDateAndTime": "={{ $json.expires_at }}"
+      }
+    },
+    {
+      "id": "resume-body",
+      "name": "Require the private resume nonce",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const body=$input.first().json.body;return body&&/^[0-9a-f-]{36}$/.test(body.approval_id)&&/^[0-9a-f-]{36}$/.test(body.nonce)?[{json:body}]:[];"
+      }
+    },
+    {
+      "id": "consume",
+      "name": "Check saved outcome revision and eligibility",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1250,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_consume_resume($1::uuid,$2::text,$3::uuid) as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.approval_id,$execution.id,$json.nonce] }}"
+        }
+      }
+    },
+    {
+      "id": "approved",
+      "name": "Continue only verified permitted approval",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1500,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const r=$input.first().json.result;return r.approved?[{json:{match_id:r.match_id}}]:[];"
+      }
+    },
+    {
+      "id": "act",
+      "name": "Resume permitted actions",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1750,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "opportunityosSlice4Act",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "poll",
+      "name": "Recover pending confirmation deliveries",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        240
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "seconds",
+              "secondsInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "resume-claim",
+      "name": "Claim one pending private resume",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        250,
+        240
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_claim_resume() as result;",
+        "options": {}
+      }
+    },
+    {
+      "id": "resume-unpack",
+      "name": "Keep resume capabilities server side",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        240
+      ],
+      "parameters": {
+        "jsCode": "const r=$input.first().json.result;return r.claimed?[{json:r}]:[];"
+      }
+    },
+    {
+      "id": "resume-http",
+      "name": "Resume the same authenticated Wait execution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        750,
+        240
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({approval_id:$json.approval_id,nonce:$json.nonce}) }}",
+        "options": {
+          "timeout": 5000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "resume-result",
+      "name": "Record delivery attempt without claiming completion",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1000,
+        240
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_resume_attempt($1::uuid,$2::boolean);",
+        "options": {
+          "queryReplacement": "={{ [$(\"Keep resume capabilities server side\").first().json.approval_id,$json.statusCode === 200] }}"
+        }
       }
     },
     {
       "id": "note",
-      "name": "Slice 4 Ask and Approve boundaries",
+      "name": "Authenticated approval boundary",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        300,
-        -350
+        280,
+        -280
       ],
       "parameters": {
-        "content": "## OpportunityOS 05 Ask and Approve Workflow\nPauses execution at the Wait node. When the student clicks `{{ $execution.resumeUrl }}?decision=approve` or resolves it from the Approval Center, execution resumes and calls Workflow 04 Act. If rejected, records feedback and terminates with zero side effects.",
-        "width": 950,
-        "height": 180
+        "content": "## Review → explicit signed-in confirmation → private resume → reevaluation gate\nEmail points to an authenticated confirmation page, never a resume URL. UNKNOWN requires corrected facts and reevaluation. Approval expires at 48 hours or the deadline, whichever is first. Revision changes, replay, rejection and timeout cannot authorize actions. The resume nonce and Header Auth credential stay server-side; only the waiting execution can consume the decision. Queued resume is not displayed as completed.",
+        "width": 1200,
+        "height": 190
       }
     }
   ],
   "connections": {
-    "Execute Ask workflow": {
+    "Ask about the saved match": {
       "main": [
         [
           {
-            "node": "Extract approval context",
+            "node": "Load current owned review context",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extract approval context": {
+    "Recover saved ASK decisions without a review": {
       "main": [
         [
           {
-            "node": "Create pending approval record",
+            "node": "Find one current missing review",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Create pending approval record": {
+    "Find one current missing review": {
       "main": [
         [
           {
-            "node": "Log ASK event in events timeline",
+            "node": "Load current owned review context",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Log ASK event in events timeline": {
+    "Load current owned review context": {
       "main": [
         [
           {
-            "node": "Wait for human approval or timeout",
+            "node": "Bind the private waiting execution",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Wait for human approval or timeout": {
+    "Bind the private waiting execution": {
       "main": [
         [
           {
-            "node": "Parse resume decision",
+            "node": "Stop duplicate approval executions",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Parse resume decision": {
+    "Stop duplicate approval executions": {
       "main": [
         [
           {
-            "node": "Did user approve?",
+            "node": "Wait for authenticated confirmation",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Did user approve?": {
+    "Wait for authenticated confirmation": {
       "main": [
         [
           {
-            "node": "Mark approval approved",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Mark approval rejected",
+            "node": "Require the private resume nonce",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mark approval approved": {
+    "Require the private resume nonce": {
       "main": [
         [
           {
-            "node": "Execute Act Workflow on Approval",
+            "node": "Check saved outcome revision and eligibility",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Execute Act Workflow on Approval": {
+    "Check saved outcome revision and eligibility": {
       "main": [
         [
           {
-            "node": "Return ASK execution summary",
+            "node": "Continue only verified permitted approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue only verified permitted approval": {
+      "main": [
+        [
+          {
+            "node": "Resume permitted actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recover pending confirmation deliveries": {
+      "main": [
+        [
+          {
+            "node": "Claim one pending private resume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim one pending private resume": {
+      "main": [
+        [
+          {
+            "node": "Keep resume capabilities server side",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep resume capabilities server side": {
+      "main": [
+        [
+          {
+            "node": "Resume the same authenticated Wait execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume the same authenticated Wait execution": {
+      "main": [
+        [
+          {
+            "node": "Record delivery attempt without claiming completion",
             "type": "main",
             "index": 0
           }

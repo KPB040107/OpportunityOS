@@ -19,6 +19,8 @@ export async function saveProfile(_state:FormState,form:FormData):Promise<FormSt
   if(error) return {error:'Your profile could not be saved. Please try again.'};
   const modeResult=await supabase.rpc('save_autonomy_mode',{p_mode:mode.data});
   if(modeResult.error)return {error:'Profile saved, but your autonomy mode could not be saved. Please try again.'};
+  const preference=await supabase.rpc('set_notification_preference',{p_enabled:form.get('notifications_enabled')==='on'});
+  if(preference.error)return {error:'Profile saved, but your email preference was not confirmed.'};
   revalidatePath('/profile'); revalidatePath('/inbox'); revalidatePath('/activity');
   return {success:'Your profile is saved.'};
 }

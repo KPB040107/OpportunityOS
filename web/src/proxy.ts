@@ -13,7 +13,11 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await supabase.auth.getClaims();
+  const {data}=await supabase.auth.getClaims();
+  if(!data?.claims?.sub && /^\/approvals\/[0-9a-f-]{36}$/.test(request.nextUrl.pathname)){
+    const login=new URL('/login',request.url);login.searchParams.set('next',request.nextUrl.pathname+request.nextUrl.search);
+    const redirect=NextResponse.redirect(login);for(const cookie of response.cookies.getAll())redirect.cookies.set(cookie);return redirect;
+  }
   response.headers.set('Cache-Control', 'private, no-store');
   return response;
 }

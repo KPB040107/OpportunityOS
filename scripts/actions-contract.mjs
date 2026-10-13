@@ -1,135 +1,33 @@
-// Actions and side-effects contract for Slice 4: Act and Ask.
-// Pure functions enforce idempotency keys, safe action boundaries, and .ics generation.
-
-export function createActionsContract() {
-  const version = 'actions-v1';
-  const permittedActions = ['tracker_update', 'calendar_event', 'email_notification', 'followup_schedule'];
-  const blockedActions = ['submit_application', 'send_email_as_user', 'share_profile_external'];
-
-  function idempotencyKey(userId, matchId, actionType) {
-    if (!userId || !matchId || !actionType) throw new Error('MISSING_KEY_PARAMETERS');
-    if (!permittedActions.includes(actionType)) throw new Error('UNPERMITTED_ACTION_TYPE');
-    return `${userId}:${matchId}:${actionType}`;
-  }
-
-  function validateActionSafety(actionType) {
-    if (blockedActions.includes(actionType)) {
-      throw new Error(`RISKY_ACTION_BLOCKED: ${actionType} is strictly prohibited.`);
-    }
-    if (!permittedActions.includes(actionType)) {
-      throw new Error(`UNKNOWN_ACTION_TYPE: ${actionType}`);
-    }
-    return true;
-  }
-
-  function formatIcsEvent({ title, organization, deadline, applicationUrl, matchScore }) {
-    if (!title) throw new Error('TITLE_REQUIRED_FOR_CALENDAR');
-    const org = organization || 'Unknown Organisation';
-    const cleanTitle = `${title} (${org})`.replace(/[,;]/g, ' ');
-    const desc = `Opportunity: ${title}\\nOrganization: ${org}\\nMatch Score: ${matchScore ?? 'N/A'}/100\\nApply here: ${applicationUrl || 'N/A'}`;
-    
-    // Default to deadline date or 7 days from now if null
-    let dt = deadline ? new Date(deadline) : new Date(Date.now() + 7 * 86400000);
-    if (isNaN(dt.getTime())) dt = new Date(Date.now() + 7 * 86400000);
-    
-    const y = dt.getUTCFullYear();
-    const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(dt.getUTCDate()).padStart(2, '0');
-    const dateStr = `${y}${m}${d}`;
-
-    return [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//OpportunityOS//EN',
-      'CALSCALE:GREGORIAN',
-      'BEGIN:VEVENT',
-      `SUMMARY:Deadline: ${cleanTitle}`,
-      `DESCRIPTION:${desc}`,
-      applicationUrl ? `URL:${applicationUrl}` : '',
-      `DTSTART;VALUE=DATE:${dateStr}`,
-      `DTEND;VALUE=DATE:${dateStr}`,
-      'STATUS:CONFIRMED',
-      'END:VEVENT',
-      'END:VCALENDAR'
-    ].filter(Boolean).join('\r\n');
-  }
-
-  function formatNotificationEmail({ userEmail, opportunity, match, actionResults }) {
-    const title = opportunity.title || 'Untitled Opportunity';
-    const org = opportunity.organization || 'Unknown Organisation';
-    const score = match.match_score ?? 'N/A';
-    const conf = match.confidence ? Math.round(match.confidence * 100) : 'N/A';
-    
-    const subject = `[OpportunityOS] Automatic Action: ${title} (${org})`;
-    const text = [
-      `Hello,`,
-      ``,
-      `OpportunityOS has evaluated a strong match and automatically taken safe actions on your behalf:`,
-      ``,
-      `Opportunity: ${title}`,
-      `Organization: ${org}`,
-      `Match Score: ${score}/100 (Confidence: ${conf}%)`,
-      `Deadline: ${opportunity.deadline || 'Not stated'}`,
-      `Application Link: ${opportunity.application_url || 'Not stated'}`,
-      ``,
-      `Actions Taken:`,
-      `- Added to your Application Tracker as 'To Apply'`,
-      `- Scheduled application reminder`,
-      actionResults?.calendarEvent ? `- Added to your Google Calendar` : `- Calendar .ics link generated`,
-      ``,
-      `Remember: OpportunityOS will NEVER automatically submit an application for you. Please review and apply at your convenience.`,
-      ``,
-      `Best,`,
-      `Your OpportunityOS Agent`
-    ].join('\n');
-
-    return { subject, text };
-  }
-
-  function formatApprovalEmail({ resumeUrl, opportunity, match }) {
-    if (!resumeUrl) throw new Error('RESUME_URL_REQUIRED');
-    const title = opportunity.title || 'Untitled Opportunity';
-    const org = opportunity.organization || 'Unknown Organisation';
-    const reasons = match.explanation || 'Uncertain requirements or unverified deadline.';
-
-    const approveLink = `${resumeUrl}?decision=approve`;
-    const rejectLink = `${resumeUrl}?decision=reject`;
-
-    const subject = `[OpportunityOS Action Needed] Review: ${title} (${org})`;
-    const text = [
-      `Hello,`,
-      ``,
-      `OpportunityOS evaluated an opportunity that requires your review before any action is taken:`,
-      ``,
-      `Opportunity: ${title}`,
-      `Organization: ${org}`,
-      `Reason for review: ${reasons}`,
-      ``,
-      `Would you like to track this opportunity and create calendar reminders?`,
-      ``,
-      `[APPROVE] Add to tracker and schedule reminders:`,
-      `${approveLink}`,
-      ``,
-      `[REJECT] Ignore this opportunity:`,
-      `${rejectLink}`,
-      ``,
-      `You can also review and resolve this in your web Approval Center.`,
-      ``,
-      `Best,`,
-      `Your OpportunityOS Agent`
-    ].join('\n');
-
-    return { subject, text, approveLink, rejectLink };
-  }
-
-  return {
-    version,
-    permittedActions,
-    blockedActions,
-    idempotencyKey,
-    validateActionSafety,
-    formatIcsEvent,
-    formatNotificationEmail,
-    formatApprovalEmail
-  };
+// This exact contract is embedded in n8n; the model has no action tools.
+export function createActionsContract(){
+ const version='actions-v3';
+ const permittedActions=['tracker_update','calendar_event','calendar_link','email_notification','task_create','followup_schedule','approval_notification','deadline_reminder','followup_notification','error_notification'];
+ const blockedActions=['submit_application','send_email_as_user','share_profile_external'];
+ function validateActionSafety(type){if(blockedActions.includes(type))throw new Error('RISKY_ACTION_BLOCKED');if(!permittedActions.includes(type))throw new Error('UNKNOWN_ACTION_TYPE');return true;}
+ function idempotencyKey(user,match,type){if(!user||!match||!type)throw new Error('MISSING_KEY_PARAMETERS');if(!permittedActions.includes(type))throw new Error('UNPERMITTED_ACTION_TYPE');return `${user}:${match}:${type}`;}
+ function day(now=new Date()){return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);}
+ function authorize(c,now=new Date()){
+  validateActionSafety(c.type);if(!c.user_id||(!c.match_id&&c.type!=='error_notification')||!c.action_id||!c.claim_token)throw new Error('UNVERIFIED_ACTION_CONTEXT');
+  if(c.type==='error_notification'&&!c.match_id&&(c.claimed!==true||c.email_enabled!==true))throw new Error('UNVERIFIED_ACTION_CONTEXT');
+  if(['approval_notification','error_notification'].includes(c.type))return true;
+  if(c.match?.status!=='complete'||!['ACT','ASK'].includes(c.match.decision)||c.match.eligibility_status!=='ELIGIBLE'||c.match.evaluation_day!==day(now)||!c.opportunity?.deadline||c.opportunity.deadline<=day(now))throw new Error('POLICY_CHANGED');
+  return true; // Atomic database claims also enforce ACT/approved permission and revision.
+ }
+ function calendarDate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)throw new Error('VALID_DEADLINE_REQUIRED');return new Date(value+'T00:00:00Z');}
+ const esc=value=>String(value||'').replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').replace(/;/g,'\\;').replace(/,/g,'\\,');
+ function formatIcsEvent({title,organization,deadline,applicationUrl,matchScore,uid='opportunityos-event',now=new Date()}){
+  if(!title)throw new Error('TITLE_REQUIRED_FOR_CALENDAR');const start=calendarDate(deadline),end=new Date(start.getTime()+86400000),date=d=>d.toISOString().slice(0,10).replaceAll('-','');
+  if(applicationUrl&&!/^https?:\/\//i.test(applicationUrl))throw new Error('UNSAFE_APPLICATION_URL');
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//OpportunityOS//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT',`UID:${esc(uid)}@opportunityos.local`,`DTSTAMP:${now.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'')}`,`SUMMARY:Deadline: ${esc(title)} (${esc(organization||'Unknown Organisation')})`,`DESCRIPTION:${esc(`Opportunity: ${title}\nOrganization: ${organization||'Unknown Organisation'}\nMatch Score: ${matchScore??'N/A'}/100\nApply here: ${applicationUrl||'Not stated'}`)}`,applicationUrl?`URL:${esc(applicationUrl)}`:'',`DTSTART;VALUE=DATE:${date(start)}`,`DTEND;VALUE=DATE:${date(end)}`,'END:VEVENT','END:VCALENDAR'].filter(Boolean);
+  return lines.map(line=>{const out=[];let chunk='',size=0;for(const char of line){const bytes=unescape(encodeURIComponent(char)).length;if(size+bytes>73){out.push(chunk);chunk=' '+char;size=1+bytes;}else{chunk+=char;size+=bytes;}}out.push(chunk);return out.join('\r\n');}).join('\r\n')+'\r\n';
+ }
+ function formatNotificationEmail({opportunity,match,actionResults={}}){
+  const subject=`[OpportunityOS] ${opportunity.title||'Opportunity'} (${opportunity.organization||'Unknown Organisation'})`.replace(/[\r\n]/g,' ');
+  const text=[`Opportunity: ${opportunity.title}`,`Match Score: ${match.match_score??'N/A'}/100 (Confidence: ${Math.round((match.confidence||0)*100)}%)`,`Deadline: ${opportunity.deadline||'Not stated'}`,`Application Link: ${opportunity.application_url||'Not stated'}`,`Completed actions: ${(actionResults.completed||[]).join(', ')||'Check your activity for current action results.'}`,'OpportunityOS will NEVER automatically submit an application for you.'].join('\n');return {subject,text};
+ }
+ function formatApprovalEmail({confirmationUrl,opportunity,match,requiresInformation=false}){
+  if(!confirmationUrl||!/\/approvals\/[0-9a-f-]{36}\?revision=\d+$/i.test(confirmationUrl))throw new Error('AUTHENTICATED_CONFIRMATION_URL_REQUIRED');
+  return {subject:`[OpportunityOS Action Needed] Review: ${opportunity.title}`.replace(/[\r\n]/g,' '),text:[opportunity.title,match.explanation||'Review required.',requiresInformation?'Correct the missing facts and reevaluate before approval.':'Sign in and explicitly approve or reject on the confirmation page.',confirmationUrl,'Opening this link does not approve anything.'].join('\n'),confirmationUrl};
+ }
+ return {version,permittedActions,blockedActions,idempotencyKey,validateActionSafety,authorize,day,formatIcsEvent,formatNotificationEmail,formatApprovalEmail};
 }

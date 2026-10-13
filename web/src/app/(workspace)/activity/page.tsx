@@ -4,6 +4,7 @@ import { formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { LiveUpdates } from '@/components/live-updates';
 import type { Activity, AgentRun } from '@/lib/types';
+import {requestTime} from '@/lib/server-clock';
 
 export default async function ActivityPage() {
   const { supabase, user } = await requireUser();
@@ -18,7 +19,7 @@ export default async function ActivityPage() {
     supabase
       .from('agent_runs')
       .select('*')
-      .or(`user_id.eq.${user.id},user_id.is.null`)
+      .eq('user_id',user.id).eq('workflow','06-autopilot')
       .order('ts', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -29,7 +30,8 @@ export default async function ActivityPage() {
   const rows = (eventsResult.data || []) as Activity[];
   const heartbeat = heartbeatResult.data as AgentRun | null;
 
-  const isHealthy = heartbeat ? heartbeat.status === 'ok' : true;
+  const checkedAt=await requestTime();
+  const isHealthy = !heartbeatResult.error && !!heartbeat && heartbeat.status === 'ok' && new Date(heartbeat.ts).getTime() > checkedAt-26*3600000;
 
   return (
     <div className="space-y-6">
@@ -67,7 +69,7 @@ export default async function ActivityPage() {
                   }`}
                 >
                   <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                  {heartbeat ? (isHealthy ? 'Autopilot Active' : 'Degraded') : 'Autopilot Ready'}
+                  {heartbeatResult.error ? 'Status unavailable' : !heartbeat ? 'Not yet verified' : isHealthy ? 'Last scan healthy' : 'Stale or degraded'}
                 </span>
               </div>
               <p className="text-sm font-semibold">
@@ -80,7 +82,7 @@ export default async function ActivityPage() {
             <div className="flex items-center gap-1.5">
               <Clock className="size-3.5 text-muted-foreground" />
               <span>
-                Last Scan: {heartbeat?.ts ? formatDate(heartbeat.ts) : 'Just started'}
+                Last Scan: {heartbeat?.ts ? formatDate(heartbeat.ts) : 'No verified scan'}
               </span>
             </div>
             <div className="flex items-center gap-1.5">

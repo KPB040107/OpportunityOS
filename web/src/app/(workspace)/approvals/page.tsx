@@ -5,9 +5,13 @@ import { ResolveButtons } from './resolve-button';
 import { formatDate } from '@/lib/utils';
 import { CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 import type { Approval } from '@/lib/types';
+import {LiveUpdates} from '@/components/live-updates';
+import {requestTime} from '@/lib/server-clock';
+import {RetryWork} from '@/components/retry-work';
 
 export default async function ApprovalsPage() {
   const { supabase, user } = await requireUser();
+  const checkedAt=await requestTime();
 
   const { data: rawApprovals, error } = await supabase
     .from('approvals')
@@ -18,7 +22,10 @@ export default async function ApprovalsPage() {
       reason,
       missing_info,
       status,
-      resume_url,
+      match_revision,
+      expires_at,
+      requires_information,
+      resume_status,
       decided_at,
       created_at,
       match:matches(
@@ -56,6 +63,7 @@ export default async function ApprovalsPage() {
 
   return (
     <div className="space-y-8">
+      <LiveUpdates userId={user.id}/>
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Approval Center</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -133,9 +141,9 @@ export default async function ApprovalsPage() {
                     </div>
 
                     <div className="sm:shrink-0 flex flex-col items-end gap-3">
-                      <ResolveButtons approvalId={appr.id} />
+                      <ResolveButtons approvalId={appr.id} revision={appr.match_revision} requiresInformation={appr.requires_information} expired={new Date(appr.expires_at).getTime()<=checkedAt}/>
                       <span className="text-xs text-muted-foreground">
-                        Received {formatDate(appr.created_at)}
+                        Expires {formatDate(appr.expires_at)} · Execution: {appr.resume_status}
                       </span>
                     </div>
                   </div>
@@ -176,6 +184,8 @@ export default async function ApprovalsPage() {
                     <p className="text-muted-foreground">
                       Decision: <span className="font-semibold uppercase">{appr.status}</span> · Resolved {formatDate(appr.decided_at || appr.created_at)}
                     </p>
+                    <p className="text-muted-foreground">Execution: {appr.resume_status}</p>
+                    {appr.resume_status==='failed'&&new Date(appr.expires_at).getTime()>checkedAt&&<RetryWork id={appr.id} kind="resume"/>}
                   </div>
                   <span
                     className={`rounded-full px-2.5 py-0.5 font-semibold capitalize ${

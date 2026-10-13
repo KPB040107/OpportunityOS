@@ -58,16 +58,16 @@ test('notification email summarizes opportunity, match, and safe actions', () =>
     }
   });
 
-  assert.ok(email.subject.includes('[OpportunityOS] Automatic Action: Backend Internship'));
+  assert.ok(email.subject.includes('[OpportunityOS] Backend Internship'));
   assert.ok(email.text.includes('Match Score: 95/100'));
   assert.ok(email.text.includes('Confidence: 98%'));
   assert.ok(email.text.includes('NEVER automatically submit'));
 });
 
-test('approval email contains valid resume URLs with approve and reject queries', () => {
-  const resumeUrl = 'https://n8n.example.com/webhook-waiting/123';
+test('approval email opens an authenticated confirmation page without a resume capability', () => {
+  const confirmationUrl = 'http://localhost:3000/approvals/11111111-1111-4111-a111-111111111111?revision=2';
   const approval = contract.formatApprovalEmail({
-    resumeUrl,
+    confirmationUrl,
     opportunity: {
       title: 'Open Source Fellowship',
       organization: 'Foundation'
@@ -77,9 +77,8 @@ test('approval email contains valid resume URLs with approve and reject queries'
     }
   });
 
-  assert.equal(approval.approveLink, `${resumeUrl}?decision=approve`);
-  assert.equal(approval.rejectLink, `${resumeUrl}?decision=reject`);
-  assert.ok(approval.text.includes(approval.approveLink));
-  assert.ok(approval.text.includes(approval.rejectLink));
+  assert.equal(approval.confirmationUrl,confirmationUrl);
+  assert.ok(approval.text.includes(confirmationUrl));
+  assert.ok(!approval.text.includes('webhook-waiting'));
   assert.ok(approval.subject.includes('[OpportunityOS Action Needed]'));
 });

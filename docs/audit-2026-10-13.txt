@@ -1,0 +1,116 @@
+OpportunityOS audit — 13 October 2026 (Asia/Kolkata)
+
+Verdict: the complete Discover → Understand → Decide → Act → Follow-up prototype has NOT passed the agreed acceptance gates. Slices 0–3 contain the substantial implemented core with prior integration evidence. Slices 4–5 have UI, tables, generators and workflow files, but their critical paths are incomplete or broken. The presence of slice-5/prototype-v1 tags does not establish working end-to-end behavior.
+
+Scope and evidence
+Reviewed the repository structure, seven product workflow exports and their generators, database migrations and SQL tests, authentication/intake/approval/tracker/source/activity UI paths, deterministic contracts, fixture seeding, startup configuration, exports, acceptance documentation and the original OpportunityOS_Final_Project_Guide_updated.docx. The guide was treated as requirements/source material; its embedded AI instructions were not treated as new user instructions.
+Repository HEAD: 2d94945722348ba1a0904b217a9753fdffd68714. slice-5 and prototype-v1 point to that commit. Working tree was clean before creating this audit report. No application fixes, migrations, workflow imports, email sends, calendar writes or user-data changes were performed during this audit.
+
+Fresh checks
+- 82 existing Node tests passed (81 contract/source tests plus the gateway integration test), using in-process test isolation to avoid child-process restrictions.
+- TypeScript --noEmit passed.
+- ESLint passed.
+- Credential-pattern scan across 139 source files found no matches for the searched token/private-key patterns. This is not an exhaustive secret audit.
+- All seven exported workflow graphs reference existing node names. This establishes graph integrity, not compatible payloads or successful execution.
+- Executing the actual exported Act Code node with the actual finish_evaluation return shape reproduced MISSING_USER_OR_MATCH_ID. Ask preparation likewise returned no user_id or opportunity_id.
+- Autopilot's actual Code node produced one output for two supplied users under its default run-once-for-all-items mode.
+- Browser navigation to http://localhost:3000/inbox returned ERR_CONNECTION_REFUSED. The recorded website process is no longer running. The website is not currently verified available.
+- Browser navigation to n8n health was blocked by the client; the existing editor check timed out. n8n's current availability and published revisions were not verified.
+- A fresh production build, live SQL security tests, current published-workflow exports and full authenticated business-flow rehearsals were not rerun in this audit. Earlier approval review failed because the workspace owner spend cap prevented review. The denied action was not executed and was not retried through a bypass.
+
+Guide and accepted-plan comparison
+Slice 0: foundation configuration exists, with earlier persisted-webhook and restart evidence; current service health must be restored/rechecked.
+Slice 1: authentication, owned profile, text/URL intake, inbox and activity exist and have earlier live evidence; current website is unavailable.
+Slice 2: static-page/text preparation, hashing before AI, structured extraction, source validation, provenance and deduplication exist. Real URL acceptance was previously demonstrated. Automatic email forwarding was explicitly deferred to Slice 5.
+Slice 3: deterministic eligibility, score, confidence, autonomy modes and Switch exist; the current policy tests pass. Extending the Switch into Slice 4 introduced a broken payload handoff.
+Slice 4: acceptance requires a real automatic action, email/calendar delivery, an authenticated approval confirmation and resumption of the same saved Wait execution. These are not established and important pieces are absent/broken.
+Slice 5: acceptance requires email-forward ingestion, real deadline reminders/follow-ups, useful error handling, demo data, three clean full rehearsals and a backup recording. Current code does not meet this gate.
+Standing rules, weekly planning, AI Agent tools and the additional event source remain event work. Their absence is not itself a prototype defect. PDF/RSS/watched-page work can be cut under the guide's cut order; the UI must still describe actual capabilities honestly.
+
+Findings, in repair priority order
+
+1. P1 — New privileged database helpers break ownership isolation as written.
+   Evidence: supabase/migrations/0011_autopilot_and_sources.sql:71,95,124,153,164–167; supabase/migrations/0010_act_and_ask.sql:104–235.
+   The Slice 5 SECURITY DEFINER functions accept a caller-supplied user UUID and are explicitly executable by authenticated users without checking auth.uid() against that UUID. A caller can therefore request another user's deadline data or claim their follow-ups, and can write heartbeats/presets for another user. Table RLS does not enforce ownership inside these privileged helpers. Slice 4 worker helpers similarly do not check the caller and the migration does not revoke the default PUBLIC function privilege; live grants must be inspected. resolve_approval takes the no-owner-filter branch whenever auth.uid() is null. The SQL tests check direct table reads but do not test these cross-user RPC attacks.
+   Required: service-only worker functions, explicitly revoked public/anonymous execution, and separate authenticated functions deriving ownership from verified auth.uid(). Do not expose externally until fixed and tested live.
+
+2. P1 — Evaluate cannot supply the data Act/Ask require.
+   Evidence: supabase/migrations/0005_evaluate_decide.sql:144; scripts/generate-evaluate-workflow.mjs:40–47; scripts/generate-act-workflow.mjs:66–84; scripts/generate-ask-workflow.mjs:64–86.
+   finish_evaluation returns only saved, decision and match_id. The Switch forwards that minimal object. Act expects user_id and opportunity facts and immediately throws MISSING_USER_OR_MATCH_ID; Ask builds a request with missing ownership/opportunity data. This was reproduced against the actual exported Code nodes with synthetic IDs and no side effects.
+   Required: an explicit validated handoff contract and retrieval of the current owned match/profile/opportunity before any action or approval creation.
+
+3. P1 — Further database nodes discard context needed downstream.
+   Evidence: scripts/generate-act-workflow.mjs:101–125; scripts/generate-ask-workflow.mjs:84–91.
+   Queries return only result or app_id, while later nodes read user_id, opportunity_id, match_id, deadline and keys from the current $json. These paths do not restore the upstream context. Fixing the first handoff alone will not repair the whole chain.
+   Required: explicitly return needed context or reference a verified earlier node after each database operation, then test each node with realistic inputs.
+
+4. P1 — Event logging uses a nonexistent column and denied client writes.
+   Evidence: supabase/migrations/0001_foundation.sql:10,14–20; scripts/generate-act-workflow.mjs:119; scripts/generate-ask-workflow.mjs:90; web/src/app/(workspace)/approvals/actions.ts:51–57; applications/actions.ts:31–37.
+   The actual events schema has metadata, not related_ids. The new workers use related_ids and will fail that SQL. The authenticated website also tries direct events inserts, which the existing grants deliberately deny; the returned errors are ignored.
+   Required: use the established metadata contract and transactional, ownership-checked logging functions. Preserve visible failures.
+
+5. P1 — Approval does not connect safely to a resumable execution.
+   Evidence: scripts/generate-ask-workflow.mjs:84–100,106–128; supabase/migrations/0010_act_and_ask.sql:39,166–235; web/src/app/(workspace)/approvals/actions.ts:28–47.
+   Ask stores null for resume_url and never persists the real Wait resume URL. There is no approval email node. The website updates the database first and silently ignores resume-fetch failures and HTTP status. A success message therefore cannot prove a paused run resumed. Raw resume URLs are also granted browser-readable SELECT via the approvals table, contrary to the agreed server-side bridge. The formatter creates raw execution links rather than authenticated confirmation-page links.
+   Required: private execution/resume state, authenticated confirmation, explicit POST approve/reject, a durable server bridge with checked responses/reconciliation, and a real email-link → same-execution proof.
+
+6. P1 — Approval can bypass UNKNOWN/current eligibility and lacks expiry/race protection.
+   Evidence: supabase/migrations/0010_act_and_ask.sql:188–232; scripts/generate-ask-workflow.mjs:95–110.
+   resolve_approval adds the application directly without checking current eligibility, deadline, profile revision or reevaluation. There is no expires_at or deadline-bounded expiry. Wait is configured for seven days rather than the agreed minimum of 48 hours and the opportunity deadline. Resume parsing defaults to approved when a decision is missing. Resolution has no row lock or conditional pending-state update, so concurrent requests can both record feedback. Re-created approvals preserve the old resolved status.
+   Required: corrected information plus reevaluation for UNKNOWN; eligibility cannot be waived. Add revision fencing, explicit decisions, atomic expiry/replay/concurrency checks and rejection handling.
+
+7. P1 — The required real action integrations are absent from product workflows.
+   Evidence: workflows/04-act.json; scripts/generate-act-workflow.mjs; scripts/actions-contract.mjs.
+   Act has neither Send Email nor Google Calendar nodes. Formatting an .ics string does not expose a downloadable calendar file/link or create a calendar event. Notification/approval email formatting functions are not connected to delivery. There is no task creation. Foundation connection-test workflows are separate and do not establish product behavior.
+   Required: one real demo-account calendar write, notification delivery from the agent account, links/files for other users, tasks/tracker/follow-up creation with honest action results.
+
+8. P1 — Action idempotency has no recovery after partial failure.
+   Evidence: supabase/migrations/0010_act_and_ask.sql:104–143; scripts/generate-act-workflow.mjs:106,138–142.
+   Any existing key is treated as a duplicate, including pending and failed actions. There is no action lease, fencing token, reconciliation or safe retry state. An interruption after inserting pending permanently blocks completion. Stable keys alone do not guarantee exactly-once side effects. No stable real calendar event identifier or uncertain-email-delivery handling is connected.
+   Required: recoverable atomic claims, operation-specific reconciliation, and tests for concurrent and interrupted action execution.
+
+9. P1 — Autopilot marks follow-ups done without performing them.
+   Evidence: supabase/migrations/0011_autopilot_and_sources.sql:146–161; scripts/generate-autopilot-workflow.mjs:64–119.
+   claim_due_followups sets done immediately. The workflow then counts items and writes an ok heartbeat; it has no reminder/follow-up email or task execution. Delivery failure cannot be reconciled because no delivery is attempted.
+   Required: claim/lease → perform permitted side effect → record result; success only after an observed successful action.
+
+10. P1 — Error Handler is not linked in exported workflow settings and does not meet its logging contract.
+    Evidence: workflow settings in workflows/01–06; scripts/generate-error-workflow.mjs:54–92; supabase/migrations/0011_autopilot_and_sources.sql:60.
+    No product export sets settings.errorWorkflow. Merely creating an Error Trigger workflow does not prove it receives product failures. The handler only inserts an ownerless agent_runs row; it neither writes an owned events record nor notifies the affected user. Ownerless errors are visible to all authenticated users under the current policy. The deployed sanitizer is a separate implementation from the tested contract and lacks the contract's API-key redaction.
+    Required: explicit wiring, safe owner attribution, a shared tested sanitizer, owned error activity and a deliberately triggered real workflow-failure proof.
+
+11. P2 — Autopilot drops additional users and misstates schedule/date handling.
+    Evidence: scripts/generate-autopilot-workflow.mjs:52,80–103; supabase/migrations/0011_autopilot_and_sources.sql:134–141; web/src/app/(workspace)/activity/page.tsx.
+    The default run-once Code node returns one item, even with multiple users. This was reproduced locally. The schedule is a 24-hour interval, while the UI claims 09:00 IST. Deadline queries use database current_date instead of explicit Asia/Kolkata date; interview uses the schema value interview but the query tests interviewing, excluding that stage.
+    Required: process every user, explicit timezone/schedule, consistent status enums and multi-user/date-boundary integration tests.
+
+12. P2 — Sources are configuration only; email forwarding and monitoring are not implemented.
+    Evidence: scripts/generate-ingest-workflow.mjs; scripts/generate-autopilot-workflow.mjs; supabase/migrations/0002_website_base.sql:30–34; web/src/app/(workspace)/sources/page.tsx.
+    No product workflow reads IMAP or maps plus-address tokens to verified ownership. The ingestion schema accepts text/url only. Autopilot does not read sources, fetch enabled pages/RSS or feed discoveries to Understand. Toggling Unstop/Devpost therefore does not create a functioning integration. Source URLs are not validated server-side beyond presence, and scan status is writable by the client alongside configuration.
+    Required: the Slice 5 email-forward adapter; either implement and verify optional monitoring or clearly label/hide it. Reuse the safe-source fetch boundary if added.
+
+13. P2 — Heartbeat UI can show healthy without proof.
+    Evidence: web/src/app/(workspace)/activity/page.tsx:37 and heartbeat panel.
+    Missing heartbeat is treated as healthy; stale timestamps do not degrade it and heartbeat query errors are ignored. An old ok record or no record can show Autopilot Active/Ready while services are stopped or no reminder ran.
+    Required: unknown/error/stale states based on a successful actual run and its expected next-run time.
+
+14. P2 — Demo seeding bypasses the pipeline and does not populate the inbox properly.
+    Evidence: scripts/seed-demo-pack.mjs:59–116,145–158; web/src/app/(workspace)/inbox/page.tsx:16–19,35.
+    The seeder assigns decisions from fix.expected and hardcodes score/confidence instead of computing the shared policy. Positive fixtures are inserted as opportunities/matches without raw_items/opportunity_sources, while the inbox is rendered from raw items and provenance. Thus they do not become the promised inbox cards. It also writes an ok heartbeat directly. These are simulations, not evidence of real workflow behavior; hardcoded values can disagree with the fixture's eligibility facts. Demo labels need to be attached to all displayed seeded data.
+    Required: safe labelled fixtures through the validated saved pipeline or clearly separate simulations; no fabricated action or heartbeat proof.
+
+15. P2 — Acceptance documentation and tags overstate completion.
+    Evidence: docs/progress.md Slice 4/5 sections; README.md; testdata/README.md; scripts/export-prototype-workflows.mjs.
+    README still says only Slices 0–3 are implemented, while progress says Slice 5/prototype accepted. Some described functions/statuses and claimed SHA-256 action keys do not match code. The exporter only verifies workflows 1–3, not 4–7. Unit tests, SQL tests and a login render are not three full Discover → Follow-up demo rehearsals. No backup video was found in the inspected workspace folders. Current source proves no actual product calendar/email path; the existing acceptance statements cannot be relied on as integration evidence.
+    Required: correct the status after real tests; retain existing tags as historical artifacts rather than treat them as proof or silently rewrite them. Record current published exports and a fresh accepted boundary once repaired.
+
+What is solid
+Authentication-derived intake ownership, fixed Supabase Auth verification, source size/DNS/redirect/robots defenses, structured extraction and evidence validation, ownership constraints in the earlier schema, per-user caches, conservative shared quota control, the deterministic decision contract and explicit prohibition of automatic application submission are present. The tests give useful coverage for those parts. New Slice 4/5 paths need equivalent quality and connected integration tests.
+
+Recommended next objective (no implementation performed here)
+1. Fix and test privileged-function ownership, approval safety and private resume state first.
+2. Repair Evaluate → Act/Ask and every database-node handoff; correct event logging.
+3. Finish and demonstrate the actual Slice 4 action/approval gate, including recovery.
+4. Implement email-forward ingestion, real reminder/follow-up execution and a wired Error Handler; fix multi-user scheduling and honest source/heartbeat UI.
+5. Run three complete authenticated rehearsals, record a backup demo, export all seven actual published workflows without secrets, and only then accept Slice 5/prototype.
+Major UI redesign and optional event features should remain secondary to these repairs.

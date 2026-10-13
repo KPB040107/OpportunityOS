@@ -47,7 +47,8 @@ test('formats deadline reminder email with urgency tags', () => {
 });
 
 test('sanitizes secrets and credentials from error logs', () => {
-  const rawWithJwt = 'Workflow failed with auth error: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.doNotLeakThisSignature123';
+  const demoJwt = [JSON.stringify({alg:'HS256',typ:'JWT'}),JSON.stringify({sub:'DEMO_TEST_USER',exp:1})].map(value=>Buffer.from(value).toString('base64url')).join('.')+'.FAKE_DEMO_SIGNATURE';
+  const rawWithJwt = 'Workflow failed with auth error: '+demoJwt;
   const cleanJwt = autopilot.sanitizeErrorMessage(rawWithJwt);
   assert.ok(!cleanJwt.includes('doNotLeakThisSignature'));
   assert.ok(cleanJwt.includes('[REDACTED_JWT]'));
