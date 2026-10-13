@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import type { FormState } from '@/lib/types';
+import { signupErrorMessage } from '@/lib/auth-errors';
 export async function authenticate(_state:FormState,form:FormData):Promise<FormState> {
   const mode = form.get('mode');
   const parsed = z.object({email:z.email(),password:z.string().min(mode==='signup'?8:1).max(128)}).safeParse({email:form.get('email'),password:form.get('password')});
@@ -10,7 +11,14 @@ export async function authenticate(_state:FormState,form:FormData):Promise<FormS
   const supabase = await createClient();
   if(mode==='signup') {
     const {data,error} = await supabase.auth.signUp({...parsed.data, options:{emailRedirectTo:`${process.env.APP_ORIGIN || 'http://localhost:3000'}/auth/callback`}});
-    if(error) return {error:error.code==='over_email_send_rate_limit' ? 'Too many confirmation emails. Please wait before trying again.' : 'Could not create your account. Please check the details and try again.'};
+    if(error) {
+      // Deliberately log only bounded metadata, never the error object or form.
+      console.error('OpportunityOS signup failed', {
+        code: error.code && /^[a-z_]{1,64}$/.test(error.code) ? error.code : 'unknown',
+        status: error.status,
+      });
+      return {error:signupErrorMessage(error)};
+    }
     if(!data.session) return {success:'Check your email to confirm your account, then sign in here.'};
     redirect('/profile');
   }
