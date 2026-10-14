@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Inbox, Briefcase, CheckCircle2, Globe, UserRound, Activity, Compass, LogOut } from 'lucide-react';
+import { Inbox, Briefcase, CheckCircle2, Globe, UserRound, Activity, Compass, LogOut, Sliders } from 'lucide-react';
 import { signOut } from '@/app/login/actions';
 import { Button } from './ui/button';
 
@@ -11,6 +11,7 @@ export function Navigation({ email }: { email: string }) {
     { href: '/inbox', name: 'Opportunity inbox', icon: Inbox },
     { href: '/applications', name: 'Applications tracker', icon: Briefcase },
     { href: '/approvals', name: 'Approval center', icon: CheckCircle2 },
+    { href: '/rules', name: 'Standing rules', icon: Sliders },
     { href: '/sources', name: 'Saved sources', icon: Globe },
     { href: '/profile', name: 'My profile', icon: UserRound },
     { href: '/activity', name: 'Activity', icon: Activity }

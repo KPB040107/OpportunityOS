@@ -305,3 +305,48 @@ Objective: Implement autonomous discovery of opportunities from zero-cost public
 Gate S2 Status: PASSED. All 121 tests pass.
 Next Objective: Slice S3 — Standing Rules & Autonomy Ledger (Decision D4: 3 approvals -> propose rule; Home screen counter).
 
+## Slice S3 — Earned Autonomy: Standing Rules & Autonomy Ledger, October 15, 2026
+
+Objective: Enable the agent to earn trust through repeated explicit student decisions, proposing inspectable, revocable standing rules after 3 consecutive consistent choices, maintaining an immutable autonomy ledger with questions avoided, and surfacing the Home screen autonomy counter.
+
+1. Applied Database Migrations `0025_standing_rules_and_autonomy_ledger.sql` and `0026_standing_rules_evaluation_integration.sql`:
+   - `public.student_decisions`: Immutable records of explicit student choices (`approve`, `reject`, `ignore`, `pin`) with source scope and opportunity type.
+   - `public.standing_rules`: Typed standing rules (`proposed`, `active`, `rejected`, `disabled`) with preauthorization conditions (min score 60, min confidence 0.65 per Decision D7) and allowed action types.
+   - `public.autonomy_ledger`: Tracks rule applications, baseline vs effective decisions, manual overrides, and questions avoided, separating real from seeded demo fixtures.
+   - Implemented security-definer RPCs:
+     - `public.record_student_decision()`: Records choices, detects 3 consecutive consistent approvals in the same scope, and automatically proposes a typed standing rule.
+     - `public.respond_standing_rule()`: Handles student approval, rejection, and disabling of rules.
+     - `public.apply_standing_rule_to_match()`: Evaluates active rules against eligible items, upgrades baseline `ASK` to `ACT` under immutable guards, and logs questions avoided to the ledger.
+     - `public.get_home_counter()`: Computes total items read, acted, asked, ignored, and questions avoided, with real vs seeded breakdown.
+   - Wired `public.finish_evaluation()` in migration 0026 to automatically apply active standing rules when baseline decision is `ASK`.
+
+2. Deterministic Rules Contract (`scripts/rules-contract.mjs`):
+   - `evaluateRuleProposal()`: Inspects recent decisions; proposes a rule only upon 3 consistent decisions in the same scope; disagreement yields no proposal.
+   - `applyStandingRule()`: Enforces hard gates (expired, INELIGIBLE, UNKNOWN, unverified trust, or risk signals strictly block rules). Enforces Autopilot floor (score >= 60, confidence >= 0.65).
+   - `calculateAutonomyLedgerStats()`: Accurately calculates questions avoided and separates real from seeded counts.
+
+3. UI & Workspace Updates:
+   - `web/src/components/autonomy-counter.tsx`: High-visibility Home screen counter for items read, acted, asked, ignored, and questions avoided with real vs seeded breakdown. Rendered at top of Opportunity Inbox and Standing Rules pages.
+   - `web/src/app/(workspace)/rules/page.tsx`: Dedicated Standing Rules & Autonomy Ledger screen showing pending proposals, active rules, and the immutable audit table.
+   - `web/src/app/(workspace)/rules/rule-card.tsx`: Interactive client component to Approve, Reject, or Disable standing rules.
+   - `web/src/app/(workspace)/opportunities/decision-toolbar.tsx`: Interactive action bar on opportunity detail page for student choices ("Approve & Track", "Pin for Later", "Ignore"). Proposes rule upon 3 consistent approvals.
+   - `web/src/components/navigation.tsx`: Added "Standing rules" with icon to workspace navigation.
+
+4. Gate S3 Verification:
+   - Added `scripts/rules-contract.test.mjs` verifying:
+     - 3 consistent choices produce a typed rule proposal.
+     - Disagreement (e.g. 2 approve, 1 reject) does not propose a rule.
+     - Duplicate proposals for active/proposed rules are prevented.
+     - Scope conflicts (internship rule does not apply to jobs/hackathons) are respected.
+     - Inactive, rejected, or disabled rules cannot act.
+     - Hard gates hold: rules cannot act on UNKNOWN, INELIGIBLE, expired, unverified, or risk-flagged items.
+     - Active rule preauthorizes eligible ASK, upgrades to ACT, and records question avoided.
+     - Ledger stats and Home counter calculate accurately with seeded data labelled.
+   - Full regression suite: 129 / 129 tests pass across `scripts/*.test.mjs`.
+   - TypeScript (`tsc --noEmit`): 0 errors.
+   - Production build (`next build`): 14 routes compiled cleanly with code 0.
+
+Gate S3 Status: PASSED. All 129 tests pass.
+Next Objective: Slice S4 — Alert-email setup and capture routes (Unstop, Internshala and LinkedIn without visiting them).
+
+
