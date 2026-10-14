@@ -14,7 +14,7 @@
   "nodes": [
     {
       "id": "daily",
-      "name": "Scan every day at nine IST",
+      "name": "Scan daily at nine IST with bounded recovery",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -26,7 +26,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 9 * * *"
+              "expression": "0 * * * *"
             }
           ]
         }
@@ -67,7 +67,7 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "select public.worker_prepare_autopilot() as result;",
+        "query": "select public.worker_check_and_run_autopilot(false) as result;",
         "options": {}
       }
     },
@@ -94,14 +94,14 @@
         -340
       ],
       "parameters": {
-        "content": "## Daily at 09:00 Asia/Kolkata\nProcess every user; queue deadline reminders and due follow-ups with stable keys. The Act worker leases each job, sends from the agent mailbox, and records actual results. Follow-ups remain pending until the side effect succeeds. Quota/profile/day changes remain fenced. A heartbeat confirms the scan, not email delivery.",
+        "content": "## Daily at 09:00 Asia/Kolkata with Bounded Recovery\nProcess every user; queue deadline reminders and due follow-ups with stable keys. If the service is started after 09:00 IST or missed, the bounded recovery executes the missed scan safely once today. The Act worker leases each job, sends from the agent mailbox, and records actual results. Follow-ups remain pending until the side effect succeeds. Quota/profile/day changes remain fenced. A heartbeat confirms the scan, not email delivery.",
         "width": 900,
         "height": 180
       }
     }
   ],
   "connections": {
-    "Scan every day at nine IST": {
+    "Scan daily at nine IST with bounded recovery": {
       "main": [
         [
           {

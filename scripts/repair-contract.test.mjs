@@ -59,3 +59,24 @@ test('every product error path is wired and external nodes have no blind retry',
  for(const file of ['01-ingest','02-understand','03-evaluate','04-act','05-ask-and-approve','06-autopilot']){const w=JSON.parse(readFileSync('workflows/'+file+'.json'));assert.equal(w.settings.errorWorkflow,'opportunityosSlice5ErrorHandler');for(const n of w.nodes)if(/emailSend|googleCalendar/.test(n.type))assert.equal(n.retryOnFail,false);}
  const ask=JSON.parse(readFileSync('workflows/05-ask-and-approve.json')),wait=ask.nodes.find(n=>n.id==='wait');assert.equal(wait.parameters.incomingAuthentication,'headerAuth');assert.equal(wait.parameters.httpMethod,'POST');assert.equal(wait.parameters.limitType,'atSpecifiedTime');
 });
+test('bounded autopilot recovery migration and query enforce single run per day',()=>{
+ const sql=readFileSync('supabase/migrations/0022_autopilot_bounded_recovery.sql','utf8');
+ assert.ok(sql.includes('create or replace function public.worker_check_and_run_autopilot'));
+ assert.ok(sql.includes("status = 'ok'"));
+ assert.ok(sql.includes("time '09:00'"));
+ assert.ok(sql.includes("'already_ran'"));
+ assert.ok(sql.includes('grant execute on function public.worker_check_and_run_autopilot(boolean) to service_role'));
+ const w=JSON.parse(readFileSync('workflows/06-autopilot.json','utf8'));
+ assert.ok(w.nodes.find(n=>n.id==='scan').parameters.query.includes('worker_check_and_run_autopilot'));
+});
+test('compose config enforces supabase custom ca for secure TLS',()=>{
+ const compose=readFileSync('compose.yaml','utf8');
+ assert.ok(compose.includes('NODE_EXTRA_CA_CERTS: /home/node/.n8n/supabase-ca.pem'));
+});
+test('applications page contains live updates and sources page contains honest saved-portal copy',()=>{
+ const apps=readFileSync('web/src/app/(workspace)/applications/page.tsx','utf8');
+ assert.ok(apps.includes('LiveUpdates'));
+ const sources=readFileSync('web/src/app/(workspace)/sources/page.tsx','utf8');
+ assert.ok(sources.includes('Add Saved Portal'));
+ assert.ok(!sources.includes('Add Monitored Source'));
+});

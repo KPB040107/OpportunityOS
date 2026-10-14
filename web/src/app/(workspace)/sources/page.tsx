@@ -220,7 +220,7 @@ export default async function SourcesPage() {
               type="submit"
               className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
             >
-              Add Monitored Source
+              Add Saved Portal
             </button>
           </div>
         </form>

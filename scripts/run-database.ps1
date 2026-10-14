@@ -12,7 +12,9 @@ $workflow=@{id='opportunityosDatabaseMaintenance';name='OpportunityOS TEST datab
 # PowerShell unrolls nested arrays; a tiny JSON writer preserves n8n's edge shape.
 $temporary=Join-Path $projectRoot '.local/database-workflow.json'
 [IO.File]::WriteAllText($temporary,($workflow|ConvertTo-Json -Depth 30),[Text.UTF8Encoding]::new($false))
-node -e "const fs=require('fs');const p='.local/database-workflow.json';const w=JSON.parse(fs.readFileSync(p,'utf8'));w.connections={'Run one reviewed SQL file':{main:[[{node:'Run the reviewed database change',type:'main',index:0}]]}};fs.writeFileSync(p,JSON.stringify(w));"
+$nodePath = & (Join-Path $PSScriptRoot 'resolve-node-runtime.ps1')
+& $nodePath -e "const fs=require('fs');const p='.local/database-workflow.json';const w=JSON.parse(fs.readFileSync(p,'utf8'));w.connections={'Run one reviewed SQL file':{main:[[{node:'Run the reviewed database change',type:'main',index:0}]]}};fs.writeFileSync(p,JSON.stringify(w));"
+
 if ($LASTEXITCODE -ne 0) { throw 'Workflow generation failed.' }
 docker compose cp $temporary n8n:/tmp/opportunityos-database.json
 if ($LASTEXITCODE -ne 0) { throw 'Workflow copy failed.' }

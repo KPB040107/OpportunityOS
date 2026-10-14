@@ -154,3 +154,45 @@ Validation: 94 Node checks and eleven reversible database suites pass, including
 The five-minute H.264 backup at .local/demo-backup/OpportunityOS-prototype-evidence.mp4 is a labelled captured-checkpoint evidence walkthrough, not a continuous fresh-model recording. Rehearse the five-minute pitch before the event as planned. The human website session returned to login during the last walkthrough; the user signed back in and the real sourced job detail was independently verified. Seven authenticated routes returned 200 for the fictional account, and its intentionally expired in-memory session successfully refreshed through the actual proxy. No browser or human session credentials were read. The original slice-5/prototype-v1 tags must not be rewritten or treated as proof of this repair.
 
 Scope: the prototype core is deployed and its controlled integrations passed. Outlook-origin forwarding is supported through the personal alias; per-user Outlook OAuth and automatic Unstop/RSS/watched-page monitoring remain unimplemented. Standing rules, weekly planning, constrained AI Agent tools and another source remain event additions. PDF/ATS/insights and major UI redesign remain deferred. Failed source/AI/provider results are preserved and visible; no claim of permanent failure-free operation or always-on hosting is made.
+
+## Startup recovery, October 14, 2026
+
+Normal PowerShell could not find Node, although the Codex runtime was installed. Added a shared resolver for an installed Node, the existing bundled runtime, or an explicit OPPORTUNITYOS_NODE_PATH. Both website and tunnel helpers use it and require Node 20.9 or newer. No global PATH changes or runtime installation were needed.
+
+Verified both startup helpers with Node removed from the child PowerShell PATH. The website started and a second invocation recognized the existing server. Login and n8n health returned HTTP 200. The tunnel connected, its URL was applied to the existing n8n container without deleting storage, and an unauthenticated public intake request returned HTTP 401. No new opportunity, email or calendar test was submitted. These are startup/connectivity checks, not a new full integration acceptance. README documents the fallback; application policy and workflow exports were unchanged.
+
+## Post-Audit Prototype Repair and Verification, October 14, 2026
+
+1. Starting State and Repository Integrity:
+   - Verified Git branch `main` at commit `71ff459163bf3f0b741bd15afff6252424a90095` (tag `prototype-repair-2026-10-13`).
+   - Investigated the unexpected `.git/config` modification: verified that the line `vscode-merge-base = origin/main` was written automatically by VS Code's internal Git extension to cache upstream merge-base. No remote URLs, credentials, or tracking configurations were altered.
+   - Recorded configuration file hashes (`.env`, `.env.example`, `web/.env.local`, `web/.env.example`).
+   - Strictly preserved all user files, video artifacts (`OpportunityOS-prototype-evidence.mp4`), next-phase guides, and runtime state.
+
+2. Database Connection Security:
+   - Fixed TLS validation for the Supabase session pooler connection in n8n. Supabase's pooler issues a custom Root CA certificate (`Supabase Root 2021 CA`), which caused certificate chain verification errors when strict TLS was enabled without the CA.
+   - Extracted and stored the Root CA in the persistent volume at `/home/node/.n8n/supabase-ca.pem`.
+   - Added `NODE_EXTRA_CA_CERTS: /home/node/.n8n/supabase-ca.pem` to `compose.yaml`.
+   - Configured n8n Postgres credential `tzQIo9wT3uuhfgvd` with `ssl: 'require'` and `allowUnauthorizedCerts: false`.
+   - Verified encrypted transport via live n8n Postgres node execution returning `SHOW ssl;` -> `{ ssl: 'on' }`.
+
+3. Runtime Restoration and Startup Helpers:
+   - Updated `scripts/start-public-tunnel.ps1`: uses persistent processes via WMI (`Win32_Process.Create`) to prevent job-object teardown upon tool runner completion, validates HTTP 404 health check before reporting success, purges stale logs before tunnel startup, prevents duplicate processes on second invocation, and invokes bounded autopilot recovery on startup.
+   - Updated `scripts/start-website.ps1`: adds health check loop on `http://localhost:3000/login` before exit, recognizes running server without duplicate creation.
+   - Updated `scripts/run-database.ps1`: resolves Node runtime dynamically via `scripts/resolve-node-runtime.ps1`.
+   - Verified runtime: Website (port 3000, HTTP 200), n8n (port 5678, HTTP 200 `/healthz`), Gateway (port 5680, HTTP 404 on `/`, only intake paths forwarded), Cloudflare HTTPS Quick Tunnel active and routing. All sensitive paths (`/rest/*`, `/webhook-waiting/*`, `/workflow/*`) verified blocked with HTTP 404 through public gateway.
+
+4. Bounded Autopilot Recovery (Section 5):
+   - Investigated cause of stale Autopilot heartbeat: n8n was offline or restarted after 09:00 IST, missing the one-shot `0 9 * * *` schedule trigger and leaving the entire day unmonitored.
+   - Created and applied migration `0022_autopilot_bounded_recovery.sql`, adding `public.worker_check_and_run_autopilot(p_force boolean default false)`.
+   - Bounded recovery: only checks current day in `Asia/Kolkata`; if time is before 09:00 IST, reports `not_due`; if already ran today, preserves idempotency and returns `already_ran` with 0 queued actions; if after 09:00 IST and missed, safely executes `worker_prepare_autopilot()`, queues pending reminders/follow-ups, and logs heartbeats.
+   - Updated `scripts/generate-autopilot-workflow.mjs` with hourly check `0 * * * *` and `worker_check_and_run_autopilot(false)`. Regenerated `workflows/06-autopilot.json` and activated in n8n.
+   - Added startup recovery trigger to `start-public-tunnel.ps1`.
+   - Tested execution in n8n: first execution recovered missed scan for all profiles and recorded healthy heartbeats; second execution verified idempotency, returning `already_ran` with 0 duplicates.
+
+5. UI and Documentation Gaps (Section 6):
+   - Added `<LiveUpdates userId={user.id}/>` to `web/src/app/(workspace)/applications/page.tsx` so tracker status refreshes live.
+   - Replaced "Add Monitored Source" with "Add Saved Portal" on `web/src/app/(workspace)/sources/page.tsx` with honest saved-bookmark wording.
+   - Verified `tsc --noEmit` (0 errors), `eslint src` (0 errors), and `next build` (compiled successfully).
+   - All 102 Node contract and unit tests pass.
+   - All seven portable published workflows synchronized via `scripts/export-prototype-workflows.mjs`.

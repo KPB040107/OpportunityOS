@@ -6,6 +6,7 @@ import { formatDate } from '@/lib/utils';
 import { deadlineLabel } from '@/lib/analysis';
 import { ArrowUpRight, Calendar, Clock } from 'lucide-react';
 import type { Application, ApplicationStatus } from '@/lib/types';
+import { LiveUpdates } from '@/components/live-updates';
 
 export default async function ApplicationsPage() {
   const { supabase, user } = await requireUser();
@@ -33,6 +34,7 @@ export default async function ApplicationsPage() {
 
   return (
     <div className="space-y-6">
+      <LiveUpdates userId={user.id} />
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Applications Tracker</h1>
         <p className="mt-1 text-sm text-muted-foreground">
