@@ -10,7 +10,9 @@ export function createActionsContract(){
   validateActionSafety(c.type);if(!c.user_id||(!c.match_id&&c.type!=='error_notification')||!c.action_id||!c.claim_token)throw new Error('UNVERIFIED_ACTION_CONTEXT');
   if(c.type==='error_notification'&&!c.match_id&&(c.claimed!==true||c.email_enabled!==true))throw new Error('UNVERIFIED_ACTION_CONTEXT');
   if(['approval_notification','error_notification'].includes(c.type))return true;
-  if(c.match?.status!=='complete'||!['ACT','ASK'].includes(c.match.decision)||c.match.eligibility_status!=='ELIGIBLE'||c.match.evaluation_day!==day(now)||!c.opportunity?.deadline||c.opportunity.deadline<=day(now))throw new Error('POLICY_CHANGED');
+  const hasValidDeadline=c.opportunity?.deadline&&c.opportunity.deadline>day(now);
+  const isNoDeadlineAllowed=!c.opportunity?.deadline&&['internship','job'].includes(c.opportunity?.type)&&['tracker_update','email_notification'].includes(c.type);
+  if(c.match?.status!=='complete'||!['ACT','ASK'].includes(c.match.decision)||c.match.eligibility_status!=='ELIGIBLE'||c.match.evaluation_day!==day(now)||(!hasValidDeadline&&!isNoDeadlineAllowed))throw new Error('POLICY_CHANGED');
   return true; // Atomic database claims also enforce ACT/approved permission and revision.
  }
  function calendarDate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value)||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)throw new Error('VALID_DEADLINE_REQUIRED');return new Date(value+'T00:00:00Z');}

@@ -11,3 +11,22 @@ Policy order: expired → IGNORE; INELIGIBLE → IGNORE; UNKNOWN → ASK regardl
 The exact same factory is embedded in the n8n Code nodes and imported by tests. The model cannot return policy fields or use tools. A visible Switch routes saved current decisions. ACT and ASK are recorded readiness/review decisions only; side effects and authenticated approval handling belong to Slice 4.
 
 Each job is atomically claimed, fenced by token/revision and the evaluation date. Profile, skill, requirement or material opportunity changes enqueue reevaluation and invalidate older runs. Mode and daily urgency changes reuse matching evidence. Matching is cached per owner and minimal profile/fact/model/prompt version; identity and credentials are excluded. Extraction and matching share the existing serialized seven-attempt reservations, 60-second spacing and 350-per-Pacific-day ceiling. A failed evaluation needs an explicit bounded retry. The SQL schema exposes only owned public decision columns and keeps claims/snapshots/cache/budget private.
+
+## Policy Version `decision-v2` (Slice S1 Unlock, Option Flag)
+
+Under the Hackathon Demo Build Guide v3.0 (Slice S1), Decision D1 unlocks low-risk automated tracking for eligible postings without stated deadlines, and Decision D3 treats CGPA and year as profile information:
+
+1. **Missing Deadlines (Decision D1)**:
+   - **Internships and Jobs**: When an opportunity does not state a deadline (`deadline === null`), it is recorded as `NOT_STATED` rather than `UNKNOWN`. If all stated mandatory eligibility requirements pass and score/confidence meet the active autonomy mode threshold, the decision is **`ACT`** with reason code `ELIGIBLE_NO_DEADLINE_TRACK`.
+   - **Action Allowlist for No-Deadline Openings**: Permitted actions are strictly restricted to low-risk internal tracking (`tracker_update`) and outgoing email notifications (`email_notification`). Time-bound actions (`calendar_event`, `calendar_link`, `deadline_reminder`, `followup_schedule`, `task_create`) remain strictly blocked without a verified future deadline.
+   - **Hackathons**: A missing deadline remains **`UNKNOWN`** (`The hackathon submission deadline is not stated.`), retaining `ASK` status.
+
+2. **CGPA and Academic Year as Profile Info (Decision D3)**:
+   - Stated mandatory requirements are evaluated using three-valued logic (`TRUE`, `FALSE`, `UNKNOWN`).
+   - If an opportunity states a requirement that the student's profile fails (e.g. minimum CGPA 8.0, student has 7.5), it evaluates to `FAIL` $\rightarrow$ `INELIGIBLE` $\rightarrow$ `IGNORE`.
+   - If an opportunity does NOT state a requirement for CGPA, graduation year, or academic year, that fact is considered `NOT_STATED` and does not block eligibility.
+   - Broad or contradictory statements remain a conflict hold (`UNKNOWN`).
+
+3. **Grouped Clarifications**:
+   - Rather than creating repetitive individual questions for each opportunity, missing student facts are grouped by missing fact into `public.clarifications`.
+   - Resolving a clarification via `public.resolve_clarification()` automatically queues re-evaluations across all linked owned opportunities.

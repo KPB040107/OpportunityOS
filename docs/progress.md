@@ -221,3 +221,37 @@ Objective: Confirm the prototype is healthy, probe candidate sources with real e
 
 Gate S0 Status: PASSED. All 108 contract tests pass. Source feasibility register published in `docs/source-feasibility.md`.
 Next Objective: Slice S1 — Policy Unlock (Missing-deadline policy, CGPA and year as profile info, 3-valued constraint evaluator).
+
+## Slice S1 — Policy Unlock, October 15, 2026
+
+Objective: Enable the agent to act autonomously instead of asking when a posting is clear, implementing Decision D1 (missing-deadline policy behind flag) and Decision D3 (CGPA & year as profile facts with three-valued evaluation).
+
+1. Applied Database Migration `0023_policy_unlock_and_clarifications.sql`:
+   - Updated `worker_action_allowed`: permits low-risk internal tracking (`tracker_update`) and email notifications (`email_notification`) for eligible jobs/internships with no stated deadline (`deadline is null`), while strictly blocking time-bound calendar actions (`calendar_event`, `calendar_link`, `deadline_reminder`, `followup_schedule`).
+   - Updated `worker_plan_actions`: queues low-risk actions for no-deadline postings, and full calendar/task actions for postings with confirmed future deadlines.
+   - Added `public.clarifications` table with Row-Level Security and `resolve_clarification()` function to support grouped missing-fact questions across affected opportunities.
+   - Migration applied to Supabase database via n8n runner with verified status `success`.
+
+2. Shared Contract Updates:
+   - `scripts/decision-contract.mjs`: Added `enableMissingDeadlinePolicy` flag. When flag is off, maintains 100% exact backward compatibility with `decision-v1`. When flag is on (`decision-v2`), no-deadline jobs and internships evaluate deadline as `NOT_STATED` rather than `UNKNOWN`, producing `ACT` with reason code `ELIGIBLE_NO_DEADLINE_TRACK`. Hackathons without deadlines remain `UNKNOWN` $\rightarrow$ `ASK`.
+   - `scripts/actions-contract.mjs`: Updated `authorize()` to validate low-risk actions for no-deadline items while strictly requiring a verified deadline for calendar actions.
+   - Regenerated `workflows/03-evaluate.json` and `workflows/04-act.json`.
+
+3. UI & Display Updates:
+   - `web/src/lib/analysis.ts`: Updated `deadlineLabel()` to display `"Not stated"` when deadline is null.
+
+4. Test Verification:
+   - Created `scripts/policy-unlock.test.mjs` verifying all Slice S1 gates:
+     - Flag off matches `decision-v1` exactly.
+     - Flag on: eligible internship with no deadline produces `ACT` with tracker and email authorization.
+     - Flag on: no-deadline hackathon remains `ASK`.
+     - Flag on: stated CGPA requirement failure gives `IGNORE` (`INELIGIBLE`).
+     - Flag on: unstated requirements never block eligibility.
+     - Mandatory unverified requirement still gives `ASK` and cannot be bypassed.
+   - Full regression suite: 114 / 114 tests pass across `scripts/*.test.mjs`.
+   - TypeScript (`tsc --noEmit`): 0 errors.
+   - ESLint (`web/src`): 0 errors.
+   - Production build (`next build`): 13 routes compiled cleanly with code 0.
+
+Gate S1 Status: PASSED. All 114 tests pass.
+Next Objective: Slice S2 — Autonomous Discovery (JSearch, Lever company feed, Devpost hackathon source).

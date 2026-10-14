@@ -1,6 +1,6 @@
 // This factory is embedded verbatim in n8n and exercised by the fixture tests.
-export function createDecisionContract({hash}) {
-  const version='decision-v1',matchVersion='match-v1';
+export function createDecisionContract({hash, enableMissingDeadlinePolicy = false}) {
+  const version=enableMissingDeadlinePolicy?'decision-v2':'decision-v1',matchVersion='match-v1';
   const weights={skill_fit:40,career_alignment:20,interest_fit:15,location_fit:10,profile_fit:10,urgency:5};
   const thresholds={cautious:[80,.85],balanced:[70,.75],autopilot:[60,.65]};
   const canon=v=>String(v??'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
@@ -14,7 +14,13 @@ export function createDecisionContract({hash}) {
     const p=input.profile||{},o=input.opportunity,requirements=input.requirements||o.requirements||[],checks=[];
     const add=(kind,status,reason,evidence=null)=>checks.push({kind,status,reason,evidence});
     const d=days(o.deadline,date(now));
-    if(d===null)add('deadline','UNKNOWN','The application deadline is not stated.',null);
+    if(d===null){
+      if(enableMissingDeadlinePolicy && ['internship','job'].includes(o.type)){
+        add('deadline','NOT_STATED','The application deadline is not stated.',null);
+      } else {
+        add('deadline','UNKNOWN',o.type==='hackathon'?'The hackathon submission deadline is not stated.':'The application deadline is not stated.',null);
+      }
+    }
     else if(d<0)add('deadline','FAIL','The application deadline has passed.',o.deadline);
     else if(d===0)add('deadline','UNKNOWN','The deadline is today; its closing time is not verified.',o.deadline);
     else add('deadline','PASS',`The deadline is in ${d} day${d===1?'':'s'}.`,o.deadline);
@@ -91,7 +97,10 @@ export function createDecisionContract({hash}) {
     if(score<40)return {decision:'IGNORE',reason_codes:['LOW_MATCH']};
     const [s,c]=thresholds[mode],reasons=[];
     if(score<s)reasons.push('BELOW_MODE_SCORE');if(confidence<c)reasons.push('LOW_CONFIDENCE');
-    return {decision:reasons.length?'ASK':'ACT',reason_codes:reasons.length?reasons:['ELIGIBLE_STRONG_MATCH']};
+    if(reasons.length)return {decision:'ASK',reason_codes:reasons};
+    const hasNotStatedDeadline=elig.checks?.some(ch=>ch.kind==='deadline'&&ch.status==='NOT_STATED')??false;
+    const mainReason=hasNotStatedDeadline?'ELIGIBLE_NO_DEADLINE_TRACK':'ELIGIBLE_STRONG_MATCH';
+    return {decision:'ACT',reason_codes:[mainReason]};
   }
   function decide(input,rawMatch,now=new Date().toISOString()) {
     const o=input.opportunity,p=input.profile||{},elig=eligibility(input,now),mode=p.autonomy_mode||'balanced';
@@ -118,7 +127,7 @@ export function createDecisionContract({hash}) {
     // Complete fields cannot cancel the model's explicit uncertainty.
     const confidence=round(Math.min(model,.3*completeness+.3*verified+.25*clarity+.15*model));
     const result=policy(elig,match_score,confidence,mode);
-    const reasons={UNKNOWN_ELIGIBILITY:'Some required facts need clarification.',LOW_MATCH:'The match score is below 40.',BELOW_MODE_SCORE:`The score is below the ${mode} threshold.`,LOW_CONFIDENCE:`Confidence is below the ${mode} threshold.`,ELIGIBLE_STRONG_MATCH:`Eligible and above both ${mode} thresholds.`};
+    const reasons={UNKNOWN_ELIGIBILITY:'Some required facts need clarification.',LOW_MATCH:'The match score is below 40.',BELOW_MODE_SCORE:`The score is below the ${mode} threshold.`,LOW_CONFIDENCE:`Confidence is below the ${mode} threshold.`,ELIGIBLE_STRONG_MATCH:`Eligible and above both ${mode} thresholds.`,ELIGIBLE_NO_DEADLINE_TRACK:`Eligible with no stated deadline; queued for tracking and notification.`};
     const explanation=[reasons[result.reason_codes[0]],...elig.checks.filter(c=>c.status!=='PASS').map(c=>c.reason),`Match score ${match_score}/100; confidence ${Math.round(confidence*100)}%.`].join(' ');
     return {policy_version:version,match_version:matchVersion,eligibility_status:elig.status,eligibility_checks:elig.checks,expired:false,days_to_deadline:elig.days_to_deadline,component_scores,match_score,confidence,confidence_inputs,semantic_evidence:match.evidence,...result,explanation,mode};
   }
