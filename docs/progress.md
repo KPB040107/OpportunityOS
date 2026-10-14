@@ -196,3 +196,28 @@ Verified both startup helpers with Node removed from the child PowerShell PATH. 
    - Verified `tsc --noEmit` (0 errors), `eslint src` (0 errors), and `next build` (compiled successfully).
    - All 102 Node contract and unit tests pass.
    - All seven portable published workflows synchronized via `scripts/export-prototype-workflows.mjs`.
+
+## Slice S0 — Baseline and Source Feasibility, October 15, 2026
+
+Objective: Confirm the prototype is healthy, probe candidate sources with real evidence, and establish the source feasibility register without schema mutations.
+
+1. Baseline Health Verification:
+   - Node contract tests: 108/108 passing across `scripts/*.test.mjs`.
+   - Local services: Next.js website (port 3000, HTTP 200), n8n workflow engine (port 5678, HTTP 200 `/healthz`), Restricted Webhook Gateway (port 5680, HTTP 404 root / 401 unauthenticated intake).
+   - Public Tunnel: Active and routing via Cloudflare Quick Tunnel (`https://texts-quality-mel-burton.trycloudflare.com`).
+   - Database TLS: Connected to Supabase session pooler via n8n with strict TLS and custom Root CA verification.
+
+2. Source Feasibility Probes & Evidence (`docs/source-feasibility.md`):
+   - Lever Postings API: Tested live with zero authentication. CRED returned 7 active jobs; Meesho returned 58 active jobs (Bangalore); Spotify returned 82; Palantir returned 314. Structured fields (commitment, location, team, hostedUrl, applyUrl) mapped cleanly without LLM calls. Selected as primary company feed adapter for Slice S2.
+   - Devpost Hackathons: Tested live (`/api/hackathons`). Returned 14,070 open hackathons (9/page) with explicit submission period dates, prizes, and links. `robots.txt` explicitly allows general crawlers (`User-agent: * Disallow:`). Selected as primary hackathon adapter for Slice S2.
+   - Devfolio: `robots.txt` permits access, but requires HTML/SSR parsing. Retained as secondary fallback behind Devpost.
+   - JSearch: No RapidAPI / OpenWeb Ninja key present in environment. Per Decision D5 and Section S0 Gate, scheduled pull is fully satisfied by Lever and Devpost without delaying the pipeline; JSearch marked as awaiting provider key.
+   - Internshala: `robots.txt` strictly disallows `/internship/details/`, `/job/details/`, and `/api/`. Direct scraping blocked by policy; routed to email alert forwarding and bookmarklet capture (Slice S4).
+   - LinkedIn and Unstop: Login-walled and restricted; routed strictly through alert forwarding and bookmarklet capture (Slice S4).
+
+3. Hosting & Deployment Decision (D6):
+   - Frontend: Next.js on Vercel with HTTPS origin and synchronized Supabase redirect URLs.
+   - Backend/n8n: Docker with persistent volume and secure tunnel. Disclosed as controlled-demo operation.
+
+Gate S0 Status: PASSED. All 108 contract tests pass. Source feasibility register published in `docs/source-feasibility.md`.
+Next Objective: Slice S1 — Policy Unlock (Missing-deadline policy, CGPA and year as profile info, 3-valued constraint evaluator).
