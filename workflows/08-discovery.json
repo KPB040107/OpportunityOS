@@ -1,0 +1,486 @@
+{
+  "id": "opportunityosSlice2Discovery",
+  "name": "OpportunityOS 08 Discovery",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "timezone": "Asia/Kolkata",
+    "errorWorkflow": "opportunityosSlice5ErrorHandler"
+  },
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Scan active discovery sources",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "manual",
+      "name": "Manual discovery scan",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -160
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "trigger",
+      "name": "Execute discovery scan",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        160
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "claim",
+      "name": "Claim due source from registry",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_claim_due_discovery() as result;",
+        "options": {}
+      }
+    },
+    {
+      "id": "unpack",
+      "name": "Check claimed source",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const r = $input.first().json.result; return r?.claimed ? [{json: r}] : [];"
+      }
+    },
+    {
+      "id": "claimed",
+      "name": "Source was claimed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "claimed",
+              "leftValue": "={{ !!$json.run_id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "adapter-switch",
+      "name": "Route by adapter",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        900,
+        0
+      ],
+      "parameters": {
+        "mode": "rules",
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "lever",
+                    "leftValue": "={{ $json.adapter }}",
+                    "rightValue": "lever-v1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "lever"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "devpost",
+                    "leftValue": "={{ $json.adapter }}",
+                    "rightValue": "devpost-v1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "devpost"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "fetch-lever",
+      "name": "Fetch Lever company postings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        -120
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ \"https://api.lever.co/v0/postings/\" + $json.config.company + \"?mode=json\" }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "normalize-lever",
+      "name": "Normalize Lever postings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        -120
+      ],
+      "parameters": {
+        "jsCode": "\n  const crypto = require('crypto');\n  function hashString(str) { return crypto.createHash('sha256').update(String(str || '')).digest('hex'); }\n  const detectRiskSignals = function detectRiskSignals(text = '') {\n  const content = String(text || '');\n  const signals = [];\n\n  const feeMatch = content.match(/\\b(?:registration fee|processing fee|application fee|training fee|security deposit|pay \\$?\\d+|send money)\\b/i);\n  if (feeMatch) {\n    signals.push(`fee_payment_required: \"${feeMatch[0]}\"`);\n  }\n\n  const credentialMatch = content.match(/\\b(?:send (?:your )?(?:password|bank account|credit card|cvv|otp))\\b/i);\n  if (credentialMatch) {\n    signals.push(`credential_request: \"${credentialMatch[0]}\"`);\n  }\n\n  const injectionMatch = content.match(/\\b(?:ignore (?:all )?(?:previous )?instructions|system prompt|override (?:all )?policies|mark as act|eval:\\s*act)\\b/i);\n  if (injectionMatch) {\n    signals.push(`prompt_injection_detected: \"${injectionMatch[0]}\"`);\n  }\n\n  return signals;\n};\n  const helper = function normalizeLeverItem(company, item) {\n  if (!item || !item.id || !item.text) {\n    throw new Error('INVALID_LEVER_PAYLOAD: Missing id or title');\n  }\n\n  const title = String(item.text).trim();\n  const location = item.categories?.location || item.categories?.allLocations?.join(', ') || null;\n  const commitment = item.categories?.commitment || '';\n  const team = item.categories?.team || item.categories?.department || null;\n  const originalUrl = item.hostedUrl || `https://jobs.lever.co/${company}/${item.id}`;\n  const applyUrl = item.applyUrl || `${originalUrl}/apply`;\n\n  // Infer type: strictly job or internship\n  const isIntern = /\\b(?:intern|internship|trainee|apprentice)\\b/i.test(title + ' ' + commitment);\n  const type = isIntern ? 'internship' : 'job';\n\n  const rawText = `${title}\\nOrganization: ${company.toUpperCase()}\\nLocation: ${location || 'Not specified'}\\nCommitment: ${commitment}\\nTeam: ${team || 'N/A'}\\nApply: ${applyUrl}`;\n  const riskSignals = detectRiskSignals(rawText);\n  const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';\n\n  return {\n    contract_version: 'source-item-v2',\n    visibility: 'public',\n    source_kind: 'company_feed',\n    adapter: 'lever-v1',\n    external_id: String(item.id),\n    title,\n    organization: company.toUpperCase(),\n    type,\n    location,\n    deadline: null, // Lever postings do not carry explicit closing dates\n    original_url: originalUrl,\n    application_url: applyUrl,\n    trust_tier: trustTier,\n    source_badge: `${company.toUpperCase()} Careers`,\n    risk_signals: riskSignals,\n    content_hash: hashString(rawText),\n    raw_text: rawText,\n    fields: {\n      title,\n      organization: company.toUpperCase(),\n      location,\n      commitment,\n      deadline: null\n    },\n    field_provenance: [\n      { field: 'title', kind: 'structured_field', json_pointer: '/text', value: title },\n      { field: 'location', kind: 'structured_field', json_pointer: '/categories/location', value: location },\n      { field: 'apply_url', kind: 'structured_field', json_pointer: '/applyUrl', value: applyUrl }\n    ]\n  };\n};\n  const source = $('Check claimed source').first().json;\n  const items = $input.all().map(i => i.json);\n  const list = Array.isArray(items[0]) ? items[0] : items;\n  const bounded = list.slice(0, 10);\n  return bounded.map(item => ({\n    json: {\n      run_id: source.run_id,\n      item: helper(source.config?.company || 'cred', item)\n    }\n  }));\n"
+      }
+    },
+    {
+      "id": "fetch-devpost",
+      "name": "Fetch Devpost hackathons",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        120
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://devpost.com/api/hackathons",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": false
+    },
+    {
+      "id": "normalize-devpost",
+      "name": "Normalize Devpost hackathons",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1380,
+        120
+      ],
+      "parameters": {
+        "jsCode": "\n  const crypto = require('crypto');\n  function hashString(str) { return crypto.createHash('sha256').update(String(str || '')).digest('hex'); }\n  const detectRiskSignals = function detectRiskSignals(text = '') {\n  const content = String(text || '');\n  const signals = [];\n\n  const feeMatch = content.match(/\\b(?:registration fee|processing fee|application fee|training fee|security deposit|pay \\$?\\d+|send money)\\b/i);\n  if (feeMatch) {\n    signals.push(`fee_payment_required: \"${feeMatch[0]}\"`);\n  }\n\n  const credentialMatch = content.match(/\\b(?:send (?:your )?(?:password|bank account|credit card|cvv|otp))\\b/i);\n  if (credentialMatch) {\n    signals.push(`credential_request: \"${credentialMatch[0]}\"`);\n  }\n\n  const injectionMatch = content.match(/\\b(?:ignore (?:all )?(?:previous )?instructions|system prompt|override (?:all )?policies|mark as act|eval:\\s*act)\\b/i);\n  if (injectionMatch) {\n    signals.push(`prompt_injection_detected: \"${injectionMatch[0]}\"`);\n  }\n\n  return signals;\n};\n  const parseDevpostDeadline = function parseDevpostDeadline(datesStr) {\n  if (!datesStr) return null;\n  // e.g. \"Aug 31 - Oct 23, 2026\" or \"Oct 01 - Nov 15, 2026\"\n  const endMatch = datesStr.match(/([A-Za-z]{3})\\s+(\\d{1,2}),\\s+(\\d{4})/g);\n  if (endMatch && endMatch.length) {\n    const lastDate = endMatch[endMatch.length - 1];\n    const parsed = new Date(lastDate + ' UTC');\n    if (!isNaN(parsed.getTime())) {\n      return parsed.toISOString().slice(0, 10);\n    }\n  }\n  return null;\n};\n  const helper = function normalizeDevpostItem(item) {\n  if (!item || !item.id || !item.title) {\n    throw new Error('INVALID_DEVPOST_PAYLOAD: Missing id or title');\n  }\n\n  const title = String(item.title).trim();\n  const url = item.url || `https://devpost.com/hackathons/${item.id}`;\n  const deadline = parseDevpostDeadline(item.submission_period_dates);\n  const prizes = item.prize_amount ? String(item.prize_amount).replace(/<[^>]*>/g, '').trim() : null;\n  const rawText = `Hackathon: ${title}\\nSubmission Period: ${item.submission_period_dates || 'Not stated'}\\nPrizes: ${prizes || 'None listed'}\\nURL: ${url}`;\n  const riskSignals = detectRiskSignals(rawText);\n  const trustTier = riskSignals.length > 0 ? 'unverified' : 'attributed';\n\n  return {\n    contract_version: 'source-item-v2',\n    visibility: 'public',\n    source_kind: 'hackathon_registry',\n    adapter: 'devpost-v1',\n    external_id: String(item.id),\n    title,\n    organization: 'Devpost Community',\n    type: 'hackathon',\n    location: item.displayed_location?.location || 'Online',\n    deadline,\n    original_url: url,\n    application_url: url,\n    trust_tier: trustTier,\n    source_badge: 'Devpost',\n    risk_signals: riskSignals,\n    content_hash: hashString(rawText),\n    raw_text: rawText,\n    fields: {\n      title,\n      deadline,\n      prizes,\n      submission_window: item.submission_period_dates\n    },\n    field_provenance: [\n      { field: 'title', kind: 'structured_field', json_pointer: '/title', value: title },\n      { field: 'submission_period', kind: 'structured_field', json_pointer: '/submission_period_dates', value: item.submission_period_dates }\n    ]\n  };\n};\n  const source = $('Check claimed source').first().json;\n  const raw = $input.first().json;\n  const list = Array.isArray(raw?.hackathons) ? raw.hackathons : [];\n  const bounded = list.slice(0, 10);\n  return bounded.map(item => ({\n    json: {\n      run_id: source.run_id,\n      item: helper(item)\n    }\n  }));\n"
+      }
+    },
+    {
+      "id": "save-item",
+      "name": "Save catalog item and project",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1640,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_save_discovery_item($1::uuid, $2::jsonb) as result;",
+        "options": {
+          "queryReplacement": "={{ [$json.run_id, JSON.stringify($json.item)] }}"
+        }
+      }
+    },
+    {
+      "id": "finish",
+      "name": "Complete discovery run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1900,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.worker_finish_discovery_run($1::uuid, 'ok', $2::int, $2::int, 0, null) as finished;",
+        "options": {
+          "queryReplacement": "={{ [$('Check claimed source').first().json.run_id, $input.all().length] }}"
+        }
+      }
+    },
+    {
+      "id": "trigger-eval",
+      "name": "Trigger evaluation pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2140,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "opportunityosSlice3Evaluate",
+          "mode": "id"
+        },
+        "mode": "each",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      }
+    },
+    {
+      "id": "note",
+      "name": "Autonomous Discovery Pipeline",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        600,
+        -380
+      ],
+      "parameters": {
+        "content": "## Scheduled & On-Demand Discovery\\nFetches from official zero-auth company feeds (Lever) and hackathons (Devpost). Bounded to 10 items per dispatch. Structured fields mapped in code with zero LLM tokens. Preserves tiered trust: corroborated (company feeds) vs attributed (Devpost) vs unverified (fee/credential risk signals). Drops non-internship/job/hackathon items. Projects to all registered users and triggers evaluation.",
+        "width": 900,
+        "height": 200
+      }
+    }
+  ],
+  "connections": {
+    "Scan active discovery sources": {
+      "main": [
+        [
+          {
+            "node": "Claim due source from registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual discovery scan": {
+      "main": [
+        [
+          {
+            "node": "Claim due source from registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute discovery scan": {
+      "main": [
+        [
+          {
+            "node": "Claim due source from registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim due source from registry": {
+      "main": [
+        [
+          {
+            "node": "Check claimed source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check claimed source": {
+      "main": [
+        [
+          {
+            "node": "Source was claimed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source was claimed?": {
+      "main": [
+        [
+          {
+            "node": "Route by adapter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by adapter": {
+      "main": [
+        [
+          {
+            "node": "Fetch Lever company postings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Devpost hackathons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Lever company postings": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lever postings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lever postings": {
+      "main": [
+        [
+          {
+            "node": "Save catalog item and project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Devpost hackathons": {
+      "main": [
+        [
+          {
+            "node": "Normalize Devpost hackathons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Devpost hackathons": {
+      "main": [
+        [
+          {
+            "node": "Save catalog item and project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save catalog item and project": {
+      "main": [
+        [
+          {
+            "node": "Complete discovery run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Complete discovery run": {
+      "main": [
+        [
+          {
+            "node": "Trigger evaluation pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

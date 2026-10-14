@@ -255,3 +255,53 @@ Objective: Enable the agent to act autonomously instead of asking when a posting
 
 Gate S1 Status: PASSED. All 114 tests pass.
 Next Objective: Slice S2 — Autonomous Discovery (JSearch, Lever company feed, Devpost hackathon source).
+
+## Slice S2 — Autonomous Discovery and Tiered Trust, October 15, 2026
+
+Objective: Implement autonomous discovery of opportunities from zero-cost public feeds (Lever company feeds for CRED and Meesho; Devpost hackathons) with zero LLM mapping costs, canonical catalog deduplication, risk signal detection, and Tiered Trust action gating (corroborated, attributed, unverified).
+
+1. Applied Database Migration `0024_discovery_registry_and_catalog.sql`:
+   - Updated `public.raw_items` source type constraint to accept `'discovery'`.
+   - Added `trust_tier`, `source_badge`, `catalog_id`, and `risk_signals` columns to `public.opportunities`.
+   - Created `opportunityos_private.source_registry` with seeded sources: CRED (Lever), Meesho (Lever), Devpost (Hackathons), and JSearch (Awaiting API key per Decision D5).
+   - Created `opportunityos_private.catalog_opportunities` and `opportunityos_private.discovery_runs` to track runs and prevent cross-run duplicate ingestion.
+   - Implemented security-definer worker functions: `public.worker_claim_due_discovery()`, `public.worker_save_discovery_item()`, `public.worker_finish_discovery_run()`, and user-facing `public.get_discovery_sources()`.
+
+2. Deterministic Adapters & Risk Detection:
+   - `scripts/discovery-adapters.mjs`: Implemented `normalizeLeverItem`, `normalizeDevpostItem`, and `detectRiskSignals`. Mappings run completely deterministically without LLM calls.
+   - Bounded discovery to a maximum of 10 items per run to preserve system resources.
+   - Implemented risk signal detection: scans for payment/fee keywords, credential requests, and prompt injection patterns. Flags detected items and downgrades trust tier to `unverified`.
+
+3. Tiered Trust Enforcement in Actions Contract:
+   - `scripts/actions-contract.mjs`: Enforced Tiered Trust rules in `authorize()`:
+     - `corroborated` (direct company feeds): permits all actions, including calendar actions when deadline is present.
+     - `attributed` (public aggregators): permits tracker and email notification, but blocks automatic calendar actions.
+     - `unverified` (risk signals present): blocks all automatic actions; holds item for human review.
+   - Regenerated `workflows/04-act.json` and synchronized with n8n.
+
+4. Autonomous Discovery Workflow (`workflows/08-discovery.json`):
+   - Created workflow via `scripts/generate-discovery-workflow.mjs` running on hourly schedule (`0 * * * *`).
+   - Tested live execution in n8n (`opportunityosSlice2Discovery`): successfully claimed Devpost Hackathons feed, fetched listings, normalized 10 items, saved them to the canonical catalog, projected to user inboxes, and queued automatic evaluation (`opportunityosSlice3Evaluate` executions 52452 through 52461).
+
+5. UI & Workspace Updates:
+   - `web/src/lib/types.ts`: Extended `RawItem['source_type']` with `'discovery'`.
+   - `web/src/lib/analysis.ts`: Added `trust_tier`, `source_badge`, `risk_signals` to `Opportunity` model and exported `trustBadgeDetails()`.
+   - `web/src/app/(workspace)/inbox/page.tsx`: Displays trust badge, risk warning badges, and autonomous feed label.
+   - `web/src/app/(workspace)/opportunities/[id]/page.tsx`: Shows trust tier and risk signal alert box.
+   - `web/src/app/(workspace)/sources/page.tsx`: Displays autonomous discovery feeds queryable via `get_discovery_sources()`.
+
+6. Gate S2A & S2B Verification:
+   - Added test suite `scripts/discovery-contract.test.mjs` verifying:
+     - Schema fixtures transform into `source-item-v2` with zero LLM calls.
+     - Internship inference correctly distinguishes internships from jobs.
+     - 10-item cap per run is enforced.
+     - Deduplication by content hash / stable key across runs.
+     - Fee/payment signals trigger risk signals and unverified tier.
+     - Prompt injection attempts are neutralized as data and flagged.
+     - Tiered Trust gating blocks unauthorized automatic actions.
+   - Full regression suite: 121 / 121 tests pass across `scripts/*.test.mjs`.
+   - TypeScript (`tsc --noEmit`): 0 errors.
+
+Gate S2 Status: PASSED. All 121 tests pass.
+Next Objective: Slice S3 — Standing Rules & Autonomy Ledger (Decision D4: 3 approvals -> propose rule; Home screen counter).
+

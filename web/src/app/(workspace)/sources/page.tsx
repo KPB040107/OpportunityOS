@@ -11,18 +11,31 @@ import {publicUrl} from '@/lib/validation';
 export default async function SourcesPage() {
   const { supabase, user } = await requireUser();
 
-  const { data: sourcesData, error } = await supabase
-    .from('sources')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: true });
+  const [sourcesResult, discoveryResult, profileResult] = await Promise.all([
+    supabase
+      .from('sources')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: true }),
+    supabase.rpc('get_discovery_sources'),
+    supabase.from('profiles').select('email_alias_token').eq('user_id', user.id).maybeSingle()
+  ]);
 
-  if (error) {
+  if (sourcesResult.error) {
     throw new Error('Sources data unavailable');
   }
 
-  const sources = (sourcesData || []) as Source[];
-  const {data:profile}=await supabase.from('profiles').select('email_alias_token').eq('user_id',user.id).maybeSingle();
+  const sources = (sourcesResult.data || []) as Source[];
+  const discoverySources = (discoveryResult.data || []) as Array<{
+    id: string;
+    name: string;
+    adapter: string;
+    source_kind: string;
+    status: string;
+    last_scan: string | null;
+    item_count: number;
+  }>;
+  const profile = profileResult.data;
   const sourceLink=(url:string)=>{try{return publicUrl(url);}catch{return undefined;}};
 
   return (
@@ -36,6 +49,47 @@ export default async function SourcesPage() {
         </div>
         <SeedPresetsButton />
       </div>
+
+      {/* Autonomous Discovery Registry */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold">Autonomous discovery feeds</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Zero-auth company feeds and public registries queried periodically on schedule. Discovered opportunities are automatically projected to your inbox.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {discoverySources.map((ds) => {
+            const isActive = ds.status === 'active';
+            const tierBadge = ds.adapter === 'lever-v1' ? 'Corroborated · Direct Feed' : ds.adapter === 'devpost-v1' ? 'Attributed · Registry' : 'Awaiting Validation';
+            const tierColor = ds.adapter === 'lever-v1' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : ds.adapter === 'devpost-v1' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-amber-50 text-amber-800 border-amber-200';
+            return (
+              <Card key={ds.id} className="p-4 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <Globe className="size-3.5 text-primary" />
+                      {ds.source_kind.replace('_', ' ')}
+                    </span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium border ${tierColor}`}>
+                      {tierBadge}
+                    </span>
+                  </div>
+                  <h3 className="mt-2 text-base font-semibold">{ds.name}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">Adapter: <code className="font-mono">{ds.adapter}</code></p>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{ds.last_scan ? `Scanned ${formatDate(ds.last_scan)}` : 'Scheduled discovery active'}</span>
+                  <span className="font-semibold">{ds.item_count} items discovered</span>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+
       <Card><h2 className="text-lg font-semibold">Email forwarding</h2>{profile?.email_alias_token?<><p className="mt-3">In Gmail or Outlook, set a forwarding rule for opportunity alerts to your personal address:</p><p className="mt-3 break-all font-mono text-sm">opportunityos0001+{profile.email_alias_token}@gmail.com</p><p className="mt-3 text-sm">This address routes mail to your own inbox. Attachments are not read. Send the announcement in the message text. Forward-provider confirmation messages may need to be confirmed manually.</p></>:<p>Save your profile first to create your forwarding address.</p>}<p className="mt-3 text-xs">The links below are saved configuration. Scheduled website/RSS monitoring remains an event addition; paste a specific announcement URL into your inbox to analyse it now.</p></Card>
 
       {sources.length === 0 ? (
