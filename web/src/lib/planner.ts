@@ -330,6 +330,7 @@ export function generateWeeklyPlan({
   // 4. Place candidates into available slots
   for (const cand of sortedCandidates) {
     const duration = customEstimates[cand.id] || 30;
+    const slotsNeeded = Math.max(1, Math.ceil(duration / 30));
 
     // Check effort budget
     if (duration > remainingBudgetMinutes) {
@@ -344,29 +345,40 @@ export function generateWeeklyPlan({
       continue;
     }
 
-    // Find the earliest free slot before the deadline without inventing precise cutoff times
+    // Find the earliest free contiguous block of slots before the deadline
     let assignedSlotIdx = -1;
-    for (let i = 0; i < availableSlots.length; i++) {
-      if (!slotUsed[i]) {
-        const slot = availableSlots[i];
-        let isBeforeDeadline = true;
-
-        if (cand.deadline) {
-          if (cand.deadline.includes('T')) {
-            const deadlineMs = new Date(cand.deadline).getTime();
-            isBeforeDeadline = slot.end.getTime() <= deadlineMs;
-          } else {
-            // Pure calendar date comparison: slot calendar date must be <= deadline calendar date
-            const slotDateStr = slot.start.toISOString().slice(0, 10);
-            const dlDateStr = cand.deadline.slice(0, 10);
-            isBeforeDeadline = slotDateStr <= dlDateStr;
-          }
-        }
-
-        if (isBeforeDeadline) {
-          assignedSlotIdx = i;
+    for (let i = 0; i <= availableSlots.length - slotsNeeded; i++) {
+      let canFit = true;
+      for (let k = 0; k < slotsNeeded; k++) {
+        if (slotUsed[i + k]) {
+          canFit = false;
           break;
         }
+        if (k > 0 && availableSlots[i + k].start.getTime() !== availableSlots[i + k - 1].end.getTime()) {
+          canFit = false;
+          break;
+        }
+      }
+      if (!canFit) continue;
+
+      const endSlot = availableSlots[i + slotsNeeded - 1];
+      let isBeforeDeadline = true;
+
+      if (cand.deadline) {
+        if (cand.deadline.includes('T')) {
+          const deadlineMs = new Date(cand.deadline).getTime();
+          isBeforeDeadline = endSlot.end.getTime() <= deadlineMs;
+        } else {
+          // Pure calendar date comparison: slot calendar date must be <= deadline calendar date
+          const slotDateStr = endSlot.start.toISOString().slice(0, 10);
+          const dlDateStr = cand.deadline.slice(0, 10);
+          isBeforeDeadline = slotDateStr <= dlDateStr;
+        }
+      }
+
+      if (isBeforeDeadline) {
+        assignedSlotIdx = i;
+        break;
       }
     }
 
@@ -389,9 +401,12 @@ export function generateWeeklyPlan({
       continue;
     }
 
-    // Allocate slot
-    slotUsed[assignedSlotIdx] = true;
+    // Allocate slot(s)
+    for (let k = 0; k < slotsNeeded; k++) {
+      slotUsed[assignedSlotIdx + k] = true;
+    }
     const slot = availableSlots[assignedSlotIdx];
+    const endSlot = availableSlots[assignedSlotIdx + slotsNeeded - 1];
     remainingBudgetMinutes -= duration;
 
     const reasons: string[] = [];
@@ -410,7 +425,7 @@ export function generateWeeklyPlan({
       organization: cand.organization,
       deadline: cand.deadline,
       start_at: slot.start.toISOString(),
-      end_at: slot.end.toISOString(),
+      end_at: endSlot.end.toISOString(),
       duration_minutes: duration,
       reason_codes: reasons,
     });

@@ -52,6 +52,7 @@ export interface FeedOpportunity {
 }
 
 export function InboxFeed({
+  serverFiltered = false,
   initialOpportunities,
   totalCount,
   currentPage: propCurrentPage,
@@ -61,6 +62,7 @@ export function InboxFeed({
   userSourcePreferences = {},
   profileBranch
 }: {
+  serverFiltered?: boolean;
   initialOpportunities: FeedOpportunity[];
   totalCount?: number;
   currentPage?: number;
@@ -106,7 +108,7 @@ export function InboxFeed({
   const navigateWithParam = (updates: Record<string, string | number | undefined | null>) => {
     const current = new URLSearchParams(searchParams ? searchParams.toString() : '');
     for (const [key, value] of Object.entries(updates)) {
-      if (value === undefined || value === null || value === '' || value === 'all' || (key === 'page' && Number(value) === 1)) {
+      if (value === undefined || value === null || value === '' || (value === 'all' && key !== 'field' && key !== 'view') || (key === 'page' && Number(value) === 1)) {
         current.delete(key);
       } else {
         current.set(key, String(value));
@@ -128,44 +130,30 @@ export function InboxFeed({
     return Array.from(set).sort();
   }, [opportunities, allEmployers]);
 
-  // Handle Save
-  const handleToggleSave = (id: string) => {
-    setOpportunities((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, is_saved: !o.is_saved } : o))
-    );
-    start(async () => {
-      const res = await toggleSaveAction(id);
-      if (res.success && res.is_saved !== undefined) {
-        setOpportunities((prev) =>
-          prev.map((o) => (o.id === id ? { ...o, is_saved: res.is_saved! } : o))
-        );
-      }
-    });
+  const [actionError,setActionError] = useState('');
+  const handleToggleSave = (id:string) => {
+    start(async()=>{setActionError('');try {
+      const res=await toggleSaveAction(id);
+      if(!res.success) throw new Error('Could not save the change. Please retry.');
+      setOpportunities(prev=>prev.map(o=>o.id===id?{...o,is_saved:!!res.is_saved}:o));
+      router.refresh();
+    } catch {setActionError('Could not save the change. Please retry.');}});
   };
-
-  // Handle Hide
-  const handleToggleHide = (id: string) => {
-    setOpportunities((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, is_hidden: !o.is_hidden } : o))
-    );
-    start(async () => {
-      const res = await toggleHideAction(id);
-      if (res.success && res.is_hidden !== undefined) {
-        setOpportunities((prev) =>
-          prev.map((o) => (o.id === id ? { ...o, is_hidden: res.is_hidden! } : o))
-        );
-      }
-    });
+  const handleToggleHide = (id:string) => {
+    start(async()=>{setActionError('');try {
+      const res=await toggleHideAction(id);
+      if(!res.success) throw new Error('Could not hide this opportunity.');
+      setOpportunities(prev=>prev.map(o=>o.id===id?{...o,is_hidden:!!res.is_hidden}:o));
+      router.refresh();
+    } catch {setActionError('Could not hide this opportunity. Please retry.');}});
   };
-
-  // Handle Source Mute
-  const handleToggleMuteSource = (source: string) => {
-    const current = sourcePrefs[source.toLowerCase()] || 'normal';
-    const next = current === 'muted' ? 'normal' : 'muted';
-    setSourcePrefs((prev) => ({ ...prev, [source.toLowerCase()]: next }));
-    start(async () => {
-      await setSourcePreferenceAction(source, next as 'normal' | 'reduced' | 'muted');
-    });
+  const handleToggleMuteSource = (source:string) => {
+    const next=sourcePrefs[source.toLowerCase()]==='muted'?'normal':'muted';
+    start(async()=>{setActionError('');try {
+      const res=await setSourcePreferenceAction(source,next);
+      if(!res.success) throw new Error('Could not update source preference.');
+      setSourcePrefs(prev=>({...prev,[source.toLowerCase()]:next}));router.refresh();
+    } catch {setActionError('Could not update source preference. Please retry.');}});
   };
 
   // Filtered & Ranked Opportunities
@@ -307,7 +295,7 @@ export function InboxFeed({
   // For server-paginated mode, opportunities are already fetched and bounded to the current page.
   // For client-paginated mode, slice from diverseOpportunities.
   const displayedOpportunities = isServerPaginated
-    ? (view === 'best' ? diverseOpportunities : opportunities)
+    ? (serverFiltered ? opportunities : diverseOpportunities)
     : diverseOpportunities.slice((safeCurrentPage - 1) * PAGE_SIZE, safeCurrentPage * PAGE_SIZE);
 
   const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
@@ -335,6 +323,7 @@ export function InboxFeed({
 
   return (
     <div className="space-y-6">
+      {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
       {/* View Switcher & Search Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
         <div className="flex items-center gap-2">

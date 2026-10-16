@@ -30,6 +30,20 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    if (working_windows !== undefined && !Array.isArray(working_windows)) {
+      return NextResponse.json(
+        { error: 'INVALID_PAYLOAD', message: 'working_windows must be an array.' },
+        { status: 400 }
+      );
+    }
+
+    if (busy_blocks !== undefined && !Array.isArray(busy_blocks)) {
+      return NextResponse.json(
+        { error: 'INVALID_PAYLOAD', message: 'busy_blocks must be an array.' },
+        { status: 400 }
+      );
+    }
+
     const { data, error } = await supabase.rpc('save_user_availability', {
       p_budget_hours: budget,
       p_working_windows: working_windows ?? [],

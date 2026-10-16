@@ -3,12 +3,18 @@
 import { revalidatePath } from 'next/cache';
 import { requireUser } from '@/lib/auth';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function recordDecisionAction(
   opportunityId: string,
   choice: 'approve' | 'reject' | 'ignore' | 'pin',
   reason?: string,
   isSeeded: boolean = false
 ) {
+  if (!opportunityId || !UUID_REGEX.test(opportunityId)) {
+    return { success: false, error: 'Invalid opportunity ID format.' };
+  }
+
   const { supabase } = await requireUser();
 
   if (choice === 'approve') {
@@ -52,6 +58,10 @@ export async function respondRuleAction(
   ruleId: string,
   action: 'approve' | 'reject' | 'disable'
 ) {
+  if (!ruleId || !UUID_REGEX.test(ruleId)) {
+    return { success: false, error: 'Invalid rule ID format.' };
+  }
+
   const { supabase } = await requireUser();
 
   const { data, error } = await supabase.rpc('respond_standing_rule', {

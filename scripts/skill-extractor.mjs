@@ -84,7 +84,7 @@ const CANONICAL_SKILL_PATTERNS = [
   { name: 'Data Structures', pattern: /\bdata\s+structures\b/i },
   { name: 'Algorithms', pattern: /\balgorithms?\b/i },
   { name: 'Agile', pattern: /\b(?:agile|scrum)\b/i },
-  { name: 'MS Excel', pattern: /\b(?:ms\s+excel|excel)\b/i },
+  { name: 'MS Excel', pattern: /\b(?:ms\s+excel|microsoft\s+excel|\bexcel\b(?!\s+(?:in|at|under|with)\b))/i },
   { name: 'PowerPoint', pattern: /\b(?:powerpoint|ppt)\b/i },
   { name: 'Project Management', pattern: /\bproject\s+management\b/i },
   { name: 'Figma', pattern: /\bfigma\b/i }
@@ -113,22 +113,23 @@ export function extractRequirementsFromText(text = '') {
   const preferredSectionRegex = /^(?:preferred qualifications|nice to have|bonus points|good to have|preferred skills)/i;
   const endSectionRegex = /^(?:about us|about the company|what we offer|benefits|perks|compensation|equal opportunity|eeo|how to apply)/i;
 
-  for (const line of lines) {
-    if (endSectionRegex.test(line)) {
+  for (const rawLine of lines) {
+    const stripped = rawLine.replace(/^[#*_~<>\s\-\d\.]+|[#*_~<>:\s]+$/g, '').trim();
+    if (endSectionRegex.test(stripped)) {
       inQualificationSection = false;
       continue;
     }
 
-    if (qualSectionRegex.test(line)) {
+    if (qualSectionRegex.test(stripped)) {
       inQualificationSection = true;
-      sectionIsPreferred = preferredSectionRegex.test(line);
+      sectionIsPreferred = preferredSectionRegex.test(stripped);
       continue;
     }
 
     if (inQualificationSection) {
       // Look for bullet points or criteria lines
-      const isBullet = /^[•\-\*\d+\.]\s+/.test(line);
-      const cleanLine = line.replace(/^[•\-\*\d+\.]\s+/, '').trim();
+      const isBullet = /^[•\-\*\d+\.]\s+/.test(rawLine);
+      const cleanLine = rawLine.replace(/^[\s#*•\-\d\.]+\s*/, '').replace(/<[^>]+>/g, '').trim();
 
       if (cleanLine.length < 5 || cleanLine.length > 300) continue;
 

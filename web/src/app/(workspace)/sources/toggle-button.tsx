@@ -14,7 +14,11 @@ export function ToggleButton({ id, enabled }: { id: string; enabled: boolean }) 
       disabled={isPending}
       onClick={() => {
         startTransition(async () => {
-          await toggleSource(id, enabled);
+          try {
+            await toggleSource(id, enabled);
+          } catch (err) {
+            console.error('Failed to toggle source:', err);
+          }
         });
       }}
       className={`text-xs font-semibold ${

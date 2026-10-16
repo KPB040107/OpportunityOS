@@ -25,7 +25,11 @@ export function StatusSelect({ id, currentStatus }: { id: string; currentStatus:
         onChange={(e) => {
           const val = e.target.value;
           startTransition(async () => {
-            await updateApplicationStatus(id, val);
+            try {
+              await updateApplicationStatus(id, val);
+            } catch (err) {
+              console.error('Failed to update status:', err);
+            }
           });
         }}
         className={`rounded-lg border border-border px-3 py-1.5 text-xs font-semibold ${

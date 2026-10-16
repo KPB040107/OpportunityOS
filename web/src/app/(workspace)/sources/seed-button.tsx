@@ -15,7 +15,11 @@ export function SeedPresetsButton() {
       disabled={isPending}
       onClick={() => {
         startTransition(async () => {
-          await seedPresetsAction();
+          try {
+            await seedPresetsAction();
+          } catch (err) {
+            console.error('Failed to seed presets:', err);
+          }
         });
       }}
       className="inline-flex items-center gap-1.5 text-xs font-semibold"

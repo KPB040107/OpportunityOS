@@ -15,8 +15,21 @@ function Test-WebsiteHealth {
 }
 
 if (Test-WebsiteHealth) {
-  Write-Host "Website is already running: http://localhost:$Port"
-  exit 0
+  $savedPidPath=Join-Path $runtimeRoot 'website.pid'
+  $buildFile=Get-Item -LiteralPath (Join-Path $webRoot '.next/BUILD_ID')
+  $savedProcess=if(Test-Path -LiteralPath $savedPidPath){ Get-Process -Id ([int](Get-Content -LiteralPath $savedPidPath)) -ErrorAction SilentlyContinue }
+  if($savedProcess -and $savedProcess.StartTime -lt $buildFile.LastWriteTime){
+    $listener=Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop
+    $identity=Get-CimInstance Win32_Process -Filter "ProcessId=$($savedProcess.Id)"
+    if($listener.OwningProcess -contains $savedProcess.Id -and $identity.CommandLine -match 'next[\\/]dist[\\/]bin[\\/]next.+start'){
+      Stop-Process -Id $savedProcess.Id -ErrorAction Stop
+      $savedProcess.WaitForExit(10000) | Out-Null
+      Write-Host 'Restarting the website to load the newer build.'
+    } else { throw 'A server is running with an older build, but its identity could not be verified. Restart the OpportunityOS website process manually.' }
+  } else {
+    Write-Host "Website is already running: http://localhost:$Port"
+    exit 0
+  }
 }
 
 function Start-PersistentProcess([string]$FilePath, [string]$ArgumentList, [string]$WorkingDirectory) {

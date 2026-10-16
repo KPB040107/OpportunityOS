@@ -24,7 +24,9 @@ export async function authenticate(_state:FormState,form:FormData):Promise<FormS
   }
   const {error} = await supabase.auth.signInWithPassword(parsed.data);
   if(error) return {error:'Could not sign in. Check your email and password, and confirm your account email first.'};
-  const next=String(form.get('next')||'');redirect(/^\/approvals\/[0-9a-f-]{36}\?revision=\d+$/.test(next)?next:'/inbox');
+  const next = String(form.get('next') || '');
+  const isSafeNext = /^\/(?:home|opportunities|approvals|plan|rules|sources|profile|capture|activity|applications)(?:\/[0-9a-f-]{36})?(?:\?[a-zA-Z0-9_=&-]+)?$/.test(next);
+  redirect(isSafeNext ? next : '/inbox');
 }
 export async function signOut() {
   const supabase = await createClient();

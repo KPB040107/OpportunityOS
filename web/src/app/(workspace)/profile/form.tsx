@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { interestTypes,splitSkillNames } from '@/lib/validation';
+import { interestTypes, splitSkillNames } from '@/lib/profile-utils';
 import type { Profile, Skill } from '@/lib/types';
 export function ProfileForm({profile,skills}:{profile:Profile|null;skills:Skill[]}) {
   const [entries,setEntries]=useState<Skill[]>(skills);

@@ -211,3 +211,31 @@ test('generateWeeklyPlan: preserves date-only deadline without inventing 23:59:5
   assert.equal(plan.scheduled_items[0].deadline, '2026-10-21', 'Date-only deadline must remain pure YYYY-MM-DD');
   assert.ok(!plan.scheduled_items[0].deadline.includes('23:59:59'), 'Must never invent 23:59:59 UTC');
 });
+
+test('generateWeeklyPlan: allocates contiguous slots for multi-unit tasks and prevents double-booking', () => {
+  const candidates = [
+    { id: 't1', title: 'Task 1 (60m)', organization: 'Org A', eligibility: 'ELIGIBLE', match_score: 90 },
+    { id: 't2', title: 'Task 2 (30m)', organization: 'Org B', eligibility: 'ELIGIBLE', match_score: 80 },
+  ];
+
+  const plan = generateWeeklyPlan({
+    candidates,
+    availability: {
+      weekly_budget_hours: 10,
+      working_windows: [{ day: 1, start: '09:00', end: '11:00' }],
+      busy_blocks: []
+    },
+    weekStart: '2026-10-19',
+    customEstimates: { t1: 60 }
+  });
+
+  assert.equal(plan.scheduled_items.length, 2);
+  const task1 = plan.scheduled_items.find(i => i.opportunity_id === 't1');
+  const task2 = plan.scheduled_items.find(i => i.opportunity_id === 't2');
+  assert.equal(task1.duration_minutes, 60);
+  assert.equal(task2.duration_minutes, 30);
+  // Task 1 spans 09:00 to 10:00 (two 30m slots)
+  assert.equal(new Date(task1.end_at).getTime() - new Date(task1.start_at).getTime(), 60 * 60 * 1000);
+  // Task 2 starts at or after 10:00 (no double-booking)
+  assert.ok(new Date(task2.start_at).getTime() >= new Date(task1.end_at).getTime(), 'Task 2 must not overlap Task 1');
+});

@@ -180,7 +180,7 @@ Run the migrations in sequential order using your Supabase SQL editor or the pro
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run-database.ps1 -SqlFile supabase/migrations/0001_foundation.sql
-# ... up through migration 0046
+# ... sequentially through migration 0050
 ```
 
 ### 4. Start n8n Workflow Automation
@@ -197,8 +197,9 @@ docker compose up -d
 
 ```bash
 cd web
-pnpm install
-pnpm dev --hostname 127.0.0.1 --port 3000
+npm install
+npm run build
+npx next start --hostname 127.0.0.1 --port 3000
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
@@ -214,31 +215,69 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Verification & Testing
 
-OpportunityOS includes rigorous regression and acceptance test suites:
+OpportunityOS includes rigorous regression and acceptance test suites spanning 279+ automated checks:
 
 ```bash
-# 1. Run all core contract unit tests
-node --test scripts/discovery-contract.test.mjs
-node --test scripts/decision-contract.test.mjs scripts/field-relevance.test.mjs
-node --test scripts/planner-contract.test.mjs
-node --test scripts/resume-contract.test.mjs
-node --test scripts/capture-contract.test.mjs
+# 1. Run all core contract and unit tests (214 tests)
+node --test scripts/*.test.mjs
 
-# 2. Run the full deployment smoke test suite
+# 2. Run the deployment smoke test suite (8 gates)
 node scripts/smoke-tests.mjs
+
+# 3. Run the live discovery & review journey audit (10 criteria)
+node scripts/audit-discovery-live-journey.mjs
+
+# 4. Run the live capture & bookmarklet security audit
+node scripts/audit-s4-live-journey.mjs
+
+# 5. Run the live deterministic planner flow test
+node scripts/test-plan-live-flow.mjs
+
+# 6. Run the live resume onboarding & privacy D9 test
+node scripts/test-resume-live-flow.mjs
 ```
 
 ### Test Suite Highlights:
-- **Zero Secret Leakage**: Guarantees zero sensitive tokens in workflow definitions.
+- **Zero Secret Leakage**: Guarantees zero sensitive tokens in workflow definitions and client bundles.
 - **Two-User Isolation**: Proves complete RLS isolation where User B cannot access or mutate User A's data.
-- **Quota Resilience**: Proves automated failover when primary LLM quotas are exhausted.
+- **Quota Resilience**: Proves automated failover to Groq LLM when primary Gemini quotas are exhausted.
 - **Deterministic Decisions**: Verifies identical scoring and policy outputs across 30+ standardized scenarios.
+- **Privacy D9 Protocol**: Guarantees physical PDF resumes are purged from Supabase Storage upon profile confirmation.
+
+---
+
+## System Audit & Engineering Remediation
+
+In October 2026, an exhaustive, multi-agent audit was conducted across the platform by 10 specialized auditing subagents. All identified defects (P0 through P4) have been fully remediated and verified:
+
+| Bug ID | Severity | Description | Resolution Status |
+|:---|:---|:---|:---|
+| **BUG-001** | P0 Blocker | PostgreSQL RPC error (`p.skills` column missing) crashing `/inbox` and `/opportunities` | **RESOLVED** via migration `0048_catalog_query.sql` |
+| **BUG-002** | P1 High | Login redirection dropping internal deep-link workspace routes | **RESOLVED** in `web/src/app/login/actions.ts` |
+| **BUG-003** | P1 High | Multi-unit planner task truncation and double-booking | **RESOLVED** in `scripts/planner-contract.mjs` & `web/src/lib/planner.ts` |
+| **BUG-004** | P1 High | Unvalidated availability arrays allowing DoS crash | **RESOLVED** with Zod array bounds checking in `/api/plan/availability` |
+| **BUG-005** | P1 High | Missing CORS preflight and response headers on `/api/capture/verify` | **RESOLVED** with OPTIONS handler and `corsHeaders` export |
+| **BUG-006** | P2 Medium | Malformed relation query on Home dashboard approvals feed | **RESOLVED** by querying through `matches` relation |
+| **BUG-007** | P2 Medium | Permission denied on `raw_items` metadata update | **RESOLVED** via `update_raw_item_metadata` RPC in migration `0050` |
+| **BUG-008** | P2 Medium | Requirement extractor dropping Markdown/HTML section headers | **RESOLVED** by normalizing headers in `scripts/skill-extractor.mjs` |
+| **BUG-009** | P2 Medium | Missing CORS headers on early error responses in `/api/intake` | **RESOLVED** with standard `corsHeaders` on all error branches |
+| **BUG-010** | P2 Medium | Unrestricted Chrome extension wildcard regex in production | **RESOLVED** by restricting wildcard to development mode |
+| **BUG-011** | P2 Medium | Missing database performance indexes on actions & requirements | **RESOLVED** via composite indexes in migration `0050` |
+| **BUG-012** | P2 Medium | Standing rule proposal feedback omitted from RPC return | **RESOLVED** by returning `proposal_created` from `track_student_application` |
+| **BUG-013** | P2 Medium | Custom source error throwing unhandled exception | **RESOLVED** with structured redirect and user feedback banner |
+| **BUG-014** | P3 Low | Unhandled client transition rejections on status toggles | **RESOLVED** with try/catch blocks on client actions |
+| **BUG-015** | P3 Low | Zod bundle leak in client profile form | **RESOLVED** by isolating client-safe helpers in `profile-utils.ts` |
+| **BUG-016** | P3 Low | Weekly Plan omitted from sidebar navigation | **RESOLVED** by adding `/plan` destination to `navigation.tsx` |
+| **BUG-017** | P3 Low | False positive skill match on "MS Excel" followed by prepositions | **RESOLVED** with negative lookahead in `skill-extractor.mjs` |
+| **BUG-018** | P3 Low | Resume graduation year window truncating up to 2032 | **RESOLVED** by extending year bounds in `resume-contract.mjs` |
+| **BUG-020** | P3 Low | Unvalidated UUID/Date parameters throwing 500s | **RESOLVED** with strict UUID/ISO date format validation |
+| **BUG-021** | P4 Trivial | `optionalNumber` preprocessor handling `undefined` | **RESOLVED** in `web/src/lib/validation.ts` |
 
 ---
 
 ## Security & Privacy Architecture
 
-- **Strict Row-Level Security (RLS)**: Enforced across all 46 database tables. Authenticated users can only read and mutate their own opportunities, sources, and rules.
+- **Strict Row-Level Security (RLS)**: Enforced across all database tables. Authenticated users can only read and mutate their own opportunities, sources, and rules.
 - **Prompt Injection Defense**: Injected instructions inside raw job postings cannot alter decisions or bypass safety gates; suspicious inputs are automatically flagged as risk signals.
 - **Verified TLS & Certificate Pinning**: Direct database connections validate custom Supabase certificates.
 - **Fenced Execution Boundaries**: Sensitive external mutations (calendar writes, email dispatches) require authenticated student authorization or explicit autopilot consent.
@@ -248,3 +287,4 @@ node scripts/smoke-tests.mjs
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+

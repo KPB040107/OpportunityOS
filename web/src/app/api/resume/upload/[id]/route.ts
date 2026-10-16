@@ -23,8 +23,8 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json({ error: 'MISSING_ID', message: 'Upload ID is required.' }, { status: 400 });
+    if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return NextResponse.json({ error: 'INVALID_ID', message: 'Valid UUID upload ID is required.' }, { status: 400 });
     }
 
     // Retrieve storage path before marking deleted

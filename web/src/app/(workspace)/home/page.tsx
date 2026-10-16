@@ -23,7 +23,7 @@ export default async function HomePage() {
     supabase.rpc('get_home_counter'),
     supabase
       .from('approvals')
-      .select('id, match_id, match_revision, status, expires_at, created_at, opportunity:opportunities(id, title, organization, deadline, type, trust_tier)')
+      .select('id, match_id, match_revision, status, expires_at, created_at, match:matches(opportunity:opportunities(id, title, organization, deadline, type, trust_tier))')
       .eq('user_id', user.id)
       .eq('status', 'pending')
       .gt('expires_at', new Date().toISOString())
@@ -73,12 +73,22 @@ export default async function HomePage() {
     }
   }) as HomeCounterData;
 
-  const pendingApprovals = (approvalsRes.data || []) as unknown as Array<{
+  const pendingApprovals = ((approvalsRes.data || []) as unknown as Array<{
     id: string;
     match_id: string;
     status: string;
     expires_at: string;
-    opportunity: {
+    match?: {
+      opportunity: {
+        id: string;
+        title: string;
+        organization: string | null;
+        deadline: string | null;
+        type: string;
+        trust_tier: string | null;
+      } | null;
+    } | null;
+    opportunity?: {
       id: string;
       title: string;
       organization: string | null;
@@ -86,7 +96,10 @@ export default async function HomePage() {
       type: string;
       trust_tier: string | null;
     } | null;
-  }>;
+  }>).map(appr => ({
+    ...appr,
+    opportunity: appr.match?.opportunity || appr.opportunity || null
+  }));
 
   const pendingClarifications = (clarificationsRes.data || []) as Array<{
     id: string;

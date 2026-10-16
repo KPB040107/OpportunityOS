@@ -43,16 +43,16 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
-    return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
+    return NextResponse.json({ error: 'Please sign in again.' }, { status: 401, headers: corsHeaders });
   }
 
   if (!request.headers.get('content-type')?.startsWith('application/json')) {
-    return NextResponse.json({ error: 'Use a JSON request.' }, { status: 415 });
+    return NextResponse.json({ error: 'Use a JSON request.' }, { status: 415, headers: corsHeaders });
   }
 
   const reader = request.body?.getReader();
   if (!reader) {
-    return NextResponse.json({ error: 'Content required.' }, { status: 400 });
+    return NextResponse.json({ error: 'Content required.' }, { status: 400, headers: corsHeaders });
   }
 
   const chunks: Uint8Array[] = [];
@@ -64,24 +64,24 @@ export async function POST(request: NextRequest) {
       size += value.length;
       if (size > 90000) {
         await reader.cancel();
-        return NextResponse.json({ error: 'Content is too long.' }, { status: 413 });
+        return NextResponse.json({ error: 'Content is too long.' }, { status: 413, headers: corsHeaders });
       }
       chunks.push(value);
     }
   } catch {
-    return NextResponse.json({ error: 'Could not read the submission.' }, { status: 400 });
+    return NextResponse.json({ error: 'Could not read the submission.' }, { status: 400, headers: corsHeaders });
   }
 
   let body: unknown;
   try {
     body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
-    return NextResponse.json({ error: 'Invalid submission.' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid submission.' }, { status: 400, headers: corsHeaders });
   }
 
   const parsed = intakeSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400, headers: corsHeaders });
   }
 
   // Cryptographic binding and single-use nonce validation for bookmarklet capture
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     if (computedHash !== parsed.data.payload_hash) {
       return NextResponse.json(
         { error: 'Payload digest mismatch: content was modified after nonce issuance.' },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -103,19 +103,19 @@ export async function POST(request: NextRequest) {
     if (redeemError || !redeemData?.valid) {
       return NextResponse.json(
         { error: redeemData?.error || 'Invalid, expired, or already-used capture nonce.' },
-        { status: 403 }
+        { status: 403, headers: corsHeaders }
       );
     }
   }
 
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
-    return NextResponse.json({ error: 'Please sign in again.' }, { status: 401 });
+    return NextResponse.json({ error: 'Please sign in again.' }, { status: 401, headers: corsHeaders });
   }
 
   const url = process.env.N8N_INGEST_URL;
   if (!url) {
-    return NextResponse.json({ error: 'Intake is not connected yet. Please try later.' }, { status: 503 });
+    return NextResponse.json({ error: 'Intake is not connected yet. Please try later.' }, { status: 503, headers: corsHeaders });
   }
 
   const content = parsed.data.source_type === 'url' ? publicUrl(parsed.data.content) : parsed.data.content;
@@ -143,10 +143,10 @@ export async function POST(request: NextRequest) {
 
     // Persist capture metadata on raw_items if provided
     if (parsed.data.metadata && result.raw_item_id) {
-      await supabase
-        .from('raw_items')
-        .update({ metadata: parsed.data.metadata })
-        .eq('id', result.raw_item_id);
+      await supabase.rpc('update_raw_item_metadata', {
+        p_id: result.raw_item_id,
+        p_metadata: parsed.data.metadata
+      });
     }
 
     return NextResponse.json(

@@ -40,111 +40,19 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
   const requestedLimit = parseInt(params.limit || '20', 10) || 20;
   const limit = Math.min(50, Math.max(1, requestedLimit));
   const from = (page - 1) * limit;
-  const to = from + limit - 1;
 
-  // Build owner-scoped indexed opportunities query
-  let oppsQuery = supabase
-    .from('opportunities')
-    .select(
-      'id, title, organization, type, location, deadline, application_url, skills, ambiguity_flags, trust_tier, source_badge, risk_signals, seniority_level, created_at',
-      { count: 'exact' }
-    )
-    .eq('user_id', user.id);
-
-  if (params.type && params.type !== 'all') {
-    oppsQuery = oppsQuery.eq('type', params.type);
-  }
-  if (params.employer && params.employer !== 'all') {
-    oppsQuery = oppsQuery.ilike('organization', params.employer);
-  }
-  if (params.trust && params.trust !== 'all') {
-    oppsQuery = oppsQuery.eq('trust_tier', params.trust.toLowerCase());
-  }
-  if (params.deadline === 'unknown') {
-    oppsQuery = oppsQuery.is('deadline', null);
-  } else if (params.deadline === 'upcoming') {
-    const today = new Date().toISOString().slice(0, 10);
-    oppsQuery = oppsQuery.gte('deadline', today);
-  }
-  if (params.location === 'remote') {
-    oppsQuery = oppsQuery.ilike('location', '%remote%');
-  } else if (params.location === 'onsite') {
-    oppsQuery = oppsQuery.not('location', 'ilike', '%remote%');
-  }
-  if (params.q && params.q.trim()) {
-    const q = params.q.trim();
-    oppsQuery = oppsQuery.or(`title.ilike.%${q}%,organization.ilike.%${q}%`);
-  }
-
-  // Handle saved-only server filtering
-  if (params.saved === 'true') {
-    const { data: savedData } = await supabase
-      .from('user_opportunity_interactions')
-      .select('opportunity_id')
-      .eq('user_id', user.id)
-      .eq('is_saved', true);
-    const savedIds = (savedData || []).map((i) => i.opportunity_id);
-    oppsQuery = oppsQuery.in('id', savedIds.length > 0 ? savedIds : ['00000000-0000-0000-0000-000000000000']);
-  }
-
-  // Handle hidden exclusion unless explicitly requested
-  if (params.hidden !== 'true') {
-    const { data: hiddenData } = await supabase
-      .from('user_opportunity_interactions')
-      .select('opportunity_id')
-      .eq('user_id', user.id)
-      .eq('is_hidden', true);
-    const hiddenIds = (hiddenData || []).map((i) => i.opportunity_id);
-    if (hiddenIds.length > 0) {
-      oppsQuery = oppsQuery.not('id', 'in', `(${hiddenIds.join(',')})`);
-    }
-  }
-
-  // Order chronologically and paginate with bounded range
-  oppsQuery = oppsQuery
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-  const [rawItemsRes, profileRes, counterRes, oppsRes, sourcePrefsRes, allEmployersRes] =
-    await Promise.all([
-      // 1. Raw submissions
-      supabase
-        .from('raw_items')
-        .select('id,source_type,raw_content,status,error_code,created_at,is_opportunity,duplicate_of,retry_count')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(30),
-
-      // 2. Profile
-      supabase
-        .from('profiles')
-        .select('display_name,autonomy_mode,branch,interest_types')
-        .eq('user_id', user.id)
-        .maybeSingle(),
-
-      // 3. Counter
-      supabase.rpc('get_home_counter'),
-
-      // 4. Bounded opportunities page read
-      oppsQuery,
-
-      // 5. Source preferences (muted / normal)
-      supabase
-        .from('user_source_preferences')
-        .select('source_identifier, preference')
-        .eq('user_id', user.id),
-
-      // 6. Distinct employers for filter dropdown
-      supabase
-        .from('opportunities')
-        .select('organization')
-        .eq('user_id', user.id)
-        .limit(200)
-    ]);
-
-  if (rawItemsRes.error || profileRes.error || oppsRes.error) {
-    throw new Error('Opportunities catalog data unavailable');
-  }
+  const [rawItemsRes, profileRes, counterRes, catalogRes] = await Promise.all([
+    supabase.from('raw_items').select('id,source_type,raw_content,status,error_code,created_at,is_opportunity,duplicate_of,retry_count,metadata')
+      .eq('user_id',user.id).neq('source_type','discovery').order('created_at',{ascending:false}).limit(10),
+    supabase.from('profiles').select('display_name,autonomy_mode,branch,interest_types').eq('user_id',user.id).maybeSingle(),
+    supabase.rpc('get_home_counter'),
+    supabase.rpc('get_opportunities_page',{p_filters:params,p_limit:limit,p_offset:from})
+  ]);
+  if (rawItemsRes.error || profileRes.error || catalogRes.error || counterRes.error) throw new Error('Opportunities data unavailable. Please retry.');
+  const catalog = catalogRes.data as {items:FeedOpportunity[];total:number;employers:string[]};
+  const feedOpportunities = catalog.items;
+  const totalCount = catalog.total;
+  const distinctEmployers = catalog.employers;
 
   const rawItems = rawItemsRes.data as RawItem[];
   const profile = profileRes.data;
@@ -164,84 +72,6 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
     }
   }) as HomeCounterData;
 
-  const totalCount = oppsRes.count ?? (oppsRes.data || []).length;
-  const oppIds = (oppsRes.data || []).map((o) => o.id);
-
-  // Fetch matches and interactions ONLY for the bounded opportunities on this page
-  const [matchesRes, interactionsRes] = oppIds.length > 0 ? await Promise.all([
-    supabase
-      .from('matches')
-      .select('id, opportunity_id, decision, eligibility_status, match_score, confidence, explanation, reason_codes')
-      .eq('user_id', user.id)
-      .in('opportunity_id', oppIds),
-    supabase
-      .from('user_opportunity_interactions')
-      .select('opportunity_id, is_saved, is_hidden')
-      .eq('user_id', user.id)
-      .in('opportunity_id', oppIds)
-  ]) : [{ data: [] }, { data: [] }];
-
-  const matchesMap = new Map((matchesRes.data || []).map((m) => [m.opportunity_id, m]));
-  const interactionsMap = new Map((interactionsRes.data || []).map((i) => [i.opportunity_id, i]));
-  const sourcePrefs = Object.fromEntries(
-    (sourcePrefsRes.data || []).map((p) => [p.source_identifier.toLowerCase(), p.preference])
-  );
-
-  const distinctEmployers = Array.from(
-    new Set((allEmployersRes.data || []).map((o) => o.organization).filter(Boolean))
-  ).sort() as string[];
-
-  type RawOpportunityRecord = {
-    id: string;
-    title: string;
-    organization: string;
-    type: string;
-    location: string | null;
-    deadline: string | null;
-    application_url: string | null;
-    skills: string[] | null;
-    ambiguity_flags: string[] | null;
-    trust_tier: string;
-    source_badge: string | null;
-    risk_signals: string[] | null;
-    seniority_level: string | null;
-    created_at: string;
-  };
-
-  const feedOpportunities: FeedOpportunity[] = ((oppsRes.data || []) as unknown as RawOpportunityRecord[]).map((o) => {
-    const m = matchesMap.get(o.id);
-    const inter = interactionsMap.get(o.id);
-    return {
-      id: o.id,
-      title: o.title,
-      organization: o.organization,
-      type: o.type,
-      location: o.location,
-      deadline: o.deadline,
-      application_url: o.application_url,
-      skills: o.skills || [],
-      ambiguity_flags: o.ambiguity_flags || [],
-      trust_tier: o.trust_tier,
-      source_badge: o.source_badge,
-      risk_signals: o.risk_signals || [],
-      seniority_level: o.seniority_level || 'uncertain',
-      created_at: o.created_at,
-      is_saved: inter?.is_saved ?? false,
-      is_hidden: inter?.is_hidden ?? false,
-      match: m
-        ? {
-            id: m.id,
-            decision: m.decision,
-            eligibility_status: m.eligibility_status,
-            match_score: m.match_score,
-            confidence: m.confidence,
-            explanation: m.explanation,
-            reason_codes: m.reason_codes
-          }
-        : undefined
-    };
-  });
-
   return (
     <>
       <LiveUpdates userId={user.id} />
@@ -250,7 +80,7 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
           <p className="text-sm font-semibold uppercase tracking-widest text-primary">Discovered Possibilities</p>
           <h1 className="mt-2 text-3xl font-semibold">{name ? `${name}’s Opportunities` : 'Opportunities Catalog'}</h1>
           <p className="mt-3 text-muted-foreground">
-            Search, filter, and track verified openings across company feeds, hackathons, and captured alerts.
+            Search, filter, and track openings across company feeds, hackathons, and captured alerts.
           </p>
         </div>
         <span className="rounded-full border border-border bg-white px-4 py-2 text-xs text-muted-foreground">
@@ -289,11 +119,13 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
         <div className="mb-4">
           <h2 className="text-xl font-semibold">All Discovered Opportunities</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Curated, ranked, and verified against your profile. Use the filters below to refine by type, trust tier, or deadline.
+            Ranked using your profile. Check each listing’s eligibility and source details. Use the filters below to refine by type, trust tier, or deadline.
           </p>
         </div>
 
         <InboxFeed
+          key={JSON.stringify(params)}
+          serverFiltered
           initialOpportunities={feedOpportunities}
           totalCount={totalCount}
           currentPage={page}
@@ -301,7 +133,6 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
           allEmployers={distinctEmployers}
           currentParams={params}
           autonomyMode={profile?.autonomy_mode || 'balanced'}
-          userSourcePreferences={sourcePrefs}
           profileBranch={profile?.branch || null}
         />
       </section>
@@ -343,7 +174,7 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
                       : item.source_type === 'discovery'
                       ? 'Autonomous feed'
                       : item.source_type === 'capture'
-                      ? 'Captured page'
+                      ? 'Captured page — unverified source'
                       : 'Pasted announcement'}
                   </span>
                   <span
@@ -351,11 +182,15 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
                       item.status === 'failed' ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-primary'
                     }`}
                   >
-                    {item.status}
+                    {item.source_type === 'capture' && item.status === 'queued'
+                      ? 'Captured page — awaiting analysis'
+                      : item.status}
                   </span>
                 </div>
                 <p className="line-clamp-2 text-foreground font-mono text-[11px] mb-2 bg-muted/30 p-1.5 rounded">
-                  {item.raw_content}
+                  {item.source_type === 'capture' && item.metadata && typeof item.metadata.title === 'string'
+                    ? `${item.metadata.title} — ${item.raw_content}`
+                    : item.raw_content}
                 </p>
                 {item.error_code && (
                   <p className="text-red-700 font-medium mb-2">

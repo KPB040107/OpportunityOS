@@ -184,6 +184,7 @@ export function generateWeeklyPlan({
 
   for (const cand of sortedCandidates) {
     const duration = customEstimates[cand.id] || 30;
+    const slotsNeeded = Math.max(1, Math.ceil(duration / 30));
 
     if (duration > remainingBudgetMinutes) {
       unscheduled.push({
@@ -198,26 +199,37 @@ export function generateWeeklyPlan({
     }
 
     let assignedSlotIdx = -1;
-    for (let i = 0; i < availableSlots.length; i++) {
-      if (!slotUsed[i]) {
-        const slot = availableSlots[i];
-        let isBeforeDeadline = true;
-
-        if (cand.deadline) {
-          if (cand.deadline.includes('T')) {
-            const deadlineMs = new Date(cand.deadline).getTime();
-            isBeforeDeadline = slot.end.getTime() <= deadlineMs;
-          } else {
-            const slotDateStr = slot.start.toISOString().slice(0, 10);
-            const dlDateStr = cand.deadline.slice(0, 10);
-            isBeforeDeadline = slotDateStr <= dlDateStr;
-          }
-        }
-
-        if (isBeforeDeadline) {
-          assignedSlotIdx = i;
+    for (let i = 0; i <= availableSlots.length - slotsNeeded; i++) {
+      let canFit = true;
+      for (let k = 0; k < slotsNeeded; k++) {
+        if (slotUsed[i + k]) {
+          canFit = false;
           break;
         }
+        if (k > 0 && availableSlots[i + k].start.getTime() !== availableSlots[i + k - 1].end.getTime()) {
+          canFit = false;
+          break;
+        }
+      }
+      if (!canFit) continue;
+
+      const endSlot = availableSlots[i + slotsNeeded - 1];
+      let isBeforeDeadline = true;
+
+      if (cand.deadline) {
+        if (cand.deadline.includes('T')) {
+          const deadlineMs = new Date(cand.deadline).getTime();
+          isBeforeDeadline = endSlot.end.getTime() <= deadlineMs;
+        } else {
+          const slotDateStr = endSlot.start.toISOString().slice(0, 10);
+          const dlDateStr = cand.deadline.slice(0, 10);
+          isBeforeDeadline = slotDateStr <= dlDateStr;
+        }
+      }
+
+      if (isBeforeDeadline) {
+        assignedSlotIdx = i;
+        break;
       }
     }
 
@@ -239,8 +251,11 @@ export function generateWeeklyPlan({
       continue;
     }
 
-    slotUsed[assignedSlotIdx] = true;
+    for (let k = 0; k < slotsNeeded; k++) {
+      slotUsed[assignedSlotIdx + k] = true;
+    }
     const slot = availableSlots[assignedSlotIdx];
+    const endSlot = availableSlots[assignedSlotIdx + slotsNeeded - 1];
     remainingBudgetMinutes -= duration;
 
     const reasons = [];
@@ -259,7 +274,7 @@ export function generateWeeklyPlan({
       organization: cand.organization,
       deadline: cand.deadline,
       start_at: slot.start.toISOString(),
-      end_at: slot.end.toISOString(),
+      end_at: endSlot.end.toISOString(),
       duration_minutes: duration,
       reason_codes: reasons,
     });

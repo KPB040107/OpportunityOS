@@ -23,9 +23,9 @@ export async function POST(request: NextRequest) {
     const { plan_id, expected_availability_revision } = body;
     const expectedRev = expected_availability_revision ?? body.availability_revision ?? 1;
 
-    if (!plan_id) {
+    if (!plan_id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(plan_id)) {
       return NextResponse.json(
-        { error: 'MISSING_PLAN_ID', message: 'plan_id is required.' },
+        { error: 'INVALID_PLAN_ID', message: 'Valid UUID plan_id is required.' },
         { status: 400 }
       );
     }

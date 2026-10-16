@@ -11,7 +11,8 @@ import {
   Compass,
   LogOut,
   Sliders,
-  Home
+  Home,
+  Calendar
 } from 'lucide-react';
 import { signOut } from '@/app/login/actions';
 import { Button } from './ui/button';
@@ -28,6 +29,7 @@ export function Navigation({ email }: { email: string }) {
       icon: Inbox,
       isActive: pathname === '/opportunities' || pathname === '/inbox'
     },
+    { href: '/plan', name: 'Weekly Plan', icon: Calendar, isActive: pathname === '/plan' },
     { href: '/applications', name: 'Applications', icon: Briefcase, isActive: pathname === '/applications' }
   ];
 

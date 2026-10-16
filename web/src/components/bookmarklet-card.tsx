@@ -1,27 +1,31 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Bookmark, Copy, Check } from 'lucide-react';
 
 export function BookmarkletCard({ appOrigin }: { appOrigin: string }) {
   const [copied, setCopied] = useState(false);
-  const [origin, setOrigin] = useState(appOrigin || 'http://localhost:3000');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.origin) {
-      setOrigin(window.location.origin);
-    }
-  }, []);
+  const [copyError, setCopyError] = useState('');
+  const origin = useSyncExternalStore(
+    () => () => {},
+    () => window.location.origin,
+    () => new URL(appOrigin || 'http://localhost:3000').origin
+  );
 
   // Minified bookmarklet JavaScript
-  const bookmarkletCode = `javascript:(function(){try{var s=window.getSelection?window.getSelection().toString().trim():'';var m=document.querySelector('main,article,[role="main"],#job-details,.job-details,.description');var t=s||(m?m.innerText.slice(0,19500):'');var title=document.title||'Captured Opportunity';var u=window.location.href;var links=[];var els=(m||document).querySelectorAll('a[href]');for(var i=0;i<Math.min(els.length,15);i++){var a=els[i];var h=a.href;if(h&&(h.indexOf('http://')===0||h.indexOf('https://')===0)&&a.innerText.trim()){links.push({text:a.innerText.trim().slice(0,80),url:h});}}var w=window.open('${origin}/capture','OpportunityOSCapture','width=620,height=750,menubar=no,toolbar=no,location=no,status=no');if(!w){alert('Popup blocked. Please allow popups for ${origin} or open ${origin}/capture to paste manually.');return;}function hMsg(e){if(e.origin!=='${origin}')return;if(e.data&&e.data.type==='OPPORTUNITYOS_READY_FOR_PAYLOAD'){w.postMessage({type:'OPPORTUNITYOS_CAPTURE_PAYLOAD',requestId:e.data.requestId,payload:{title:title,url:u,text:t,links:links,captured_at:new Date().toISOString()}},'${origin}');window.removeEventListener('message',hMsg);}}window.addEventListener('message',hMsg);}catch(err){alert('Capture error: '+(err.message||err));}})();`;
+  const bookmarkletCode = `javascript:(function(){try{var s=window.getSelection?window.getSelection().toString().trim():'';var m=document.querySelector('main,article,[role="main"],#job-details,.job-details,.description');var t=s||(m?m.innerText.slice(0,19500):'');var title=document.title||'Captured Opportunity';var u=window.location.href;var links=[];var els=(m||document).querySelectorAll('a[href]');for(var i=0;i<Math.min(els.length,15);i++){var a=els[i];var h=a.href;if(h&&(h.indexOf('http://')===0||h.indexOf('https://')===0)&&a.innerText.trim()){links.push({text:a.innerText.trim().slice(0,80),url:h});}}var w=window.open('${origin}/capture','OpportunityOSCapture','width=620,height=750,menubar=no,toolbar=no,location=no,status=no');if(!w){alert('Popup blocked. Please allow popups for ${origin} or open ${origin}/capture to paste manually.');return;}function hMsg(e){if(e.origin!=='${origin}'||e.source!==w)return;if(e.data&&e.data.type==='OPPORTUNITYOS_READY_FOR_PAYLOAD'){w.postMessage({type:'OPPORTUNITYOS_CAPTURE_PAYLOAD',requestId:e.data.requestId,payload:{title:title,url:u,text:t,links:links,captured_at:new Date().toISOString()}},'${origin}');window.removeEventListener('message',hMsg);}}window.addEventListener('message',hMsg);}catch(err){alert('Capture error: '+(err.message||err));}})();`;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(bookmarkletCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    setCopyError('');
+    try {
+      await navigator.clipboard.writeText(bookmarkletCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyError('Clipboard access was blocked. Drag the button to your bookmarks bar instead.');
+    }
   };
 
   return (
@@ -52,7 +56,7 @@ export function BookmarkletCard({ appOrigin }: { appOrigin: string }) {
 
         <div className="flex items-center gap-2 shrink-0">
           <a
-            href={bookmarkletCode}
+            ref={element => { element?.setAttribute('href', bookmarkletCode); }}
             onClick={e => e.preventDefault()}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium shadow hover:bg-primary/90 transition-colors cursor-grab active:cursor-grabbing select-none"
             title="Drag to Bookmarks Bar"
@@ -68,6 +72,7 @@ export function BookmarkletCard({ appOrigin }: { appOrigin: string }) {
         </div>
       </div>
 
+      {copyError && <p role="alert" className="text-sm text-red-700">{copyError}</p>}
       {/* Usage steps */}
       <div className="grid gap-3 sm:grid-cols-3 pt-2 text-xs text-muted-foreground">
         <div className="flex gap-2">

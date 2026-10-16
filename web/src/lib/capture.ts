@@ -106,7 +106,7 @@ export function isAllowedCaptureOrigin(
     if (knownIds.has(extId)) return true;
 
     // In local development: allow any 32-character lowercase [a-p] Chrome extension ID
-    if (/^[a-p]{32}$/.test(extId)) {
+    if (process.env.NODE_ENV !== 'production' && /^[a-p]{32}$/.test(extId)) {
       return true;
     }
   }

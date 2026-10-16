@@ -21,7 +21,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const weekStart = body.plan_week_start || body.weekStart || new Date().toISOString().slice(0, 10);
+    const rawWeekStart = body.plan_week_start || body.weekStart;
+    if (rawWeekStart && (!/^\d{4}-\d{2}-\d{2}$/.test(rawWeekStart) || isNaN(new Date(rawWeekStart).getTime()))) {
+      return NextResponse.json(
+        { error: 'INVALID_DATE', message: 'plan_week_start must be a valid date in YYYY-MM-DD format.' },
+        { status: 400 }
+      );
+    }
+    const weekStart = rawWeekStart || new Date().toISOString().slice(0, 10);
     const customEstimates = body.customEstimates || {};
     const priorities = body.priorities || {};
 

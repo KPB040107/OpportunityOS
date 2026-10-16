@@ -94,7 +94,7 @@ export default async function ApprovalsPage() {
     applicationsQuery
   ]);
 
-  if (approvalsRes.error) {
+  if (approvalsRes.error || clarificationsRes.error || sourceReviewsRes.error || interactionsRes.error || applicationsRes.error) {
     throw new Error('Approval center data unavailable');
   }
 
@@ -142,7 +142,7 @@ export default async function ApprovalsPage() {
   };
 
   const sourceReviews: SourceReviewItem[] = ((sourceReviewsRes.data || []) as unknown as SourceReviewMatch[])
-    .filter((m) => m.opportunity)
+    .filter((m) => m.opportunity && !interactionsMap.get(m.opportunity.id)?.is_hidden)
     .map((m) => {
       const opp = m.opportunity;
       const inter = interactionsMap.get(opp.id);
@@ -185,7 +185,7 @@ export default async function ApprovalsPage() {
             <CheckCircle2 className="mx-auto size-8 text-emerald-600" />
             <h3 className="mt-3 text-sm font-semibold">No pending approvals</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              All eligible opportunities have been processed or handled autonomously.
+              There are no eligible opportunities awaiting your permission. Items needing facts or source checks appear below.
             </p>
           </Card>
         ) : (
@@ -314,8 +314,8 @@ export default async function ApprovalsPage() {
 
       {/* 4. Resolved Approvals History */}
       {resolvedApprovals.length > 0 && (
-        <div className="space-y-3 pt-6 border-t border-border">
-          <h2 className="text-base font-semibold text-muted-foreground">Resolved Approvals History</h2>
+        <details className="space-y-3 pt-6 border-t border-border">
+          <summary className="cursor-pointer text-base font-semibold text-muted-foreground">Resolved Approvals History ({resolvedApprovals.length})</summary>
           <div className="grid gap-2">
             {resolvedApprovals.map((appr) => {
               const opp = appr.match?.opportunity;
@@ -349,7 +349,7 @@ export default async function ApprovalsPage() {
               );
             })}
           </div>
-        </div>
+        </details>
       )}
     </div>
   );

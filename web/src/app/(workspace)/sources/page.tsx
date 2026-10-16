@@ -11,7 +11,8 @@ import { BookmarkletCard } from '@/components/bookmarklet-card';
 import { ExtensionSetupCard } from '@/components/extension-setup-card';
 import { PortalSetupCard } from '@/components/portal-setup-card';
 
-export default async function SourcesPage() {
+export default async function SourcesPage({ searchParams }: { searchParams?: Promise<{ error?: string; success?: string }> } = {}) {
+  const params = searchParams ? await searchParams : {};
   const { supabase, user } = await requireUser();
 
   const [sourcesResult, discoveryResult, profileResult] = await Promise.all([
@@ -225,6 +226,17 @@ export default async function SourcesPage() {
         <p className="mt-1 text-xs text-muted-foreground">
           Save a public page or feed link. Use URL intake to analyse an announcement; saving a link does not start a scan.
         </p>
+
+        {params.error && (
+          <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+            {params.error}
+          </div>
+        )}
+        {params.success && (
+          <div role="status" className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+            {params.success}
+          </div>
+        )}
 
         <form action={addCustomSource} className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="space-y-1">

@@ -313,8 +313,8 @@ export function extractDraftFromText(
   }
 
   // 3. Graduation year detection
-  const gradMatch = clean.match(/\b(?:Graduat(?:ing|ion)|Batch of|Class of)\s*(?:in)?\s*(202[4-9]|203[0-2])\b/i) ||
-                    clean.match(/\b(202[4-9]|203[0-2])\s*(?:Batch|Graduation)\b/i);
+  const gradMatch = clean.match(/\b(?:Graduat(?:ing|ion)|Batch of|Class of)\s*(?:in)?\s*(20[1-2][0-9]|203[0-2])\b/i) ||
+                    clean.match(/\b(20[1-2][0-9]|203[0-2])\s*(?:Batch|Graduation)\b/i);
   if (gradMatch) {
     fields.push({
       field: 'graduation_year',

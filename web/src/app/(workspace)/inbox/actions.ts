@@ -10,7 +10,7 @@ export async function retryAnalysis(_state:FormState,form:FormData):Promise<Form
   const {supabase}=await requireUser();
   const {error}=await supabase.rpc('retry_understand_item',{p_id:id.data});
   if(error)return {error:'Could not retry this submission. Only the original failed item can be retried, up to twice. You can also submit corrected text.'};
-  revalidatePath('/inbox');revalidatePath('/activity');
+  revalidatePath('/inbox');revalidatePath('/opportunities');revalidatePath('/approvals');revalidatePath('/activity');
   return {success:'Retry queued. Analysis will update here when it finishes.'};
 }
 
@@ -20,7 +20,7 @@ export async function toggleSaveAction(opportunityId: string): Promise<{ success
   const { supabase } = await requireUser();
   const { data, error } = await supabase.rpc('toggle_opportunity_save', { p_opportunity_id: parsed.data });
   if (error) return { success: false, error: error.message };
-  revalidatePath('/inbox');
+  revalidatePath('/inbox');revalidatePath('/opportunities');revalidatePath('/approvals');
   return { success: true, is_saved: !!data };
 }
 
@@ -30,7 +30,7 @@ export async function toggleHideAction(opportunityId: string): Promise<{ success
   const { supabase } = await requireUser();
   const { data, error } = await supabase.rpc('toggle_opportunity_hide', { p_opportunity_id: parsed.data });
   if (error) return { success: false, error: error.message };
-  revalidatePath('/inbox');
+  revalidatePath('/inbox');revalidatePath('/opportunities');revalidatePath('/approvals');
   return { success: true, is_hidden: !!data };
 }
 
@@ -43,6 +43,6 @@ export async function setSourcePreferenceAction(source: string, preference: 'nor
   const { supabase } = await requireUser();
   const { error } = await supabase.rpc('set_source_preference', { p_source: parsed.data.source, p_preference: parsed.data.preference });
   if (error) return { success: false, error: error.message };
-  revalidatePath('/inbox');
+  revalidatePath('/inbox');revalidatePath('/opportunities');revalidatePath('/approvals');
   return { success: true };
 }

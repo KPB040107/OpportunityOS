@@ -1,9 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
-import {publicUrl} from '@/lib/validation';
-import {z} from 'zod';
+import { publicUrl } from '@/lib/validation';
+import { z } from 'zod';
 
 export async function toggleSource(sourceId: string, currentEnabled: boolean) {
   const { supabase, user } = await requireUser();
@@ -36,16 +37,26 @@ export async function seedPresetsAction() {
 export async function addCustomSource(formData: FormData) {
   const { supabase, user } = await requireUser();
 
-  const name = formData.get('name') as string;
-  const url = publicUrl(String(formData.get('url')||''));
+  const name = String(formData.get('name') || '').trim();
+  const rawUrl = String(formData.get('url') || '').trim();
+  let url = '';
+  try {
+    url = publicUrl(rawUrl);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Invalid URL';
+    redirect(`/sources?error=${encodeURIComponent(msg)}`);
+  }
+
   const type = (formData.get('type') as string) || 'page';
   const frequency = (formData.get('frequency') as string) || 'daily';
   const keywordsStr = (formData.get('keywords') as string) || '';
 
   if (!name || !url) {
-    throw new Error('Name and URL are required');
+    redirect('/sources?error=Name+and+URL+are+required');
   }
-  if(!z.string().trim().min(1).max(100).safeParse(name).success||!['page','rss'].includes(type)||!['hourly','6hours','daily','weekly'].includes(frequency))throw new Error('Check the source settings');
+  if (!z.string().trim().min(1).max(100).safeParse(name).success || !['page', 'rss'].includes(type) || !['hourly', '6hours', 'daily', 'weekly'].includes(frequency)) {
+    redirect('/sources?error=Check+the+source+settings');
+  }
 
   const keywords = keywordsStr
     .split(',')
@@ -63,8 +74,9 @@ export async function addCustomSource(formData: FormData) {
   });
 
   if (error) {
-    throw new Error('Failed to add custom source: ' + error.message);
+    redirect(`/sources?error=${encodeURIComponent('Failed to add custom source: ' + error.message)}`);
   }
 
   revalidatePath('/sources');
+  redirect('/sources?success=Source+added+successfully');
 }
