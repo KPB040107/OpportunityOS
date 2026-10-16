@@ -55,26 +55,67 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
       }
     }
     for(const r of requirements.filter(r=>r.mandatory)) {
-      const proof=r.evidence_snippet||r.evidence||'';let n=r.normalized_value;
+      const fullProof=r.evidence_snippet||r.evidence||'';
+      const proofLines=fullProof.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+      const proof=proofLines.find(l=>canon(l).includes(canon(r.value)))||fullProof;
+      let n=r.normalized_value;
+
+      const isOpenBranch=r.kind==='branch' && (
+        /\b(?:any|all)\s+(?:branch(?:es)?|major(?:s)?|stream(?:s)?|discipline(?:s)?)(?:\s+(?:or|and)\s+major(?:s)?)?\b/i.test(r.value) ||
+        /\bopen\s+to\s+all\s+(?:branches|majors|streams|disciplines)\b/i.test(r.value)
+      ) && !/\b(?:relevant|related|allied|circuital)\b/i.test(r.value);
+
+      const isOpenDegree=r.kind==='degree' && (
+        /\b(?:any|all)\s+(?:undergraduate|ug|bachelor(?:'?s)?)\s+degree\b/i.test(r.value) ||
+        /\bopen\s+to\s+all\s+(?:undergraduate|ug|bachelor)\b/i.test(r.value)
+      );
+
       // Only recognize explicit, literal, named lists; broad academic descriptions remain unknown.
       if(['branch','degree'].includes(r.kind)&&!n){
-        const known=r.kind==='branch'?['computer science','information technology','data science','electrical engineering','electronics and communication','mechanical engineering','civil engineering','chemical engineering']:['btech','be','bsc','mtech','mca','bca','mba','bcom'];
-        const whole=norm(r.value),allowed=known.includes(whole)?[whole]:r.value.split(/\s+(?:or|and)\s+|[,;/|]/i).map(norm).filter(Boolean);
-        if(allowed.length&&allowed.every(v=>known.includes(v)))n={allowed};
+        const known=r.kind==='branch'?['computer science','information technology','data science','electrical engineering','electronics and communication','mechanical engineering','civil engineering','chemical engineering']:['btech','be','bsc','mtech','mca','bca','mba','bcom','ba','bba'];
+        if(isOpenBranch) {
+          n={open:true};
+        } else if(isOpenDegree) {
+          const normVal=norm(r.value).replace(/\bb\.tech\b/g,'btech').replace(/\bm\.tech\b/g,'mtech').replace(/\bb\.sc\b/g,'bsc').replace(/\bb\.e\b/g,'be').replace(/\bb\.com\b/g,'bcom');
+          const found=known.filter(deg=>new RegExp(`\\b${deg}\\b`,'i').test(normVal));
+          n={allowed:found.length?found:known,open:true};
+        } else {
+          const whole=norm(r.value),allowed=known.includes(whole)?[whole]:r.value.split(/\s+(?:or|and)\s+|[,;/|]/i).map(norm).filter(Boolean);
+          if(allowed.length&&allowed.every(v=>known.includes(v)))n={allowed};
+        }
       }
-      if(r.kind==='graduation_year'&&n?.allowed){
-        const years=[...new Set((proof.match(/\b20\d{2}\b/g)||[]).map(Number))];
-        if(years.length>1){const explicit=proof.match(/\b20\d{2}(?:\s*(?:,|\/|or|and)\s*20\d{2})+\b/i);n=explicit&&/graduat|batch/i.test(proof)?{allowed:explicit[0].match(/20\d{2}/g).map(Number)}:null;}
+      if(r.kind==='graduation_year'){
+        if(!n?.allowed){
+          const text=r.value+' '+proof;
+          const explicit=text.match(/\b20\d{2}(?:\s*(?:,\s*or\b|,\s*and\b|[,;/|]|\bor\b|\band\b)\s*20\d{2})+\b/i);
+          if(explicit&&!/[–—-]/.test(explicit[0])&&/graduat|batch/i.test(text)){
+            n={allowed:explicit[0].match(/20\d{2}/g).map(Number)};
+          }
+        } else if(n?.allowed){
+          const years=[...new Set((proof.match(/\b20\d{2}\b/g)||[]).map(Number))];
+          if(years.length>1){const explicit=proof.match(/\b20\d{2}(?:\s*(?:,|\/|or|and)\s*20\d{2})+\b/i);n=explicit&&/graduat|batch/i.test(proof)?{allowed:explicit[0].match(/20\d{2}/g).map(Number)}:null;}
+        }
       }
-      if(r.kind==='academic_year'&&n?.allowed){
-        const years=[...new Set((proof.match(/\b[1-8](?:st|nd|rd|th)?\b/g)||[]).map(v=>parseInt(v)))];
-        if(years.length>1){const explicit=proof.match(/\b[1-8](?:st|nd|rd|th)?(?:\s*(?:,|\/|or|and)\s*[1-8](?:st|nd|rd|th)?)+\b/i);n=explicit&&/\byears?\b/i.test(proof)?{allowed:explicit[0].match(/[1-8]/g).map(Number)}:null;}
+      if(r.kind==='academic_year'){
+        if(!n?.allowed){
+          const text=r.value+' '+proof;
+          const explicit=text.match(/\b[1-8](?:st|nd|rd|th)?(?:\s*(?:,\s*or\b|,\s*and\b|[,;/|]|\bor\b|\band\b)\s*[1-8](?:st|nd|rd|th)?)+\b/i);
+          if(explicit&&!/[–—-]/.test(explicit[0])&&/\byears?\b/i.test(text)){
+            n={allowed:explicit[0].match(/[1-8]/g).map(Number)};
+          }
+        } else if(n?.allowed){
+          const years=[...new Set((proof.match(/\b[1-8](?:st|nd|rd|th)?\b/g)||[]).map(v=>parseInt(v)))];
+          if(years.length>1){const explicit=proof.match(/\b[1-8](?:st|nd|rd|th)?(?:\s*(?:,|\/|or|and)\s*[1-8](?:st|nd|rd|th)?)+\b/i);n=explicit&&/\byears?\b/i.test(proof)?{allowed:explicit[0].match(/[1-8]/g).map(Number)}:null;}
+        }
       }
       if(['academic_year','graduation_year'].includes(r.kind)&&/\b(at least|minimum|min\.?|after|before|onwards?|up to|or later|or earlier)\b/i.test(proof))n=null;
       let status='UNKNOWN',reason=`The mandatory ${r.kind.replaceAll('_',' ')} requirement (${r.value}) cannot be verified from the current profile.`;
       // Compound and experience qualifiers must never be satisfied by skill presence alone.
-      const qualified=/\b(experience|years? of|months? of|at least (?:a|one|two)|except|excluding|not eligible|either|and\/or|related disciplines?|equivalent|or higher)\b/i.test(proof);
-      if(!conflict && r.kind==='cgpa' && n?.scale===10 && Number.isFinite(n.minimum) && p.cgpa!==null && p.cgpa!==undefined && !qualified && !/\b(or|unless|category)\b/i.test(proof)) {
+      const qualified=/\b(experience|years? of|months? of|at least (?:a|one|two)|except|excluding|not eligible|either|and\/or|related disciplines?|or higher)\b/i.test(proof)
+        || (/\bequivalent\b/i.test(proof) && !(r.kind==='degree' && p.degree && n?.allowed && n.allowed.includes(norm(p.degree))));
+      if(!conflict && isOpenBranch && p.branch) {
+        status='PASS';reason='This opportunity is open to all branches and majors.';
+      } else if(!conflict && r.kind==='cgpa' && n?.scale===10 && Number.isFinite(n.minimum) && p.cgpa!==null && p.cgpa!==undefined && !qualified && !/\b(or|unless|category)\b/i.test(proof)) {
         status=Number(p.cgpa)>=n.minimum?'PASS':'FAIL';reason=status==='PASS'?`Your CGPA meets the minimum of ${n.minimum}/10.`:`Your CGPA is below the minimum of ${n.minimum}/10.`;
       } else if(!conflict && ['academic_year','graduation_year'].includes(r.kind) && Array.isArray(n?.allowed) && n.allowed.length && n.allowed.every(Number.isInteger) && p[r.kind]!=null && !qualified) {
         status=n.allowed.includes(Number(p[r.kind]))?'PASS':'FAIL';reason=`Your ${r.kind.replaceAll('_',' ')} ${status==='PASS'?'is':'is not'} in the stated allowed years.`;
@@ -86,7 +127,8 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
           (allowedList.includes('computer science') && studentVal === 'data science') ||
           (allowedList.includes('data science') && studentVal === 'computer science')
         );
-        status=(r.kind === 'branch' ? branchMatch : allowedList.includes(studentVal))?'PASS':'FAIL';reason=`Your ${r.kind} ${status==='PASS'?'matches':'does not match'} the stated allowed list.`;
+        status=(r.kind === 'branch' ? branchMatch : (allowedList.includes(studentVal) || Boolean(n?.open)))?'PASS':'FAIL';
+        reason=`Your ${r.kind} ${status==='PASS'?'matches':'does not match'} the stated allowed list.`;
       } else if(!conflict && r.kind==='skill' && n?.name && !qualified && !/\b(?:advanced|expert|proficient|proficiency|fluent|fluency|certified|certification|[0-9]+\s*\+?\s*(?:years?|months?))\b/i.test(proof)) {
         // An absent skill is UNKNOWN: a profile is not a declaration of everything someone cannot do.
         if((p.skills||[]).some(s=>norm(s.name)===norm(n.name))){status='PASS';reason=`Your profile lists the required ${r.value} skill.`;}

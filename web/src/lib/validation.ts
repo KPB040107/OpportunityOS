@@ -1,6 +1,8 @@
 import { z } from 'zod';
-import { interestTypes, splitSkillNames } from './profile-utils';
-export { interestTypes, splitSkillNames };
+export const interestTypes = ['internship', 'hackathon', 'scholarship', 'program', 'job'] as const;
+export function splitSkillNames<T extends {name:string}>(entries:T[]):T[]{
+  return entries.flatMap(entry=>entry.name.split(',').map(name=>({...entry,name:name.trim()})).filter(entry=>entry.name.length>0));
+}
 
 const optionalNumber = (min: number, max: number, integer = false) => z.preprocess(
   value => value === '' || value === null || value === undefined ? null : Number(value),
