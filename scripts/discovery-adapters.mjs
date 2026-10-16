@@ -5,6 +5,41 @@ export function hashString(str) {
   return createHash('sha256').update(String(str || '')).digest('hex');
 }
 
+export function htmlToCleanText(html = '') {
+  if (!html) return '';
+  let text = String(html)
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n));
+
+  // Convert headings to Markdown
+  text = text.replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n\n### $1\n\n');
+  // Convert list items to Markdown bullets
+  text = text.replace(/<li[^>]*>(.*?)<\/li>/gi, '\n- $1');
+  // Convert paragraphs and line breaks
+  text = text.replace(/<p[^>]*>/gi, '\n\n');
+  text = text.replace(/<\/p>/gi, '');
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  // Strip remaining HTML tags
+  text = text.replace(/<[^>]+>/g, ' ');
+  // Clean whitespace
+  text = text.replace(/[ \t]+/g, ' ');
+  text = text.replace(/\n\s*\n\s*\n+/g, '\n\n');
+  return text.trim();
+}
+
+export function isIndiaOrRemoteLocation(location = '') {
+  if (!location) return true;
+  const normLoc = String(location).toLowerCase();
+  const isForeign = /\b(?:united states|usa|us\b|uk\b|united kingdom|london|san francisco|sf\b|seattle|austin|dublin|ireland|germany|berlin|france|paris|canada|toronto|vancouver|australia|sydney|singapore|tokyo|japan)\b/i.test(normLoc);
+  const isIndia = /\b(?:india|in\b|bengaluru|bangalore|hyderabad|pune|mumbai|delhi|noida|gurgaon|gurugram|chennai|kolkata|ahmedabad|karnataka|maharashtra|telangana|tamil\s*nadu|haryana|remote|worldwide|anywhere)\b/i.test(normLoc);
+  return isIndia && !isForeign;
+}
+
 export function detectRiskSignals(text = '') {
   const content = String(text || '');
   const signals = [];
@@ -87,10 +122,10 @@ export function normalizeLeverItem(company, item) {
 
   // Preserve substantive posting descriptions, requirements, and lists
   const descParts = [
-    item.descriptionPlain || (item.description ? item.description.replace(/<[^>]*>/g, ' ') : ''),
+    item.descriptionPlain || (item.description ? htmlToCleanText(item.description) : ''),
     item.additionalPlain || '',
     Array.isArray(item.lists)
-      ? item.lists.map(l => `${l.text || ''}:\n${(l.content || '').replace(/<[^>]*>/g, ' ')}`).join('\n')
+      ? item.lists.map(l => `${l.text || ''}:\n${htmlToCleanText(l.content || '')}`).join('\n')
       : ''
   ].filter(Boolean).join('\n\n');
 
@@ -294,7 +329,7 @@ export function normalizeGreenhouseItem(company, item) {
   const type = isIntern ? 'internship' : 'job';
   const seniority = classifySeniority(title);
 
-  const cleanContent = item.content ? String(item.content).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  const cleanContent = item.content ? htmlToCleanText(item.content) : '';
   const rawTextParts = [
     title,
     `Organization: ${company.toUpperCase()}`,
@@ -305,6 +340,9 @@ export function normalizeGreenhouseItem(company, item) {
 
   const rawText = rawTextParts.join('\n');
   const riskSignals = detectRiskSignals(rawText);
+  if (location && !isIndiaOrRemoteLocation(location)) {
+    riskSignals.push('foreign_location_excluded');
+  }
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(cleanContent);
 
@@ -359,7 +397,7 @@ export function normalizeAshbyItem(company, item) {
   const type = isIntern ? 'internship' : 'job';
   const seniority = classifySeniority(title);
 
-  const cleanContent = item.descriptionPlain || (item.descriptionHtml ? String(item.descriptionHtml).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+  const cleanContent = item.descriptionPlain || (item.descriptionHtml ? htmlToCleanText(item.descriptionHtml) : '');
   const rawTextParts = [
     title,
     `Organization: ${company.toUpperCase()}`,
@@ -370,6 +408,9 @@ export function normalizeAshbyItem(company, item) {
 
   const rawText = rawTextParts.join('\n');
   const riskSignals = detectRiskSignals(rawText);
+  if (location && !isIndiaOrRemoteLocation(location)) {
+    riskSignals.push('foreign_location_excluded');
+  }
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(cleanContent);
 

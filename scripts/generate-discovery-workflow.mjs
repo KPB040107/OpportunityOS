@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {prepareDiscoveryBatch, summarizeDiscoveryBatch} from './discovery-batch.mjs';
 import {workflowBuilder} from './workflow-builder.mjs';
-import {normalizeLeverItem, normalizeDevpostItem, normalizeGreenhouseItem, normalizeAshbyItem, normalizeJSearchItem, detectRiskSignals, parseDevpostDeadline, classifySeniority} from './discovery-adapters.mjs';
+import {normalizeLeverItem, normalizeDevpostItem, normalizeGreenhouseItem, normalizeAshbyItem, normalizeJSearchItem, detectRiskSignals, parseDevpostDeadline, classifySeniority, htmlToCleanText, isIndiaOrRemoteLocation} from './discovery-adapters.mjs';
 
 const b = workflowBuilder('opportunityosSlice2Discovery', 'OpportunityOS 08 Discovery');
 const {runtime, config, add, pg, code, branch, link, child, save} = b;
@@ -86,6 +86,8 @@ code('normalize-lever', 'Normalize Lever postings', 1380, -180, `
   const crypto = require('crypto');
   function hashString(str) { return crypto.createHash('sha256').update(String(str || '')).digest('hex'); }
   ${skillHelpers}
+  const htmlToCleanText = ${htmlToCleanText.toString()};
+  const isIndiaOrRemoteLocation = ${isIndiaOrRemoteLocation.toString()};
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
@@ -105,6 +107,8 @@ code('normalize-devpost', 'Normalize Devpost hackathons', 1380, -60, `
   const crypto = require('crypto');
   function hashString(str) { return crypto.createHash('sha256').update(String(str || '')).digest('hex'); }
   ${skillHelpers}
+  const htmlToCleanText = ${htmlToCleanText.toString()};
+  const isIndiaOrRemoteLocation = ${isIndiaOrRemoteLocation.toString()};
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
@@ -124,6 +128,8 @@ code('normalize-greenhouse', 'Normalize Greenhouse postings', 1380, 60, `
   const crypto = require('crypto');
   function hashString(str) { return crypto.createHash('sha256').update(String(str || '')).digest('hex'); }
   ${skillHelpers}
+  const htmlToCleanText = ${htmlToCleanText.toString()};
+  const isIndiaOrRemoteLocation = ${isIndiaOrRemoteLocation.toString()};
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
@@ -143,6 +149,8 @@ code('normalize-ashby', 'Normalize Ashby postings', 1380, 180, `
   const crypto = require('crypto');
   function hashString(str) { return crypto.createHash('sha256').update(String(str || '')).digest('hex'); }
   ${skillHelpers}
+  const htmlToCleanText = ${htmlToCleanText.toString()};
+  const isIndiaOrRemoteLocation = ${isIndiaOrRemoteLocation.toString()};
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
