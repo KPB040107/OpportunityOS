@@ -2,18 +2,21 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
 import { Card } from '@/components/ui/card';
 import { ResolveButtons } from './resolve-button';
+import { ClarificationCard, type ClarificationItem } from './clarification-card';
+import { SourceReviewCard, type SourceReviewItem } from './source-review-card';
 import { formatDate } from '@/lib/utils';
-import { CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ArrowRight, HelpCircle, AlertCircle } from 'lucide-react';
 import type { Approval } from '@/lib/types';
-import {LiveUpdates} from '@/components/live-updates';
-import {requestTime} from '@/lib/server-clock';
-import {RetryWork} from '@/components/retry-work';
+import { LiveUpdates } from '@/components/live-updates';
+import { requestTime } from '@/lib/server-clock';
+import { RetryWork } from '@/components/retry-work';
 
 export default async function ApprovalsPage() {
   const { supabase, user } = await requireUser();
-  const checkedAt=await requestTime();
+  const checkedAt = await requestTime();
 
-  const { data: rawApprovals, error } = await supabase
+  // 1. Fetch approvals
+  const approvalsQuery = supabase
     .from('approvals')
     .select(`
       id,
@@ -32,21 +35,75 @@ export default async function ApprovalsPage() {
         id,
         match_score,
         confidence,
+        eligibility_status,
         opportunity:opportunities(id, title, organization, deadline, application_url, type)
       )
     `)
     .eq('user_id', user.id)
     .order('created_at', { ascending: false });
 
-  if (error) {
+  // 2. Fetch pending clarifications (Needs Information)
+  const clarificationsQuery = supabase
+    .from('clarifications')
+    .select('id, missing_fact, requirement_kind, question_text, affected_opportunity_ids, status, created_at')
+    .eq('user_id', user.id)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  // 3. Fetch unknown source reviews (Needs Source Review)
+  const sourceReviewsQuery = supabase
+    .from('matches')
+    .select(`
+      id,
+      eligibility_status,
+      decision,
+      explanation,
+      opportunity:opportunities(
+        id,
+        title,
+        organization,
+        type,
+        location,
+        application_url,
+        risk_signals
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('decision', 'ASK')
+    .eq('eligibility_status', 'UNKNOWN')
+    .order('updated_at', { ascending: false })
+    .limit(20);
+
+  // 4. Fetch user interactions for source reviews
+  const interactionsQuery = supabase
+    .from('user_opportunity_interactions')
+    .select('opportunity_id, is_saved, is_hidden')
+    .eq('user_id', user.id);
+
+  // 5. Fetch tracked applications to flag already tracked opportunities
+  const applicationsQuery = supabase
+    .from('applications')
+    .select('opportunity_id')
+    .eq('user_id', user.id);
+
+  const [approvalsRes, clarificationsRes, sourceReviewsRes, interactionsRes, applicationsRes] = await Promise.all([
+    approvalsQuery,
+    clarificationsQuery,
+    sourceReviewsQuery,
+    interactionsQuery,
+    applicationsQuery
+  ]);
+
+  if (approvalsRes.error) {
     throw new Error('Approval center data unavailable');
   }
 
-  const allApprovals = (rawApprovals || []) as unknown as (Approval & {
+  const allApprovals = (approvalsRes.data || []) as unknown as (Approval & {
     match?: {
       id: string;
       match_score: number | null;
       confidence: number | null;
+      eligibility_status?: string | null;
       opportunity?: {
         id: string;
         title: string;
@@ -58,38 +115,82 @@ export default async function ApprovalsPage() {
     };
   })[];
 
-  const pendingApprovals = allApprovals.filter((a) => a.status === 'pending');
+  // Actionable approvals are strictly ELIGIBLE
+  const pendingActionableApprovals = allApprovals.filter(
+    (a) => a.status === 'pending' && !a.requires_information && a.match?.eligibility_status === 'ELIGIBLE'
+  );
+
   const resolvedApprovals = allApprovals.filter((a) => a.status !== 'pending');
+
+  const pendingClarifications = (clarificationsRes.data || []) as ClarificationItem[];
+
+  const interactionsMap = new Map((interactionsRes.data || []).map((i) => [i.opportunity_id, i]));
+  const trackedSet = new Set((applicationsRes.data || []).map((a) => a.opportunity_id));
+
+  type SourceReviewMatch = {
+    id: string;
+    explanation?: string | null;
+    opportunity: {
+      id: string;
+      title: string;
+      organization: string;
+      type: string;
+      location: string | null;
+      application_url: string | null;
+      risk_signals: string[] | null;
+    };
+  };
+
+  const sourceReviews: SourceReviewItem[] = ((sourceReviewsRes.data || []) as unknown as SourceReviewMatch[])
+    .filter((m) => m.opportunity)
+    .map((m) => {
+      const opp = m.opportunity;
+      const inter = interactionsMap.get(opp.id);
+      return {
+        id: opp.id,
+        title: opp.title,
+        organization: opp.organization,
+        type: opp.type,
+        location: opp.location,
+        application_url: opp.application_url,
+        risk_signals: opp.risk_signals || [],
+        explanation: m.explanation || undefined,
+        is_saved: inter?.is_saved ?? false,
+        is_hidden: inter?.is_hidden ?? false,
+        is_tracked: trackedSet.has(opp.id)
+      };
+    });
 
   return (
     <div className="space-y-8">
-      <LiveUpdates userId={user.id}/>
+      <LiveUpdates userId={user.id} />
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Approval Center</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Review & Approval Center</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Human-in-the-loop review queue. When the agent is uncertain or finds incomplete requirements (ASK), it pauses and requests your permission before acting.
+          Human-in-the-loop review queue. Actionable approvals require human sign-off; missing facts and source details can be inspected and updated below.
         </p>
       </div>
 
+      {/* 1. Actionable Approvals (ELIGIBLE items needing human authorization) */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
-          <span>Pending Approvals</span>
+          <span>Actionable Approvals</span>
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">
-            {pendingApprovals.length}
+            {pendingActionableApprovals.length}
           </span>
         </h2>
 
-        {pendingApprovals.length === 0 ? (
+        {pendingActionableApprovals.length === 0 ? (
           <Card className="p-8 text-center bg-muted/30">
             <CheckCircle2 className="mx-auto size-8 text-emerald-600" />
-            <h3 className="mt-3 text-sm font-semibold">All caught up!</h3>
+            <h3 className="mt-3 text-sm font-semibold">No pending approvals</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              No opportunities currently require your review. High-confidence matches are handled autonomously.
+              All eligible opportunities have been processed or handled autonomously.
             </p>
           </Card>
         ) : (
           <div className="grid gap-4">
-            {pendingApprovals.map((appr) => {
+            {pendingActionableApprovals.map((appr) => {
               const opp = appr.match?.opportunity;
               const match = appr.match;
               return (
@@ -97,8 +198,8 @@ export default async function ApprovalsPage() {
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
-                          Needs Review
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-900">
+                          Eligible · Needs Human Sign-off
                         </span>
                         {opp?.type && (
                           <span className="text-xs uppercase text-muted-foreground font-medium">
@@ -121,27 +222,23 @@ export default async function ApprovalsPage() {
                         )}
                       </h3>
                       <p className="text-sm text-muted-foreground">{opp?.organization || 'Unknown Organisation'}</p>
-                      
+
                       <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                        <p className="font-medium flex items-center gap-1.5">
+                        <p className="font-medium flex items-center gap-1.5 text-xs">
                           <AlertTriangle className="size-4 text-amber-600 shrink-0" />
-                          Why the agent paused:
+                          Why approval is required:
                         </p>
                         <p className="mt-1 text-xs leading-relaxed">{appr.reason}</p>
-                        {appr.missing_info?.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {appr.missing_info.map((flag) => (
-                              <span key={flag} className="rounded bg-white/80 border border-amber-300 px-2 py-0.5 text-[11px] font-mono text-amber-900">
-                                {flag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
 
                     <div className="sm:shrink-0 flex flex-col items-end gap-3">
-                      <ResolveButtons approvalId={appr.id} revision={appr.match_revision} requiresInformation={appr.requires_information} expired={new Date(appr.expires_at).getTime()<=checkedAt}/>
+                      <ResolveButtons
+                        approvalId={appr.id}
+                        revision={appr.match_revision}
+                        requiresInformation={false}
+                        expired={new Date(appr.expires_at).getTime() <= checkedAt}
+                      />
                       <span className="text-xs text-muted-foreground">
                         Expires {formatDate(appr.expires_at)} · Execution: {appr.resume_status}
                       </span>
@@ -166,6 +263,56 @@ export default async function ApprovalsPage() {
         )}
       </div>
 
+      {/* 2. Needs Information (Grouped Clarifications for Missing Profile Facts) */}
+      {pendingClarifications.length > 0 && (
+        <div className="space-y-4 pt-4 border-t border-border">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <HelpCircle className="size-5 text-sky-600" />
+              <span>Needs Information</span>
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-900">
+                {pendingClarifications.length}
+              </span>
+            </h2>
+            <Link href="/profile" className="text-xs font-semibold text-primary hover:underline">
+              Edit full profile →
+            </Link>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            These questions resolve missing profile facts. Answering once updates your profile and immediately re-evaluates all affected opportunities.
+          </p>
+          <div className="grid gap-3">
+            {pendingClarifications.map((c) => (
+              <ClarificationCard key={c.id} clarification={c} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 3. Needs Source Review (Listings with insufficient requirements / unverified details) */}
+      {sourceReviews.length > 0 && (
+        <div className="space-y-4 pt-4 border-t border-border">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <AlertCircle className="size-5 text-amber-600" />
+              <span>Source Review</span>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">
+                {sourceReviews.length}
+              </span>
+            </h2>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Listings that lack explicit employer requirements, have unverified claims, or contain sparse details. These cannot be approved because no actionable criteria exist. You can save, hide, or view the original listing.
+          </p>
+          <div className="grid gap-3">
+            {sourceReviews.map((item) => (
+              <SourceReviewCard key={item.id} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 4. Resolved Approvals History */}
       {resolvedApprovals.length > 0 && (
         <div className="space-y-3 pt-6 border-t border-border">
           <h2 className="text-base font-semibold text-muted-foreground">Resolved Approvals History</h2>
@@ -185,7 +332,9 @@ export default async function ApprovalsPage() {
                       Decision: <span className="font-semibold uppercase">{appr.status}</span> · Resolved {formatDate(appr.decided_at || appr.created_at)}
                     </p>
                     <p className="text-muted-foreground">Execution: {appr.resume_status}</p>
-                    {appr.resume_status==='failed'&&new Date(appr.expires_at).getTime()>checkedAt&&<RetryWork id={appr.id} kind="resume"/>}
+                    {appr.resume_status === 'failed' && new Date(appr.expires_at).getTime() > checkedAt && (
+                      <RetryWork id={appr.id} kind="resume" />
+                    )}
                   </div>
                   <span
                     className={`rounded-full px-2.5 py-0.5 font-semibold capitalize ${

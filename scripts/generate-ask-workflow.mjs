@@ -3,8 +3,8 @@ const b=workflowBuilder('opportunityosSlice4Ask','OpportunityOS 05 Ask and Appro
 const {add,pg,code,branch,link,child,credentials}=b;
 const resumeCredentials=credentials('httpHeaderAuth','N8N_RESUME_CREDENTIAL_ID','N8N_RESUME_CREDENTIAL_NAME');
 add('trigger','Ask about the saved match','executeWorkflowTrigger',1.1,0,0,{inputSource:'passthrough'});
-add('review-recovery','Recover saved ASK decisions without a review','scheduleTrigger',1.2,0,-180,{rule:{interval:[{field:'seconds',secondsInterval:5}]}});
-pg('review-candidate','Find one current missing review',250,-180,"select m.id as match_id from public.matches m join public.opportunities o on o.id=m.opportunity_id and o.user_id=m.user_id where m.status='complete' and m.decision='ASK' and (o.deadline is null or o.deadline>(now() at time zone 'Asia/Kolkata')::date) and not exists(select 1 from public.approvals a where a.match_id=m.id and a.match_revision=m.revision) order by m.updated_at limit 1;");
+add('review-recovery','Recover saved ASK decisions without a review','scheduleTrigger',1.2,0,-180,{rule:{interval:[{field:'minutes',minutesInterval:1}]}});
+pg('review-candidate','Find one current missing review',250,-180,"select m.id as match_id from public.matches m join public.opportunities o on o.id=m.opportunity_id and o.user_id=m.user_id where m.status='complete' and m.decision='ASK' and m.eligibility_status='ELIGIBLE' and (o.deadline is null or o.deadline>(now() at time zone 'Asia/Kolkata')::date) and not exists(select 1 from public.approvals a where a.match_id=m.id and a.match_revision=m.revision) order by m.updated_at limit 1;");
 pg('review-context','Load current owned review context',250,0,"select public.worker_match_context($1::uuid,$2::text,'05-ask') as result;",'={{ [$json.match_id,$execution.id] }}');
 pg('approval','Bind the private waiting execution',460,0,'select public.worker_create_approval($1::uuid,$2::text,$3::text) as result;','={{ [$json.result.match_id,$execution.id,$execution.resumeUrl.replace(/^https?:[/][/][^/]+/,"http://localhost:5678")] }}');
 code('unpack','Stop duplicate approval executions',500,0,'const c=$input.first().json.result;return c?.created?[{json:c}]:[];');
@@ -13,7 +13,7 @@ code('resume-body','Require the private resume nonce',1000,0,"const body=$input.
 pg('consume','Check saved outcome revision and eligibility',1250,0,'select public.worker_consume_resume($1::uuid,$2::text,$3::uuid) as result;','={{ [$json.approval_id,$execution.id,$json.nonce] }}');
 code('approved','Continue only verified permitted approval',1500,0,'const r=$input.first().json.result;return r.approved?[{json:{match_id:r.match_id}}]:[];');
 child('act','Resume permitted actions',1750,0,'opportunityosSlice4Act');
-add('poll','Recover pending confirmation deliveries','scheduleTrigger',1.2,0,240,{rule:{interval:[{field:'seconds',secondsInterval:5}]}});
+add('poll','Recover pending confirmation deliveries','scheduleTrigger',1.2,0,240,{rule:{interval:[{field:'minutes',minutesInterval:1}]}});
 pg('resume-claim','Claim one pending private resume',250,240,'select public.worker_claim_resume() as result;');
 code('resume-unpack','Keep resume capabilities server side',500,240,'const r=$input.first().json.result;return r.claimed?[{json:r}]:[];');
 add('resume-http','Resume the same authenticated Wait execution','httpRequest',4.2,750,240,{method:'POST',url:'={{ $json.url }}',authentication:'genericCredentialType',genericAuthType:'httpHeaderAuth',sendBody:true,specifyBody:'json',jsonBody:'={{ JSON.stringify({approval_id:$json.approval_id,nonce:$json.nonce}) }}',options:{timeout:5000,redirect:{redirect:{followRedirects:false}},response:{response:{fullResponse:true,neverError:true,responseFormat:'json'}}}},{credentials:resumeCredentials,onError:'continueRegularOutput',retryOnFail:false});

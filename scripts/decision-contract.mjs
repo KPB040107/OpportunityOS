@@ -4,7 +4,7 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
   const weights={skill_fit:40,career_alignment:20,interest_fit:15,location_fit:10,profile_fit:10,urgency:5};
   const thresholds={cautious:[80,.85],balanced:[70,.75],autopilot:[60,.65]};
   const canon=v=>String(v??'').normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
-  const aliases={py:'python',js:'javascript','react.js':'react',reactjs:'react','node.js':'nodejs',node:'nodejs',bangalore:'bengaluru',bombay:'mumbai','c++':'cpp','c#':'csharp',cse:'computer science',cs:'computer science','computer science and engineering':'computer science',it:'information technology','b.tech':'btech','bachelor of technology':'btech','b.e.':'be','bachelor of engineering':'be','m.tech':'mtech'};
+  const aliases={py:'python',js:'javascript','react.js':'react',reactjs:'react','node.js':'nodejs',node:'nodejs',bangalore:'bengaluru',bombay:'mumbai','c++':'cpp','c#':'csharp',cse:'computer science',cs:'computer science','computer science and engineering':'computer science',it:'information technology','data science and engineering':'data science','artificial intelligence and data science':'data science','ai & ds':'data science','ai and ds':'data science','ai & ml':'data science','ai and ml':'data science','machine learning':'data science','b.tech':'btech','bachelor of technology':'btech','b.e.':'be','bachelor of engineering':'be','m.tech':'mtech'};
   const norm=v=>aliases[canon(v)]||canon(v);
   const round=v=>Math.round(v*10000)/10000;
   const date=now=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(now));
@@ -28,11 +28,37 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
     const flags=(o.ambiguity_flags||[]).filter(f=>!securityFlags.has(f));
     const conflict=flags.some(f=>/contradict|conflict|source_variation/.test(f));
     if(conflict)add('source','UNKNOWN','The sources contain conflicting details. Clarification is required.');
+    if(p.branch && o.title) {
+      const b=norm(p.branch), title=canon(o.title), type=canon(o.type);
+      if(type !== 'hackathon' && (b === 'computer science' || b === 'data science' || b === 'information technology')) {
+        const unrelatedPatterns = [
+          /\b(?:account executive|sales executive|sales manager|business development representative|\bbdr\b|\bsdr\b|inside sales|commercial hunter|commercial grower|telecaller|territory manager)\b/,
+          /\b(?:general counsel|corporate counsel|legal counsel|privacy counsel|paralegal|attorney|lawyer|compliance manager)\b/,
+          /\b(?:business finance|corporate finance|statutory audit|tax manager|financial controller|accounts payable|accounts receivable|payroll)\b/,
+          /\b(?:performance marketing|growth marketing|brand marketing|seo specialist|social media manager|copywriter)\b/,
+          /\b(?:human resources|recruiter|talent acquisition|\bhr\b|\bhrbp\b|people partner)\b/,
+          /\b(?:cluster head|last mile|warehouse manager|fleet manager|logistics coordinator|facilities manager|loss prevention|security & investigation)\b/,
+          /\b(?:nurse|physician|chef|culinary)\b/
+        ];
+        const techPatterns = [
+          /\b(?:software|developer|sde|swe|frontend|front[- ]end|backend|back[- ]end|fullstack|full[- ]stack|web|mobile|android|ios)\b/,
+          /\b(?:engineer|engineering|devops|sre|cloud|infrastructure|systems?|platform|network|linux)\b/,
+          /\b(?:data scientist|data science|data analyst|data analytics|data engineer|big data|etl|bi developer|decision science)\b/,
+          /\b(?:machine learning|deep learning|artificial intelligence|\bai\b|\bml\b|nlp|computer vision|genai|llm)\b/,
+          /\b(?:security|cybersecurity|infosec|red team|qa|quality assurance|test engineer|research intern|algorithm)\b/
+        ];
+        const hasUnrelated = unrelatedPatterns.some(pat => pat.test(title));
+        const hasTech = techPatterns.some(pat => pat.test(title));
+        if(hasUnrelated && !hasTech) {
+          add('branch', 'FAIL', `This role (${o.title}) is outside your field of study (${p.branch}).`, p.branch);
+        }
+      }
+    }
     for(const r of requirements.filter(r=>r.mandatory)) {
       const proof=r.evidence_snippet||r.evidence||'';let n=r.normalized_value;
       // Only recognize explicit, literal, named lists; broad academic descriptions remain unknown.
       if(['branch','degree'].includes(r.kind)&&!n){
-        const known=r.kind==='branch'?['computer science','information technology','electrical engineering','electronics and communication','mechanical engineering','civil engineering','chemical engineering']:['btech','be','bsc','mtech','mca','bca','mba','bcom'];
+        const known=r.kind==='branch'?['computer science','information technology','data science','electrical engineering','electronics and communication','mechanical engineering','civil engineering','chemical engineering']:['btech','be','bsc','mtech','mca','bca','mba','bcom'];
         const whole=norm(r.value),allowed=known.includes(whole)?[whole]:r.value.split(/\s+(?:or|and)\s+|[,;/|]/i).map(norm).filter(Boolean);
         if(allowed.length&&allowed.every(v=>known.includes(v)))n={allowed};
       }
@@ -53,7 +79,14 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
       } else if(!conflict && ['academic_year','graduation_year'].includes(r.kind) && Array.isArray(n?.allowed) && n.allowed.length && n.allowed.every(Number.isInteger) && p[r.kind]!=null && !qualified) {
         status=n.allowed.includes(Number(p[r.kind]))?'PASS':'FAIL';reason=`Your ${r.kind.replaceAll('_',' ')} ${status==='PASS'?'is':'is not'} in the stated allowed years.`;
       } else if(!conflict && ['branch','degree'].includes(r.kind) && Array.isArray(n?.allowed) && n.allowed.length && p[r.kind] && !qualified) {
-        status=n.allowed.map(norm).includes(norm(p[r.kind]))?'PASS':'FAIL';reason=`Your ${r.kind} ${status==='PASS'?'matches':'does not match'} the stated allowed list.`;
+        const studentVal=norm(p[r.kind]);
+        const allowedList=n.allowed.map(norm);
+        const branchMatch = r.kind === 'branch' && (
+          allowedList.includes(studentVal) ||
+          (allowedList.includes('computer science') && studentVal === 'data science') ||
+          (allowedList.includes('data science') && studentVal === 'computer science')
+        );
+        status=(r.kind === 'branch' ? branchMatch : allowedList.includes(studentVal))?'PASS':'FAIL';reason=`Your ${r.kind} ${status==='PASS'?'matches':'does not match'} the stated allowed list.`;
       } else if(!conflict && r.kind==='skill' && n?.name && !qualified && !/\b(?:advanced|expert|proficient|proficiency|fluent|fluency|certified|certification|[0-9]+\s*\+?\s*(?:years?|months?))\b/i.test(proof)) {
         // An absent skill is UNKNOWN: a profile is not a declaration of everything someone cannot do.
         if((p.skills||[]).some(s=>norm(s.name)===norm(n.name))){status='PASS';reason=`Your profile lists the required ${r.value} skill.`;}

@@ -38,8 +38,8 @@
         "rule": {
           "interval": [
             {
-              "field": "seconds",
-              "secondsInterval": 5
+              "field": "minutes",
+              "minutesInterval": 1
             }
           ]
         }

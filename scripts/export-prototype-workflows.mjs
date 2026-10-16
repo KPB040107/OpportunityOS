@@ -1,7 +1,7 @@
 // Export only reviewed product workflows; local snapshots may contain credentials.
 import {readFileSync,writeFileSync} from 'node:fs';
 const current=JSON.parse(readFileSync('.local/prototype-live-export.json','utf8'));
-for(const [target,id] of [
+const targets = [
   ['workflows/01-ingest.json','opportunityosSlice1Ingest'],
   ['workflows/02-understand.json','opportunityosSlice2Understand'],
   ['workflows/03-evaluate.json','opportunityosSlice3Evaluate'],
@@ -9,7 +9,11 @@ for(const [target,id] of [
   ['workflows/05-ask-and-approve.json','opportunityosSlice4Ask'],
   ['workflows/06-autopilot.json','opportunityosSlice5Autopilot'],
   ['workflows/07-error-handler.json','opportunityosSlice5ErrorHandler'],
-]) {
+];
+if (Array.isArray(current) && current.some(w => w.id === 'opportunityosSlice2Discovery')) {
+  targets.push(['workflows/08-discovery.json', 'opportunityosSlice2Discovery']);
+}
+for(const [target,id] of targets) {
   const exported=current;
   const workflow=Array.isArray(exported)?exported.find(w=>w.id===id):exported;
   if(workflow?.id!==id||!workflow.active||workflow.activeVersionId!==workflow.versionId)throw new Error('Export must be the current published product workflow.');

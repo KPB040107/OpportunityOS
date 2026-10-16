@@ -140,3 +140,50 @@ test('Gate S1: UNKNOWN mandatory eligibility still gives ASK and cannot be bypas
   assert.equal(result.decision, 'ASK');
   assert.ok(result.reason_codes.includes('UNKNOWN_ELIGIBILITY'));
 });
+
+test('Field Relevance: CS profile excludes unrelated marketing role as INELIGIBLE and IGNORE', () => {
+  const input = clone();
+  input.profile.branch = 'Computer Science and Engineering';
+  input.opportunity.title = 'Assistant Manager - Performance Marketing';
+  input.requirements = [];
+
+  const result = unlockedContract.decide(input, base.match, pack.now);
+  assert.equal(result.eligibility_status, 'INELIGIBLE');
+  assert.equal(result.decision, 'IGNORE');
+  assert.ok(result.reason_codes.includes('INELIGIBLE'));
+  assert.ok(result.explanation.includes('outside your field of study'));
+});
+
+test('Field Relevance: Data Science profile accepts general CS / Software Engineering roles (user rule)', () => {
+  const input = clone();
+  input.profile.branch = 'Data Science';
+  input.opportunity.title = 'DEMO Software Internship';
+  input.opportunity.type = 'internship';
+
+  const result = unlockedContract.decide(input, base.match, pack.now);
+  assert.equal(result.eligibility_status, 'ELIGIBLE');
+  assert.equal(result.decision, 'ACT');
+});
+
+test('Field Relevance: CS profile accepts Data Science / AI / ML roles', () => {
+  const input = clone();
+  input.profile.branch = 'Computer Science';
+  input.opportunity.title = 'PhD Data Scientist, Intern';
+  input.opportunity.type = 'internship';
+
+  const result = unlockedContract.decide(input, base.match, pack.now);
+  assert.equal(result.eligibility_status, 'ELIGIBLE');
+  assert.equal(result.decision, 'ACT');
+});
+
+test('Field Relevance: Data Science profile excludes unrelated Business Finance role', () => {
+  const input = clone();
+  input.profile.branch = 'Data Science';
+  input.opportunity.title = 'Associate Director - Business Finance';
+  input.requirements = [];
+
+  const result = unlockedContract.decide(input, base.match, pack.now);
+  assert.equal(result.eligibility_status, 'INELIGIBLE');
+  assert.equal(result.decision, 'IGNORE');
+  assert.ok(result.reason_codes.includes('INELIGIBLE'));
+});

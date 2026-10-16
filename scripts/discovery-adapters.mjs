@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {extractSkillsAndRequirements} from './skill-extractor.mjs';
 
 export function hashString(str) {
   return createHash('sha256').update(String(str || '')).digest('hex');
@@ -8,22 +9,64 @@ export function detectRiskSignals(text = '') {
   const content = String(text || '');
   const signals = [];
 
-  const feeMatch = content.match(/\b(?:registration fee|processing fee|application fee|training fee|security deposit|pay \$?\d+|send money)\b/i);
+  // Match fee requirements only when NOT preceded by negative context (e.g. "no application fee", "zero registration fee", "free of fees")
+  const feePattern = /(?<!\b(?:no|zero|without|free\s+of|free\s+from)\s+)(?:registration\s+fee|processing\s+fee|application\s+fee|training\s+fee|security\s+deposit|pay\s+\$?\d+|send\s+money)\b/i;
+  const feeMatch = content.match(feePattern);
   if (feeMatch) {
-    signals.push(`fee_payment_required: "${feeMatch[0]}"`);
+    // Context check around the match to protect against phrases like "no application fee is required"
+    const start = Math.max(0, feeMatch.index - 25);
+    const end = Math.min(content.length, feeMatch.index + feeMatch[0].length + 25);
+    const window = content.slice(start, end);
+    const isExempt = /\b(?:no|zero|without|free|waived)\s+(?:registration|processing|application|training)?\s*fee/i.test(window) ||
+                     /\b(?:free\s+to\s+apply|free\s+to\s+participate|no\s+fee)\b/i.test(window);
+    if (!isExempt) {
+      signals.push(`fee_payment_required: "${feeMatch[0]}"`);
+    }
   }
 
-  const credentialMatch = content.match(/\b(?:send (?:your )?(?:password|bank account|credit card|cvv|otp))\b/i);
+  const credentialMatch = content.match(/\b(?:send\s+(?:your\s+)?(?:password|bank\s+account|credit\s+card|cvv|otp))\b/i);
   if (credentialMatch) {
     signals.push(`credential_request: "${credentialMatch[0]}"`);
   }
 
-  const injectionMatch = content.match(/\b(?:ignore (?:all )?(?:previous )?instructions|system prompt|override (?:all )?policies|mark as act|eval:\s*act)\b/i);
+  const injectionMatch = content.match(/\b(?:ignore\s+(?:all\s+)?(?:previous\s+)?instructions|system\s+prompt|override\s+(?:all\s+)?policies|mark\s+as\s+act|eval:\s*act)\b/i);
   if (injectionMatch) {
     signals.push(`prompt_injection_detected: "${injectionMatch[0]}"`);
   }
 
   return signals;
+}
+
+export function classifySeniority(title = '', commitment = '') {
+  const combined = `${title} ${commitment}`.toLowerCase();
+  
+  if (/\b(?:intern|internship|trainee|apprentice|fellow|fellowship)\b/i.test(combined)) {
+    return 'intern';
+  }
+  
+  const hasExec = /\b(?:director|vice president|vp\b|chief|head of|general manager|partner\b)/i.test(combined);
+  if (hasExec) {
+    return 'executive';
+  }
+  
+  const hasSenior = /\b(?:senior|sr\.?\b|lead\b|principal\b|staff\b|manager|architect|mgr\b)/i.test(combined);
+  
+  const hasEntry = /\b(?:junior|jr\.?\b|entry[- ]level|graduate engineer|fresher|associate (?:software|engineer|developer|consultant|analyst|qa|tester|product))\b/i.test(combined)
+    || (/\bassociate\b/i.test(combined) && !hasSenior && !hasExec);
+
+  if (hasEntry && !hasSenior) {
+    return 'entry';
+  }
+  
+  if (hasSenior) {
+    return 'senior';
+  }
+  
+  if (/\b(?:software engineer|developer|analyst|specialist|designer|consultant)\b/i.test(combined)) {
+    return 'mid';
+  }
+  
+  return 'uncertain';
 }
 
 export function normalizeLeverItem(company, item) {
@@ -42,9 +85,30 @@ export function normalizeLeverItem(company, item) {
   const isIntern = /\b(?:intern|internship|trainee|apprentice)\b/i.test(title + ' ' + commitment);
   const type = isIntern ? 'internship' : 'job';
 
-  const rawText = `${title}\nOrganization: ${company.toUpperCase()}\nLocation: ${location || 'Not specified'}\nCommitment: ${commitment}\nTeam: ${team || 'N/A'}\nApply: ${applyUrl}`;
+  // Preserve substantive posting descriptions, requirements, and lists
+  const descParts = [
+    item.descriptionPlain || (item.description ? item.description.replace(/<[^>]*>/g, ' ') : ''),
+    item.additionalPlain || '',
+    Array.isArray(item.lists)
+      ? item.lists.map(l => `${l.text || ''}:\n${(l.content || '').replace(/<[^>]*>/g, ' ')}`).join('\n')
+      : ''
+  ].filter(Boolean).join('\n\n');
+
+  const rawTextParts = [
+    title,
+    `Organization: ${company.toUpperCase()}`,
+    location ? `Location: ${location}` : '',
+    commitment ? `Commitment: ${commitment}` : '',
+    team ? `Team: ${team}` : '',
+    descParts,
+    `Apply: ${applyUrl}`
+  ].filter(Boolean);
+
+  const rawText = rawTextParts.join('\n');
   const riskSignals = detectRiskSignals(rawText);
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
+  const seniority = classifySeniority(title, commitment);
+  const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(descParts);
 
   return {
     contract_version: 'source-item-v2',
@@ -62,6 +126,9 @@ export function normalizeLeverItem(company, item) {
     trust_tier: trustTier,
     source_badge: `${company.toUpperCase()} Careers`,
     risk_signals: riskSignals,
+    seniority_level: seniority,
+    skills: extractedSkills,
+    requirements: extractedReqs,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
@@ -69,7 +136,10 @@ export function normalizeLeverItem(company, item) {
       organization: company.toUpperCase(),
       location,
       commitment,
-      deadline: null
+      deadline: null,
+      seniority_level: seniority,
+      skills: extractedSkills,
+      requirements: extractedReqs
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/text', value: title },
@@ -81,16 +151,33 @@ export function normalizeLeverItem(company, item) {
 
 export function parseDevpostDeadline(datesStr) {
   if (!datesStr) return null;
-  // e.g. "Aug 31 - Oct 23, 2026" or "Oct 01 - Nov 15, 2026"
-  const endMatch = datesStr.match(/([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})/g);
-  if (endMatch && endMatch.length) {
-    const lastDate = endMatch[endMatch.length - 1];
-    const parsed = new Date(lastDate + ' UTC');
-    if (!isNaN(parsed.getTime())) {
-      return parsed.toISOString().slice(0, 10);
-    }
+  // Match month day, year format at the end of the date range: e.g. "Aug 15 - Oct 25, 2026"
+  const endMatch = datesStr.match(/(?:^|[-–—])\s*([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})\s*$/);
+  const fallback = datesStr.match(/([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})/g);
+  const target = endMatch ? endMatch[0] : (fallback ? fallback[fallback.length - 1] : null);
+  if (!target) return null;
+
+  const parts = target.match(/([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})/);
+  if (!parts) return null;
+
+  const [_, monthStr, dayStr, yearStr] = parts;
+  const months = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  };
+  const m = months[monthStr.toLowerCase()];
+  if (m === undefined) return null;
+
+  const d = parseInt(dayStr, 10);
+  const y = parseInt(yearStr, 10);
+  if (y < 2000 || y > 2100) return null;
+
+  const dateObj = new Date(Date.UTC(y, m, d));
+  // Strict calendar verification: month and day must match exactly (prevent rollover)
+  if (dateObj.getUTCFullYear() !== y || dateObj.getUTCMonth() !== m || dateObj.getUTCDate() !== d) {
+    return null;
   }
-  return null;
+  return dateObj.toISOString().slice(0, 10);
 }
 
 export function normalizeDevpostItem(item) {
@@ -102,9 +189,11 @@ export function normalizeDevpostItem(item) {
   const url = item.url || `https://devpost.com/hackathons/${item.id}`;
   const deadline = parseDevpostDeadline(item.submission_period_dates);
   const prizes = item.prize_amount ? String(item.prize_amount).replace(/<[^>]*>/g, '').trim() : null;
+  const location = item.displayed_location?.location || null;
   const rawText = `Hackathon: ${title}\nSubmission Period: ${item.submission_period_dates || 'Not stated'}\nPrizes: ${prizes || 'None listed'}\nURL: ${url}`;
   const riskSignals = detectRiskSignals(rawText);
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'attributed';
+  const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(rawText);
 
   return {
     contract_version: 'source-item-v2',
@@ -115,20 +204,24 @@ export function normalizeDevpostItem(item) {
     title,
     organization: 'Devpost Community',
     type: 'hackathon',
-    location: item.displayed_location?.location || 'Online',
+    location,
     deadline,
     original_url: url,
     application_url: url,
     trust_tier: trustTier,
     source_badge: 'Devpost',
     risk_signals: riskSignals,
+    skills: extractedSkills,
+    requirements: extractedReqs,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
       title,
       deadline,
       prizes,
-      submission_window: item.submission_period_dates
+      submission_window: item.submission_period_dates,
+      skills: extractedSkills,
+      requirements: extractedReqs
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/title', value: title },
@@ -151,6 +244,7 @@ export function normalizeJSearchItem(item) {
   const rawText = `${title}\nEmployer: ${org}\nLocation: ${location || 'N/A'}\nDescription: ${item.job_description || ''}\nLink: ${url}`;
   const riskSignals = detectRiskSignals(rawText);
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'attributed';
+  const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(item.job_description || '');
 
   return {
     contract_version: 'source-item-v2',
@@ -168,17 +262,151 @@ export function normalizeJSearchItem(item) {
     trust_tier: trustTier,
     source_badge: 'JSearch India',
     risk_signals: riskSignals,
+    skills: extractedSkills,
+    requirements: extractedReqs,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
       title,
       organization: org,
       location,
-      deadline: null
+      deadline: null,
+      skills: extractedSkills,
+      requirements: extractedReqs
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/job_title', value: title },
       { field: 'employer', kind: 'structured_field', json_pointer: '/employer_name', value: org }
+    ]
+  };
+}
+
+export function normalizeGreenhouseItem(company, item) {
+  if (!item || !item.id || !item.title) {
+    throw new Error('INVALID_GREENHOUSE_PAYLOAD: Missing id or title');
+  }
+
+  const title = String(item.title).trim();
+  const location = item.location?.name || null;
+  const originalUrl = item.absolute_url || `https://boards.greenhouse.io/${company}/jobs/${item.id}`;
+  const applyUrl = originalUrl;
+  const isIntern = /\b(?:intern|internship|trainee|apprentice)\b/i.test(title);
+  const type = isIntern ? 'internship' : 'job';
+  const seniority = classifySeniority(title);
+
+  const cleanContent = item.content ? String(item.content).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  const rawTextParts = [
+    title,
+    `Organization: ${company.toUpperCase()}`,
+    location ? `Location: ${location}` : '',
+    cleanContent,
+    `Apply: ${applyUrl}`
+  ].filter(Boolean);
+
+  const rawText = rawTextParts.join('\n');
+  const riskSignals = detectRiskSignals(rawText);
+  const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
+  const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(cleanContent);
+
+  return {
+    contract_version: 'source-item-v2',
+    visibility: 'public',
+    source_kind: 'company_feed',
+    adapter: 'greenhouse-v1',
+    external_id: String(item.id),
+    title,
+    organization: company.toUpperCase(),
+    type,
+    location,
+    deadline: null,
+    original_url: originalUrl,
+    application_url: applyUrl,
+    trust_tier: trustTier,
+    source_badge: `${company.toUpperCase()} Careers`,
+    risk_signals: riskSignals,
+    seniority_level: seniority,
+    skills: extractedSkills,
+    requirements: extractedReqs,
+    content_hash: hashString(rawText),
+    raw_text: rawText,
+    fields: {
+      title,
+      organization: company.toUpperCase(),
+      location,
+      deadline: null,
+      seniority_level: seniority,
+      skills: extractedSkills,
+      requirements: extractedReqs
+    },
+    field_provenance: [
+      { field: 'title', kind: 'structured_field', json_pointer: '/title', value: title },
+      { field: 'location', kind: 'structured_field', json_pointer: '/location/name', value: location },
+      { field: 'apply_url', kind: 'structured_field', json_pointer: '/absolute_url', value: applyUrl }
+    ]
+  };
+}
+
+export function normalizeAshbyItem(company, item) {
+  if (!item || !item.id || !item.title) {
+    throw new Error('INVALID_ASHBY_PAYLOAD: Missing id or title');
+  }
+
+  const title = String(item.title).trim();
+  const location = item.location || (typeof item.locationName === 'string' ? item.locationName : null);
+  const originalUrl = item.jobUrl || `https://jobs.ashbyhq.com/${company}/${item.id}`;
+  const applyUrl = item.applyUrl || originalUrl;
+  const isIntern = /\b(?:intern|internship|trainee|apprentice)\b/i.test(title);
+  const type = isIntern ? 'internship' : 'job';
+  const seniority = classifySeniority(title);
+
+  const cleanContent = item.descriptionPlain || (item.descriptionHtml ? String(item.descriptionHtml).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+  const rawTextParts = [
+    title,
+    `Organization: ${company.toUpperCase()}`,
+    location ? `Location: ${location}` : '',
+    cleanContent,
+    `Apply: ${applyUrl}`
+  ].filter(Boolean);
+
+  const rawText = rawTextParts.join('\n');
+  const riskSignals = detectRiskSignals(rawText);
+  const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
+  const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(cleanContent);
+
+  return {
+    contract_version: 'source-item-v2',
+    visibility: 'public',
+    source_kind: 'company_feed',
+    adapter: 'ashby-v1',
+    external_id: String(item.id),
+    title,
+    organization: company.toUpperCase(),
+    type,
+    location,
+    deadline: null,
+    original_url: originalUrl,
+    application_url: applyUrl,
+    trust_tier: trustTier,
+    source_badge: `${company.toUpperCase()} Careers`,
+    risk_signals: riskSignals,
+    seniority_level: seniority,
+    skills: extractedSkills,
+    requirements: extractedReqs,
+    content_hash: hashString(rawText),
+    raw_text: rawText,
+    fields: {
+      title,
+      organization: company.toUpperCase(),
+      location,
+      deadline: null,
+      seniority_level: seniority,
+      skills: extractedSkills,
+      requirements: extractedReqs
+    },
+    field_provenance: [
+      { field: 'title', kind: 'structured_field', json_pointer: '/title', value: title },
+      { field: 'location', kind: 'structured_field', json_pointer: '/location', value: location },
+      { field: 'apply_url', kind: 'structured_field', json_pointer: '/jobUrl', value: applyUrl }
     ]
   };
 }

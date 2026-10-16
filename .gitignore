@@ -8,3 +8,10 @@ backups/
 .tools/
 .local/
 .freebuff/
+
+# Local personal assignment / scratch files
+completed_assignment/
+build_assignment.py
+inspect_docs.py
+render_word.ps1
+output/

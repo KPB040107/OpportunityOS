@@ -38,8 +38,8 @@
         "rule": {
           "interval": [
             {
-              "field": "seconds",
-              "secondsInterval": 5
+              "field": "minutes",
+              "minutesInterval": 1
             }
           ]
         }
@@ -56,7 +56,7 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "select m.id as match_id from public.matches m join public.opportunities o on o.id=m.opportunity_id and o.user_id=m.user_id where m.status='complete' and m.decision='ASK' and (o.deadline is null or o.deadline>(now() at time zone 'Asia/Kolkata')::date) and not exists(select 1 from public.approvals a where a.match_id=m.id and a.match_revision=m.revision) order by m.updated_at limit 1;",
+        "query": "select m.id as match_id from public.matches m join public.opportunities o on o.id=m.opportunity_id and o.user_id=m.user_id where m.status='complete' and m.decision='ASK' and m.eligibility_status='ELIGIBLE' and (o.deadline is null or o.deadline>(now() at time zone 'Asia/Kolkata')::date) and not exists(select 1 from public.approvals a where a.match_id=m.id and a.match_revision=m.revision) order by m.updated_at limit 1;",
         "options": {}
       }
     },
@@ -205,8 +205,8 @@
         "rule": {
           "interval": [
             {
-              "field": "seconds",
-              "secondsInterval": 5
+              "field": "minutes",
+              "minutesInterval": 1
             }
           ]
         }

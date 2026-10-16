@@ -122,6 +122,9 @@ for ($attempt = 0; $attempt -lt 30; $attempt++) {
                 }
                 Start-Sleep -Milliseconds 500
             }
+            if (-not $tunnelHealthy) {
+                throw "Tunnel URL $tunnelUrl failed verified health check (must return HTTP 404 through gateway)."
+            }
             & (Join-Path $PSScriptRoot 'set-public-url.ps1') -Url ($tunnelUrl + '/')
             try { docker compose exec -T -e N8N_RUNNERS_BROKER_PORT=5682 n8n n8n execute --id=opportunityosSlice5Autopilot 2>$null | Out-Null } catch {}
             Write-Output ('Public webhook base URL: ' + $tunnelUrl + '/')

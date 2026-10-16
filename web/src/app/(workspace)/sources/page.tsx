@@ -7,6 +7,9 @@ import { addCustomSource } from './actions';
 import { Globe, ArrowUpRight, Rss, Mail, PlusCircle, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import type { Source } from '@/lib/types';
 import {publicUrl} from '@/lib/validation';
+import { BookmarkletCard } from '@/components/bookmarklet-card';
+import { ExtensionSetupCard } from '@/components/extension-setup-card';
+import { PortalSetupCard } from '@/components/portal-setup-card';
 
 export default async function SourcesPage() {
   const { supabase, user } = await requireUser();
@@ -18,7 +21,7 @@ export default async function SourcesPage() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: true }),
     supabase.rpc('get_discovery_sources'),
-    supabase.from('profiles').select('email_alias_token').eq('user_id', user.id).maybeSingle()
+    supabase.from('profiles').select('email_alias_token, verified_portals, forwarding_received').eq('user_id', user.id).maybeSingle()
   ]);
 
   if (sourcesResult.error) {
@@ -62,8 +65,16 @@ export default async function SourcesPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           {discoverySources.map((ds) => {
             const isActive = ds.status === 'active';
-            const tierBadge = ds.adapter === 'lever-v1' ? 'Corroborated · Direct Feed' : ds.adapter === 'devpost-v1' ? 'Attributed · Registry' : 'Awaiting Validation';
-            const tierColor = ds.adapter === 'lever-v1' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : ds.adapter === 'devpost-v1' ? 'bg-blue-50 text-blue-800 border-blue-200' : 'bg-amber-50 text-amber-800 border-amber-200';
+            const tierBadge = ds.adapter === 'lever-v1' || ds.adapter === 'greenhouse-v1' || ds.adapter === 'ashby-v1'
+              ? 'Corroborated · Direct Feed'
+              : ds.adapter === 'devpost-v1' || ds.adapter === 'jsearch-v1'
+                ? 'Attributed · Registry'
+                : 'Awaiting Validation';
+            const tierColor = ds.adapter === 'lever-v1' || ds.adapter === 'greenhouse-v1' || ds.adapter === 'ashby-v1'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : ds.adapter === 'devpost-v1' || ds.adapter === 'jsearch-v1'
+                ? 'bg-blue-50 text-blue-800 border-blue-200'
+                : 'bg-amber-50 text-amber-800 border-amber-200';
             return (
               <Card key={ds.id} className="p-4 flex flex-col justify-between">
                 <div>
@@ -81,7 +92,14 @@ export default async function SourcesPage() {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{ds.last_scan ? `Scanned ${formatDate(ds.last_scan)}` : 'Scheduled discovery active'}</span>
+                  <span className="flex items-center gap-1.5">
+                    {isActive ? (
+                      <span className="size-1.5 rounded-full bg-emerald-500" />
+                    ) : (
+                      <span className="size-1.5 rounded-full bg-amber-500" />
+                    )}
+                    {ds.last_scan ? `Scanned ${formatDate(ds.last_scan)}` : (isActive ? 'Scheduled discovery active' : 'Awaiting review')}
+                  </span>
                   <span className="font-semibold">{ds.item_count} items discovered</span>
                 </div>
               </Card>
@@ -90,7 +108,18 @@ export default async function SourcesPage() {
         </div>
       </div>
 
-      <Card><h2 className="text-lg font-semibold">Email forwarding</h2>{profile?.email_alias_token?<><p className="mt-3">In Gmail or Outlook, set a forwarding rule for opportunity alerts to your personal address:</p><p className="mt-3 break-all font-mono text-sm">opportunityos0001+{profile.email_alias_token}@gmail.com</p><p className="mt-3 text-sm">This address routes mail to your own inbox. Attachments are not read. Send the announcement in the message text. Forward-provider confirmation messages may need to be confirmed manually.</p></>:<p>Save your profile first to create your forwarding address.</p>}<p className="mt-3 text-xs">The links below are saved configuration. Scheduled website/RSS monitoring remains an event addition; paste a specific announcement URL into your inbox to analyse it now.</p></Card>
+      {/* 1-Click Browser Extension */}
+      <ExtensionSetupCard />
+
+      {/* Alternative Zero-Install Bookmarklet Capture */}
+      <BookmarkletCard appOrigin={process.env.APP_ORIGIN || 'http://localhost:3000'} />
+
+      {/* Guided Portal Alert-Email Forwarding */}
+      <PortalSetupCard
+        aliasToken={profile?.email_alias_token || null}
+        verifiedPortals={(profile?.verified_portals as string[]) || []}
+        forwardingReceived={Boolean(profile?.forwarding_received)}
+      />
 
       {sources.length === 0 ? (
         <Card className="p-10 text-center">

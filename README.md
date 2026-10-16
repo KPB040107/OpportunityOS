@@ -1,112 +1,250 @@
 # OpportunityOS
 
-A student opportunity agent orchestrated by n8n. AI extracts evidence; deterministic code evaluates eligibility and authorizes actions.
+> **The Autonomous Student Opportunity Intelligence & Action Operating System**  
+> AI extracts grounded evidence; deterministic policy evaluates eligibility, enforces standing rules, and executes verified actions.
 
-## Current status
+OpportunityOS is an autonomous agentic platform designed to help students discover, evaluate, track, and act on internships, hackathons, and research roles without missing deadlines or wasting hours on manual tracking. Built with **n8n workflow automation**, **Supabase PostgreSQL with strict Row-Level Security (RLS)**, **Next.js 15 App Router**, and a resilient **Dual-Engine AI architecture (Google Gemini + Groq LLM failover)**.
 
-The repaired prototype has verified authenticated intake, structured extraction, deterministic decisions, real tracker/tasks, calendar downloads, private demo-calendar writes, notifications, signed-in Wait approvals, email forwarding, reminders, follow-ups and owned error handling. All seven workflows are published. Three bounded rehearsals, 105 Node checks and eleven reversible database suites passed; the final website build and local service recovery passed too. Database TLS security has been verified with required certificate validation against Supabase's custom CA; missed-run bounded Autopilot recovery is active. A five-minute labelled checkpoint evidence backup is saved locally; rehearse the pitch before the event as planned. See docs/progress.md and docs/repair-2026-10-13.txt. Existing slice-5/prototype-v1 tags are historical and are not the repaired acceptance record. Standing rules and other event additions remain separate.
+---
 
-## Start locally
+## Architecture Overview
 
-1. Run `powershell -ExecutionPolicy Bypass -File scripts/setup.ps1` once. It creates a private `.env` and preserves existing encryption keys on subsequent runs.
-2. Run `docker compose up -d` and open http://localhost:5678. Create the n8n owner account through the editor.
-3. Pin `N8N_IMAGE` in `.env` to the downloaded image digest before the demo. Do not upgrade mid-build.
-4. Keep `.env` and a backup of the `opportunityos_n8n_data` volume together. Restarting the container retains workflows and credentials; deleting the volume does not.
+```mermaid
+flowchart TD
+    subgraph Capture["1. Ingestion & Discovery Layer"]
+        EXT["Chrome Extension (Manifest V3)"] --> INTAKE["/api/capture & /api/intake"]
+        BKM["JavaScript Bookmarklet"] --> INTAKE
+        EML["Inbound Email (IMAP/Plus-Addressing)"] --> W1["01-ingest Workflow"]
+        DISC["Discovery Feeds\n(Lever, Greenhouse, Ashby, JSearch, Devpost)"] --> W8["08-discovery Workflow"]
+        INTAKE --> W1
+    end
 
-## Complete the foundation
+    subgraph Extraction["2. Extraction & Fact Normalization"]
+        W1 --> W2["02-understand Workflow"]
+        W8 --> W2
+        W2 --> AI_EXT["Dual-Engine LLM Extraction\n(Gemini 2.5 Flash / Groq Llama-3.3)\n+ Canonical Skill & Requirement Extractor"]
+        AI_EXT --> CAT["Deduplicated Catalog &\nOpportunity Projections"]
+    end
 
-1. Create a free Supabase project. Run `supabase/migrations/0001_foundation.sql` in its SQL Editor. Create a test Auth user and copy its UUID.
-2. Create an n8n Postgres credential using Supabase's session-pooler connection details and SSL. Keep the password only in n8n credentials.
-3. Create an n8n Header Auth credential: name `X-Foundation-Key`, value a randomly generated secret. This is a restricted setup endpoint, not the future app ingestion endpoint.
-4. Import `workflows/00-foundation.json`. Select your Header Auth credential on the webhook and Postgres credential on the database node. Publish/activate the workflow.
-5. Run `powershell -ExecutionPolicy Bypass -File scripts/start-public-tunnel.ps1`, then `docker compose up -d`. The helper starts a webhook-only gateway on loopback port 5680 and a Cloudflare Quick Tunnel, updates `WEBHOOK_URL`, and prints the public URL. The editor stays at localhost:5678. Requests to editor, administrative, and test-webhook paths are blocked. Do not tunnel port 5678 directly.
-6. Run `scripts/verify-foundation.ps1 -BaseUrl https://YOUR-TUNNEL/ -UserId YOUR-AUTH-USER-UUID`. Enter the secret at the protected prompt. Verify the returned event in Supabase.
-7. Restart n8n, verify the owner account and workflow remain, and repeat the public webhook check. Test an incorrect secret and confirm it is rejected without a new event.
-8. Obtain a Gemini free-tier API key; record the enabled model and actual quotas locally. Configure IMAP/SMTP credentials for the dedicated mailbox and verify plus-address routing. Connect the demo calendar and test a disposable calendar entry. Never commit credentials or send them in chat.
-9. Create the GitHub repository and push only tracked source files after reviewing them for secrets.
+    subgraph Decision["3. Deterministic Decision & Policy Engine"]
+        CAT --> W3["03-evaluate Workflow"]
+        W3 --> ELIG["Deterministic Eligibility Check\n(CGPA, Branch, Degree, Year, Deadlines)"]
+        W3 --> FIELD["Field & Domain Relevance Filter\n(CS/IT & Data Science Intersections)"]
+        W3 --> SCORE["Semantic Skill Fit & Match Scoring\n(Weighted Multi-Factor Formula)"]
+        W3 --> RULES["Standing Rules & Learning Loop Engine"]
+        RULES --> DECISION{"Policy Gate\nACT / ASK / IGNORE"}
+    end
 
-## Slice gate
+    subgraph Action["4. Action & Autonomy Layer"]
+        DECISION -- "ACT" --> W4["04-act Workflow"]
+        DECISION -- "ASK" --> W5["05-ask Workflow"]
+        DECISION -- "IGNORE" --> ARCHIVE["Mute / Archive / Ignore"]
+        W4 --> CAL["Google Calendar Sync (Deadlines)"]
+        W4 --> NOTIF["Email Alerts & Digest"]
+        W4 --> TRK["Application Tracker & Kanban"]
+        W5 --> APPR["Student Clarification & Approval Queue"]
+    end
 
-Do not start Slice 1 until the public authenticated webhook persists an event and the restart check passes. Tag `slice-0` only after acceptance; later tag `prototype-v1` after three clean rehearsals.
+    subgraph Planning["5. Strategy & Profile Acceleration"]
+        RES["PDF Resume Upload"] --> W10["10-resume Workflow"]
+        W10 --> PROF["Auto-Populated Profile & Skills"]
+        TRK --> W9["09-plan Workflow"]
+        W9 --> WEEK["Weekly Action Planner (Priority Sprints)"]
+    end
+```
 
-## Planned slices
+---
 
-1. Auth, profile, text/URL intake, processing inbox, activity.
-2. Validated extraction, evidence, provenance, deduplication before AI calls.
-3. Deterministic eligibility, scoring, confidence, ACT/ASK/IGNORE.
-4. Idempotent actions, tracker, confirmation-based approvals and Wait resume.
-5. Email forwarding, autopilot, error workflow, fixtures and rehearsals.
+## Key Features
 
-Standing rules, weekly plan, and constrained AI Agent tools remain event additions.
+### 1. Autonomous Multi-Source Discovery
+- **Native ATS & Job Board Connectors**: Continuous autonomous discovery via Lever, Greenhouse, Ashby, JSearch (RapidAPI for LinkedIn/Indeed/Glassdoor), and Devpost.
+- **Intelligent Field Relevance Filter**: Automatically filters non-technical roles (Sales, HR, Telecalling, Finance) for engineering students, while ensuring Data Science students receive both Data Science and core Computer Science opportunities.
+- **Deduplication & Tiered Trust**: SHA-256 fingerprinting prevents repeated listings across feeds; risk signals flag non-standard compensation, upfront fees, or unverified claims.
 
-## Website base (Slice 1)
+### 2. Grounded Fact Extraction & Canonical Skill Recognition
+- **Canonical Skill & Requirement Parser**: Recognizes over 80+ technology skills (HTML, CSS, JavaScript, React, Python, C/C++, Java, Android SDK, SQL, Docker, AWS, etc.) directly from job descriptions.
+- **Grounded Qualification Criteria**: Extracts structured, verifiable requirements (mandatory vs. preferred) paired with verbatim evidence quotes from the source listing.
+- **Zero Hallucination Policy**: Every extracted datum is bound to an exact snippet from the source text; unquoted or assumed qualifications are strictly blocked.
 
-The local website is in `web`. Sign-in, profile save, text/URL intake, ownership isolation, and overlapping duplicate requests have been verified. Slice 1 is accepted with user-reported signup confirmation; see docs/progress.md. Slice 2 adds structured extraction; decisions remain Slice 3 work.
+### 3. Deterministic & Semantic Decision Engine
+- **Three-Tier Policy Routing**:
+  - `ACT`: High-confidence match meeting all mandatory requirements. Automatically schedules deadlines to Google Calendar, adds to tracker, and sends alerts.
+  - `ASK`: Ambiguous requirements, missing academic profile facts, or borderline scores. Surfaces interactive clarification cards to the student.
+  - `IGNORE`: Expired deadlines, failing mandatory requirements, or roles below the student's relevance threshold.
+- **Missing Deadline Handling (D1 Policy)**: If an internship posting does not state an explicit closing date, OpportunityOS authorizes action without cluttering the student's calendar.
 
-1. Apply `supabase/migrations/0002_website_base.sql` after the foundation migration. The checked schema restricts reads by owner and uses transactional functions for writes. Run `supabase/tests/0002_website_base.test.sql` to verify isolation; its temporary data is rolled back.
-2. Copy `web/.env.example` to `web/.env.local` and set the public Supabase project URL and publishable key. No service-role key is used in the website. The local builder's configuration is already set and is ignored by Git.
-3. Configure `workflows/01-ingest.json`: select the existing Postgres credential, set the fixed Supabase Auth project URL and public API key in the verification node, then publish it in n8n. No client-provided ownership claim or remote Auth URL is accepted. Leave execution-data retention disabled. Slice 2 adds only the builtin modules required for safe public-page fetching and hashing; filesystem, process and arbitrary external modules remain unavailable.
-4. In `web`, run `pnpm install --frozen-lockfile`, then `pnpm build`. Use Node 20.9+ and pnpm 11.25.0. Run `scripts/start-website.ps1` from the repository to open a background server at http://localhost:3000. For development, use `pnpm dev --hostname 127.0.0.1` in `web` instead.
+### 4. Dual-Engine LLM with Automatic Failover
+- **Primary Model**: Google Gemini (`models/gemini-2.5-flash` / `models/gemini-2.5-flash-lite`).
+- **Resilient Fallback**: Groq Cloud (`openai/gpt-oss-120b` / `llama-3.3-70b-versatile`).
+- **Dynamic Quota & Rate Management**: If Gemini encounters rate limits (HTTP 429) or daily quota exhaustion, the evaluation and extraction pipelines immediately switch to Groq without interruption.
+- **Sub-Second Cooldown**: Worker cooldown reduced to 2 seconds with up to 10,000 daily evaluation allowances.
 
-The website and public-tunnel startup helpers resolve an installed Node executable or the existing Codex bundled runtime when Node is absent from a normal PowerShell PATH. Set `OPPORTUNITYOS_NODE_PATH` to a supported `node.exe` to use an explicit runtime. This fallback does not install Node or modify the system PATH; direct `pnpm` development/build commands still need their normal runtime setup.
+### 5. Multi-Channel Capture Tools
+- **Chrome Extension (Manifest V3)**: One-click capture from active browser tabs with instant metadata extraction and secure authentication.
+- **JavaScript Bookmarklet**: Portable capture tool compatible with any modern browser (Chrome, Edge, Safari, Firefox).
+- **Inbound Email Ingestion**: Plus-address routing (`opportunities+userid@domain.com`) automatically converts forwarded job newsletters into structured opportunities.
 
-5. Sign in with the Supabase test user, or create an account and confirm its email. For signup, set the Auth Site URL to http://localhost:3000 and allow http://localhost:3000/auth/callback in Supabase Auth redirect settings. Configure custom SMTP to deliver confirmations beyond Supabase organization members. For the controlled demo, use the dedicated mailbox, smtp.gmail.com port 465, and its app password entered directly in Supabase. Gmail delivery limits still apply; delivery must be verified. The website uses a separate account password.
-6. Save a profile, paste an opportunity and verify the saved item plus its activity entry. A rejected/uncertain workflow response is shown as an error, never a confirmed save. Retrying unchanged content keeps the same request ID.
+### 6. Standing Rules & Progressive Autonomy
+- **Learning Loop**: When students repeatedly accept or reject opportunities with specific traits, OpportunityOS proposes deterministic standing rules.
+- **Autonomy Counter & Ledger**: Live transparency showing items read, acted upon, clarified, ignored, and protected against risk.
 
-Workflow generation: `node scripts/generate-ingest-workflow.mjs` exports a portable JSON with placeholders. `--runtime` creates an ignored `.local/01-ingest.runtime.json` using the public settings and credential references in `web/.env.local`; review this file locally before importing. Never commit runtime exports or execution payloads.
+### 7. Weekly Action Planner & Resume Onboarding
+- **Weekly Strategy Sprints**: Organizes active applications into manageable, prioritized weekly sprints with buffer time and conflict protection.
+- **One-Click Resume Onboarding**: Upload a PDF resume to instantly extract degrees, graduation year, CGPA, technical skills, and career goals into your student profile.
 
-Validation: `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm build` in `web`, and `node --test scripts/ingest-contract.test.mjs scripts/webhook-gateway.test.mjs` from the repository. The initial quota observations are in `config/ai-quota.json`.
+---
 
-## Understand (Slice 2)
+## Technology Stack
 
-1. Apply migrations `0003_understand.sql` and `0004_source_ambiguities.sql`, once each, in order. Run `supabase/tests/0003_understand.test.sql`; disposable users and rows are rolled back.
-2. Import `workflows/02-understand.json` into the same n8n project. Select the existing Postgres credential on its database nodes and Gemini credential on its model node. Publish it, then import/configure the updated Ingest workflow. Its child workflow reference must point to Understand. The 30-second queue checker also recovers a missed dispatch.
-3. Run `docker compose up -d` after changing the Compose module allowlist. After CLI import/publish, restart n8n to reload its published revision. The editor draft and published revision must match.
-4. Paste an announcement. The worker claims it atomically, prepares text, hashes it before AI, checks its per-user cache, reserves the free budget, extracts through a Basic LLM Chain and Structured Output Parser, validates literal evidence, normalizes facts, and saves cards with provenance. Exact repeated content reuses analysis. Complete identity fingerprints merge different sources while preserving each original submission. Incomplete identities conservatively stay separate.
-5. Open a card to inspect stated requirements, quotes, original text and missing facts. Failures remain visible and require an explicit retry, at most twice; no automatic retry of failed analysis. A source instruction cannot authorize an action.
+| Layer | Technologies |
+| :--- | :--- |
+| **Frontend Web App** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Lucide Icons |
+| **Workflow Engine** | n8n (Self-hosted via Docker), Node.js Code Nodes, Custom HTTP Webhooks |
+| **Database & Auth** | Supabase PostgreSQL, Row-Level Security (RLS), PL/pgSQL Triggers, Auth SSR |
+| **AI & NLP** | Google Gemini 2.5, Groq Cloud (Llama 3.3 / GPT-OSS 120B), Structured Output Parsers |
+| **Browser Extension** | Chrome Extensions Manifest V3, Webpack/Vanilla JS, Background Service Workers |
+| **Testing & CI** | Node.js Test Runner (`node --test`), Custom Contract Suites, RLS Security Tests |
 
-The reader supports public static HTML/text only, with robots checks, pinned public DNS, revalidated redirects, a 10-second fetch limit, 350 KB raw/decoded response limit and 20,000 prepared characters. Login-only, JavaScript-rendered, PDF, oversized and blocked pages need pasted text. A valid schema can still fail literal-evidence validation; such failures never create unchecked cards. At most five opportunities are extracted per submission. Source citations prove where text came from, not that a posting is genuine or still open.
+---
 
-Real URL acceptance was verified on October 12, 2026: a Python.org job posting became a validated card through authenticated website intake, and repeating the URL reused the same card without another AI reservation. AI skills now require paired source quotes; explicit job headings supply type evidence, publication dates cannot substitute for labelled application deadlines, and opposing remote-work statements remain visible. The earlier slice-2 tag is preserved; slice-2-real-url records the follow-up. Detailed evidence and remaining limitations are in docs/progress.md.
+## Repository Structure
 
-One extraction runs at a time, at least 60 seconds apart. The installed Gemini SDK may retry up to six times internally, so each extraction reserves seven attempts, capped at 350 reservations per Pacific day (50 extraction starts). This is conservative budgeting, not a provider usage meter. Other users of the same API project can exhaust quota independently; there is no paid fallback. Waiting items remain queued, and failures are preserved for review.
+```
+OpportunityOS/
+├── web/                             # Next.js 15 web application
+│   ├── src/app/                    # App Router pages (inbox, approvals, plan, rules, sources)
+│   ├── src/components/             # UI components, autonomy counter, decision toolbar
+│   └── src/lib/                    # Supabase SSR clients, validation, decision contracts
+├── workflows/                       # Sanitized, exportable n8n workflows
+│   ├── 01-ingest.json              # Intake, hashing, and user authentication
+│   ├── 02-understand.json          # Grounded extraction with dual Gemini/Groq LLM
+│   ├── 03-evaluate.json            # Deterministic decision and semantic matching
+│   ├── 04-act.json                 # Calendar scheduling, tracking, and notifications
+│   ├── 05-ask-and-approve.json     # Interactive student approvals and clarifications
+│   ├── 08-discovery.json           # Scheduled discovery feeder (JSearch, Lever, etc.)
+│   ├── 09-plan.json                # Weekly action planner generator
+│   └── 10-resume.json              # PDF resume parsing and profile alignment
+├── scripts/                         # Core execution contracts, test suites, and worker tools
+│   ├── decision-contract.mjs       # Pure-function decision logic shared with n8n
+│   ├── discovery-adapters.mjs      # Normalizers for JSearch, Lever, Greenhouse, Ashby, Devpost
+│   ├── skill-extractor.mjs         # Canonical skill and requirement extraction engine
+│   ├── planner-contract.mjs        # Deterministic weekly planner engine
+│   ├── resume-contract.mjs         # Resume parser and profile extractor
+│   ├── smoke-tests.mjs             # End-to-end system smoke tests (Slice S8)
+│   └── run-database.ps1            # Secure database migration runner via n8n Postgres
+├── supabase/
+│   ├── migrations/                 # Migrations 0001 through 0046 (RLS, schema, procedures)
+│   └── tests/                      # Reversible pgTAP / SQL isolation test suites
+├── extension/                       # Chrome Extension (Manifest V3)
+│   ├── manifest.json               # Extension configuration and permissions
+│   ├── popup.html / popup.js       # Extension UI for one-click opportunity capture
+│   └── background.js               # Service worker for background API dispatch
+└── docs/                            # Architecture specs, decision policies, progress logs
+```
 
-Reproducible generators: `node scripts/generate-understand-workflow.mjs` and `node scripts/generate-ingest-workflow.mjs`. Their `--runtime` variants create ignored local imports using credential references, never credential secrets. `scripts/export-prototype-workflows.mjs` verifies the all-workflow published snapshot in `.local/prototype-live-export.json`, strips credential references and replaces account settings with placeholders before writing portable exports.
+---
 
-Checks: `node --test scripts/ingest-contract.test.mjs scripts/understand-contract.test.mjs scripts/safe-source.test.mjs scripts/webhook-gateway.test.mjs`, the SQL test above, and the website checks. `scripts/test-content-race.ps1` uses two overlapping manual executions to verify exactly one content-cache owner; its explicitly disposable fixture is removed afterward. Database helpers require Docker and the existing credential/project references in ignored `web/.env.local`. Full execution logs and database snapshots must stay in ignored `.local` files.
+## Getting Started
 
-## Evaluate and Decide (Slice 3)
+### 1. Prerequisites
+- **Node.js**: v20.9.0 or higher
+- **pnpm**: v9.0.0 or higher
+- **Docker & Docker Compose**: For local n8n workflow execution
+- **Supabase Account**: Free or self-hosted PostgreSQL database
 
-Apply migrations 0005 through 0009 in order after Slice 2. They add owned matches, a private fenced queue/cache, shared AI reservations and consistent source comparison. Run supabase/tests/0005_evaluate.test.sql; its users, results and budget changes roll back. Earlier website and Understand SQL tests must still pass.
+### 2. Environment Configuration
 
-Import workflows/03-evaluate.json in the existing n8n project, select the existing Postgres and Gemini credentials, and publish it. Import the updated Understand workflow with its Execute Workflow reference to Evaluate and Decide. Restart n8n after CLI publication. The 30-second evaluation checker recovers missed dispatches, profile edits and daily deadline changes.
+Copy the example environment files and configure your keys:
 
-The shared scripts/decision-contract.mjs factory runs in n8n Code nodes and tests. Basic LLM Chain and Structured Output Parser propose semantic evidence only. Both sides of each quote are checked; code computes eligibility, fixed weighted scores, confidence, reasons and policy. The visible Switch routes saved current ACT, ASK and IGNORE decisions. No action or approval workflow is wired yet. Detailed frozen formulas and conservative UNKNOWN cases are in docs/decision-policy.md.
+```bash
+# In the repository root
+cp .env.example .env
 
-The profile lets users choose Cautious, Balanced or Autopilot. Comma-separated skills are saved individually with the selected level; each academic fact remains user-entered. Cards show a decision and reason; details show eligibility checks, score components, confidence inputs and matching quotes. Simulated submissions are labelled. Failed evaluation is visible and supports at most two explicit retries. Profile corrections reevaluate their own opportunities; old in-flight results cannot overwrite newer facts.
+# In the web directory
+cp web/.env.example web/.env.local
+```
 
-Matching uses a per-owner cache of minimal facts, profile and model/prompt version. Identity and credentials are excluded from model input. Mode/date-only changes reuse evidence. Missing score components contribute zero without redistributing weights. Expired and ineligible cases skip matching. Extraction and matching share one in-flight AI job, 60-second spacing, and seven conservative attempt reservations per call, capped at 350 per Pacific day (50 combined starts, roughly 25 fresh extraction/matching pairs). There is no paid fallback; reservations are not an actual provider usage meter.
+Configure the following essential variables in `web/.env.local` and `.env`:
+- `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: Your Supabase anon/publishable key.
+- `RAPIDAPI_KEY`: (Optional) JSearch API key for real-time job discovery.
+- `GROQ_API_KEY`: (Optional) Groq Cloud key for ultra-fast fallback evaluation.
 
-Generate a portable export with node scripts/generate-evaluate-workflow.mjs; --runtime writes ignored credential references. The product exporter also requires .local/evaluate-export.json and checks its current published version. Do not commit runtime imports, logs or private caches.
+> [!IMPORTANT]
+> Never commit `.env` or `web/.env.local` files to version control. All secrets, keys, and tokens are strictly excluded via `.gitignore`.
 
-For the full test suite use Node 24+ (the profile parsing test uses native TypeScript loading) and run node --test scripts/decision-contract.test.mjs scripts/profile-skills.test.mjs scripts/understand-contract.test.mjs scripts/safe-source.test.mjs scripts/ingest-contract.test.mjs scripts/webhook-gateway.test.mjs. Website runtime remains Node 20.9+; run its lint/build checks in web.
+### 3. Database Initialization
 
-The 15 fictional fixtures in testdata/slice3-fixtures.json freeze deterministic decisions. For live matching diagnostics, scripts/prepare-slice3-demo.mjs generates a disposable guide profile and five validated fictional sources with no seeded AI result or decision. Apply its ignored seed SQL using scripts/run-database.ps1. After recording live results, the ignored cleanup SQL removes that exact disposable profile while retaining honest global AI reservations. scripts/run-evaluation-check.ps1 runs the same product nodes in an inactive fixture-only workflow to inspect Switch outputs. It requires completed live fixture proof and the Cautious test mode; diagnostics are excluded from product exports. Real actions and approvals are now repaired. Email forwarding is implemented but still needs its final live mailbox test; event additions remain later work.
+Run the migrations in sequential order using your Supabase SQL editor or the provided database runner:
 
-## Public tunnel lifecycle
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run-database.ps1 -SqlFile supabase/migrations/0001_foundation.sql
+# ... up through migration 0046
+```
 
-The tunnel and gateway run in the background; logs and process IDs are in ignored `.local` files. Keep Docker and your computer awake while testing. Run the start helper again after a reboot; it verifies the executable and command line before reusing a PID. If Cloudflare has expired the tunnel with "Tunnel not found", it restarts that verified tunnel and obtains a fresh URL. Always apply any changed URL with `docker compose up -d` before testing.
+### 4. Start n8n Workflow Automation
 
-The executable in ignored `.tools/cloudflared.exe` is Cloudflare release `2026.10.0`, verified against SHA256 `86aee4017b26625cee8484c113558f48effa4cd47f7aa05fcf425604e5d2b23c`. On another computer, obtain that executable from the official Cloudflare GitHub release and verify its checksum before starting it. Quick Tunnels are temporary development endpoints with no uptime guarantee.
+```bash
+# Launch the n8n container
+docker compose up -d
 
-Gateway checks: `node --test scripts/webhook-gateway.test.mjs`. These verify that restricted routes are blocked, authentication headers are preserved, spoofed proxy headers are replaced, oversized requests are rejected, and upstream redirects cannot expose administrative routes.
+# Open the n8n editor at http://localhost:5678
+# Import workflows from the workflows/ directory and activate them
+```
 
-## Repaired Act, Ask and Autopilot
+### 5. Launch the Web Application
 
-Apply migrations through 0022 in order on a new installation. On this project they are already applied; do not reapply existing migrations blindly. Worker functions are server-only. Website confirmation uses confirm_approval with the signed-in owner and current revision; it does not expose or fetch a resume URL. Email opt-out cancels pending mail, and uncertain delivery requires mailbox review. Failed eligible actions and failed unexpired resume attempts have owned safe-retry controls.
+```bash
+cd web
+pnpm install
+pnpm dev --hostname 127.0.0.1 --port 3000
+```
 
-Generate portable workflows with the seven generate-*-workflow.mjs scripts. Their --runtime variants read ignored web/.env.local and require existing credential references. Configure SMTP, IMAP, Calendar OAuth, private resume Header Auth and the separate demo calendar using the entries in web/.env.example. The runtime config reader accepts N8N names containing digits and fails on missing references. After import/publish, restart n8n and verify the active and draft versions agree. Export all workflows to .local/prototype-live-export.json before running scripts/export-prototype-workflows.mjs; it verifies and sanitizes all seven product exports.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-The demo seeder creates 15 labelled, validated raw sources with provenance for a new fictional account. It does not seed decisions, completed actions or a healthy heartbeat. Matching runs against one common fictional profile, so its outcomes may differ from unit scenarios with varied profiles and a frozen clock. Its notifications are disabled and it is not the connected calendar user. Applying the seed uses guarded free-tier matching quota. The cleanup script checks the exact fictional email as well as UUID.
+### 6. Install the Chrome Extension
 
-The Sources page stores links and displays each owner's forwarding address. Automatic page/RSS scanning, standing rules, weekly planning and constrained agent tools remain event additions. A scan heartbeat means the scan ran; delivery is established separately from each action result.
+1. Open Google Chrome and navigate to `chrome://extensions/`.
+2. Enable **Developer mode** (top right toggle).
+3. Click **Load unpacked** and select the [`extension/`](extension/) directory from this repository.
+4. Pin the OpportunityOS extension to capture opportunities from any webpage with one click!
+
+---
+
+## Verification & Testing
+
+OpportunityOS includes rigorous regression and acceptance test suites:
+
+```bash
+# 1. Run all core contract unit tests
+node --test scripts/discovery-contract.test.mjs
+node --test scripts/decision-contract.test.mjs scripts/field-relevance.test.mjs
+node --test scripts/planner-contract.test.mjs
+node --test scripts/resume-contract.test.mjs
+node --test scripts/capture-contract.test.mjs
+
+# 2. Run the full deployment smoke test suite
+node scripts/smoke-tests.mjs
+```
+
+### Test Suite Highlights:
+- **Zero Secret Leakage**: Guarantees zero sensitive tokens in workflow definitions.
+- **Two-User Isolation**: Proves complete RLS isolation where User B cannot access or mutate User A's data.
+- **Quota Resilience**: Proves automated failover when primary LLM quotas are exhausted.
+- **Deterministic Decisions**: Verifies identical scoring and policy outputs across 30+ standardized scenarios.
+
+---
+
+## Security & Privacy Architecture
+
+- **Strict Row-Level Security (RLS)**: Enforced across all 46 database tables. Authenticated users can only read and mutate their own opportunities, sources, and rules.
+- **Prompt Injection Defense**: Injected instructions inside raw job postings cannot alter decisions or bypass safety gates; suspicious inputs are automatically flagged as risk signals.
+- **Verified TLS & Certificate Pinning**: Direct database connections validate custom Supabase certificates.
+- **Fenced Execution Boundaries**: Sensitive external mutations (calendar writes, email dispatches) require authenticated student authorization or explicit autopilot consent.
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

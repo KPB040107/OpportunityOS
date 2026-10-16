@@ -347,6 +347,573 @@ Objective: Enable the agent to earn trust through repeated explicit student deci
    - Production build (`next build`): 14 routes compiled cleanly with code 0.
 
 Gate S3 Status: PASSED. All 129 tests pass.
-Next Objective: Slice S4 — Alert-email setup and capture routes (Unstop, Internshala and LinkedIn without visiting them).
+
+## S0–S3 Repair and Acceptance Completion, October 15, 2026
+
+Objective: Complete comprehensive audit repairs across S0–S3 against `OpportunityOS — Hackathon Demo Build Guide v3.0.pdf` without starting S4 or adding bookmarklet capture, resume onboarding, or weekly planning.
+
+### 1. Repair 1 — Privileged Database Operations Secured
+- **Applied Migration 0027 (`0027_secure_privileged_worker_boundaries.sql`):**
+  - Revoked all `PUBLIC`, `anon`, and ordinary `authenticated` execution rights on `worker_claim_due_discovery`, `worker_save_discovery_item`, `worker_finish_discovery_run`, and `apply_standing_rule_to_match`.
+  - Granted execution strictly to `service_role`.
+  - Negative API test verified: calling privileged functions with public publishable/anon key returns HTTP 42501 `permission denied`.
+  - Source trust tiers are derived strictly from `opportunityos_private.source_registry` (Lever CRED/Meesho = `corroborated`, Devpost/JSearch = `awaiting_validation`); caller-supplied trust metadata is rejected.
+  - Lease tokens (`lease_token`, `claimed_until`) strictly enforced across discovery run claims, item saves, and completions.
+  - Standing rule proposals enforce 3 distinct opportunities (`count(distinct opportunity_id) = 3`), score >= 60, confidence >= 0.65; pinning is strictly excluded from action consent.
+
+### 2. Repair 2 — Baseline Reliability & Notification Consent Restored
+- **Applied Migrations 0028 & 0032 (`0028_notification_consent_and_autopilot_recovery.sql`, `0032_fix_notification_consent_lookup.sql`):**
+  - Re-implemented `worker_action_allowed`: restored notification consent verification against `public.profiles.notifications_enabled`. User opt-out immediately blocks sending at queueing, claiming, and send boundaries.
+  - `scripts/start-public-tunnel.ps1`: verified tunnel health check and required it to pass with visible errors before reporting success or applying URLs.
+  - Autopilot recovery: converted from global heartbeat to durable per-user progress with concurrency isolation (`for update skip locked`), preventing duplicate actions.
+
+### 3. Repair 3 — Eligibility, Grouped Clarifications & No-Deadline Approval Flow
+- **Applied Migration 0029 (`0029_eligibility_clarifications_and_nodeadline_approval.sql`):**
+  - Added `profiles.revision` tracking.
+  - Replaced table-level unique constraint with partial index `uq_active_user_clarification on public.clarifications (user_id, missing_fact) where status = 'pending'` to support recurring history while allowing only 1 active question per fact.
+  - Implemented `public.record_or_group_clarification()`: groups missing facts across multiple opportunities into a single canonical question affecting all relevant opportunity IDs.
+  - Implemented `public.resolve_clarification()`: verifies authenticated user context, atomically updates `public.profiles` (`cgpa`, `academic_year`, `graduation_year`, `degree`, `branch`, `skills`), increments `profiles.revision`, verifies ownership of each opportunity in `affected_opportunity_ids`, and enqueues bounded re-evaluation.
+  - Implemented `public.confirm_approval()`: permits eligible jobs/internships with null deadlines within the 48-hour approval window without requiring a fabricated deadline. Hackathons without deadlines remain `ASK`.
+
+### 4. Repair 4 — Discovery Adapters, Deduplication & Pipeline
+- **Applied Migrations 0030 & 0031 (`0030_discovery_rescan_deduplication.sql`, `0031_fix_worker_plan_actions_variable_collision.sql`):**
+  - Full text preservation in `normalizeLeverItem`: includes `descriptionPlain`, unescaped `description`, `additionalPlain`, and all bullet `lists`.
+  - Strict calendar date parsing in `parseDevpostDeadline`: validates UTC day/month to reject invalid dates like Feb 31.
+  - Context-sensitive fee detection in `detectRiskSignals`: exempts phrases like "no application fee", "free to apply", and "zero registration fee" while flagging real payment requirements.
+  - Rescan deduplication: `worker_save_discovery_item` checks `content_hash` and `stable_key`; unchanged rescans update timestamps without duplicating raw items or re-queueing evaluations.
+  - Scoped projection: items project only to profiles whose `interest_types` match the opportunity type.
+  - `workflows/08-discovery.json` & `scripts/generate-discovery-workflow.mjs`: added `aggregate-saved` node before the Complete run node so `worker_finish_discovery_run` executes exactly once per batch; forwards `lease_token`.
+  - `scripts/export-prototype-workflows.mjs`: added `['workflows/08-discovery.json', 'opportunityosSlice2Discovery']` to export targets.
+  - Resolved variable collision in `worker_plan_actions` and secured worker privileges.
+
+### 5. Final Verification & Acceptance
+- **27 Mandatory Acceptance Tests (T01–T27):** 27 / 27 PASS (`scripts/audit-acceptance.test.mjs`).
+- **Complete Test Suite:** 159 / 159 tests PASS (`node --test scripts/*.test.mjs`).
+- **End-to-End Rehearsals 1, 2, and 3:**
+  - Rehearsal 1: Verified Lever full-text extraction, trust tier derivation, profile projection, and content-hash rescan deduplication (both contract and SQL `supabase/tests/0027_worker_security_and_discovery.test.sql`).
+  - Rehearsal 2: Verified grouped clarifications across multiple opportunities, atomic profile update with revision increment, and no-deadline approval flow (both contract and SQL `supabase/tests/0029_clarifications_and_nodeadline.test.sql`).
+  - Rehearsal 3: Verified 3 distinct decisions -> rule proposal -> student activation -> incoming match scoped preauthorization -> question avoided in autonomy ledger -> revocation (both contract and SQL `supabase/tests/0030_standing_rules_learning_loop.test.sql`).
+- **TypeScript (`tsc --noEmit`):** 0 errors.
+- **ESLint (`eslint web/src`):** 0 errors, 0 warnings.
+- **Production Website Build (`next build web`):** 14/14 static & dynamic routes compiled cleanly.
+- **Service Endpoints Verified:** Website `/inbox` (HTTP 200), n8n `/healthz` (HTTP 200), Gateway `/` (HTTP 404 expected).
+- **Scope Boundary:** S0–S3 fully repaired and accepted; S4 repaired and accepted below. S5 remains future work.
+
+## Slice S4 — Alert-Email Setup and Save to OpportunityOS Capture (Repaired & Accepted, October 15, 2026)
+
+Objective: Reach LinkedIn, Unstop, and Internshala without directly scraping login-gated pages or violating provider `robots.txt`, via guided alert-email forwarding and a first-party bookmarklet capture route. Keep n8n as the visible orchestrator, Supabase as the owned system of record, and existing evidence and action policy as the authority after intake.
+
+### 1. Database & Privilege Repairs (Migration 0034)
+- **Deployed Migration:** Applied `supabase/migrations/0034_repair_capture_and_forwarding_provenance.sql`.
+- **Privileged Function Lockdown:**
+  - Revoked all execution privileges on `public.verify_portal_alert` and `public.detect_and_verify_portal_alert` from `public`, `anon`, and `authenticated`.
+  - Granted execution strictly to `service_role`.
+  - Derives destination user ownership strictly from the unique 32-hex email alias token inside `public.worker_ingest_email`, never from caller-supplied user IDs.
+- **Honest Portal Attribution vs. Generic Forwarding:**
+  - Reset unearned badges across all profiles (`update public.profiles set verified_portals = '{}'`).
+  - Added `forwarding_received` and `forwarding_received_at` to `public.profiles`.
+  - Defined two honest states when mail arrives:
+    - **Forwarding received:** an email reached the student's unique alias.
+    - **Portal attributable:** authenticated sender evidence (e.g., `jobalerts-noreply@linkedin.com`, `noreply@unstop.com`, `internshala.com`) ties the alert to the named portal.
+  - Generic messages mentioning portal URLs or phrases set `forwarding_received = true` but leave `verified_portals` empty.
+- **Private Envelope Provenance:**
+  - Created `opportunityos_private.forwarded_email_provenance` accessible only by `service_role`.
+  - Stores `message_id`, `recipient_alias`, `from_address`, `subject`, and metadata as private provenance without exposing headers to other users.
+- **Replay Protection:**
+  - Deduplicates on `(user_id, request_id)` via `worker_ingest_email`.
+  - Replay attempts return `was_created = false` and suppress duplicate intake activity events.
+- **Cryptographically Bound Capture Nonces:**
+  - Bound nonces to `(user_id, request_id, payload_hash)` in `opportunityos_private.capture_nonces`.
+  - `issue_capture_nonce(uuid, text)` and `redeem_capture_nonce(uuid, uuid, text)` enforce session identity, expiration (60s), exact request ID, and exact SHA-256 payload digest.
+  - Replay is rejected with `NONCE_ALREADY_USED`, while allowing safe idempotent retry if already saved to `raw_items`.
+- **Capture Metadata on Raw Items:**
+  - Added `metadata jsonb not null default '{}'::jsonb` to `public.raw_items`.
+  - Extended `raw_items_source_type_check` to permit `'capture'`.
+
+### 2. Multi-Listing Alert Parsing in n8n Ingest Workflow
+- **Shared Parsing Contract (`scripts/capture-contract.mjs`):**
+  - `cleanTrackingUrl()`: Strips tracking parameters (`utm_*`, `trk`, `trackingId`, `ref`, `fbclid`, etc.), unwraps nested redirect params (`url`, `dest`, `target`), and rejects opaque redirector hosts (`clk.linkedin.com`, `mandrillapp.com`).
+  - `parseMultiListingAlert()`: Identifies discrete listing blocks with strict boundary isolation between adjacent listings. Prevents candidate text/URL cross-contamination. Enforces minimum necessary facts (title + valid URL).
+  - Digest bomb protection: Caps multi-listing alert emails at 10 candidates.
+  - Deterministic UUIDs: Derives distinct candidate request IDs deterministically via `deterministicUUID(parentRequestId + ':listing:' + idx)`.
+- **n8n Workflow Integration (`scripts/generate-ingest-workflow.mjs`):**
+  - Inserted new Code node `forward-split` (`Parse alert candidates into discrete items`) between `forward-parse` and `forward-save`.
+  - Embeds self-contained contract functions without external `require('crypto')` dependencies.
+  - Successfully generated `workflows/01-ingest.json` and `.local/01-ingest.runtime.json`, imported into the n8n container, and published with `publish:workflow`.
+
+### 3. Bookmarklet Handshake & Web UI Repairs
+- **API Endpoints (`web/src/app/api/capture/*`):**
+  - `POST /api/capture/nonce`: Requires authenticated session and matching `APP_ORIGIN` (HTTP 403 on origin mismatch, HTTP 401 on unauthenticated). Validates `request_id` (UUID) and `payload_hash`, calling `issue_capture_nonce`.
+  - `POST /api/capture/verify`: Enforces matching origin and session, checks nonce validity before consumption.
+  - `POST /api/intake`: Supports `source_type: 'capture'`. Verifies `sha256(content) === payload_hash`, redeems nonce via `redeem_capture_nonce`, and persists capture metadata on `raw_items`.
+- **UI & Handshake Components:**
+  - `web/src/components/bookmarklet-card.tsx`: Removed misleading "encrypted" claim. Bookmarklet targets exact `appOrigin` in `postMessage`, avoids accessing forms, storage, or cookies. Includes popup-blocked manual fallback.
+  - `web/src/app/(workspace)/capture/capture-client.tsx`: Uses nonsecret readiness signal, validates `event.source === window.opener` and matching origin, computes SHA-256 payload digest, provides preview with link checkboxes and whitespace trimming, safe retries with same request ID, and manual paste route.
+  - `web/src/components/portal-setup-card.tsx` & `web/src/app/(workspace)/sources/page.tsx`: Displays three truthful states: **Awaiting first alert**, **Forwarding received**, and **Portal attributable**.
+  - `web/src/app/(workspace)/inbox/page.tsx`: Correctly labels captured items as **Captured page — unverified source** with status **Captured page — awaiting analysis**.
+
+### 4. Gate S4 Acceptance Verification Matrix
+
+| Test / Acceptance Gate | Mode | Result | Evidence / Details |
+|---|---|---|---|
+| 1. Authenticated user tries to verify another user's portal | Live DB | **PASS** | `verify_portal_alert` revoked from `authenticated` role; `has_function_privilege` returns false; ownership derived strictly from 32-hex alias. |
+| 2. Anonymous caller invokes verification or nonce functions | Live API & DB | **PASS** | Anonymous `POST /api/capture/nonce` returns HTTP 401; DB execution revoked from `anon`. |
+| 3. Generic or fabricated message includes portal phrases and links | Live DB | **PASS** | Email from `friend@gmail.com` with `linkedin.com` link sets `forwarding_received = true` but `verified_portals` remains empty. |
+| 4. Supported attributable alert reaches the correct alias | Live DB | **PASS** | Alert with `jobalerts-noreply@linkedin.com` to alias1 sets `verified_portals = '{linkedin}'` for user 1; user 2 profile is completely unaffected. |
+| 5. One alert contains several listings | Test & n8n | **PASS** | `parseMultiListingAlert` isolates discrete candidates without text contamination; `01-ingest` workflow `forward-split` node splits and routes each candidate. |
+| 6. Same message replays or two workers race | Live DB | **PASS** | Replay of existing `(user_id, request_id)` returns `was_created = false`; zero duplicate intake events emitted. |
+| 7. Shallow alert omits deadline or requirements | Test | **PASS** | Shallow alert retains missing fields as null/unknown without scraping login-gated external pages. |
+| 8. Forged, expired, reused, cross-user, or changed-payload nonce | Live DB & API | **PASS** | `redeem_capture_nonce` rejects mismatched payload hash, mismatched request ID, reused nonce (`NONCE_ALREADY_USED`), and cross-user redemption. |
+| 9. Popup message comes from a different origin or window | Live API & UI | **PASS** | Origin mismatch returns HTTP 403; `capture-client.tsx` verifies `event.source === window.opener` and matching origin. |
+| 10. Popup blocked, CSP blocks bookmarklet, or opener lost | UI Inspection | **PASS** | `capture-client.tsx` and `bookmarklet-card.tsx` provide manual paste route with clear limitations explained. |
+| 11. Captured page has several listings | UI & Test | **PASS** | Link selection checkboxes in capture preview allow deselecting/selecting individual links with associated URLs. |
+| 12. Capture contains hidden form fields or private page data | Test | **PASS** | `validateCapturePayload` and `capture.ts` reject script blocks, cookies, auth headers, and limit content length to 20,000 characters. |
+| 13. Save response is lost and user retries | Live DB & API | **PASS** | `ingest_raw_item` and `/api/intake` reuse stable `request_id`, returning existing row with `was_created: false`. |
+| 14. Two users capture the same public page | Live DB | **PASS** | Unique `(user_id, request_id)` and RLS policy `raw_items_read_own` enforce complete cross-user isolation. |
+| 15. AI quota is exhausted after intake | UI & Engine | **PASS** | Submission remains saved with `status = 'queued'` and displayed honestly as `Captured page — awaiting analysis`; no fabricated cards or actions. |
+
+### 5. Test Suite & Build Verification
+- **Automated Regression Suite (`scripts/*.test.mjs`):** 172 / 172 tests passed (including `scripts/slice4-alert-and-capture.test.mjs` and `scripts/capture-contract.test.mjs`).
+- **Database Regression Tests (`supabase/tests/0034_capture_security_and_multi_alert.test.sql`):** Passed with code 0.
+- **Database E2E Verification (`supabase/tests/0034_live_e2e_capture_and_forwarding.test.sql`):** Passed with code 0.
+- **TypeScript Typecheck (`tsc --noEmit -p ./web`):** 0 errors.
+- **ESLint (`eslint src` in `web`):** 0 errors, 0 warnings.
+- **Production Build (`next build` in `web`):** Compiled cleanly in 9.2s using Turbopack (16 / 16 static and dynamic routes).
+- **Service Verification:** Next.js daemon running on `http://127.0.0.1:3000` (HTTP 200); n8n container running on `http://localhost:5678` (HTTP 200, status ok); published `01-ingest` workflow active with `forward-split`.
+
+Gate S4 Status: **ACCEPTED**. Verified forwarding and previewed authenticated capture each produce correctly owned cards, and all 15 security, replay, fallback, and duplicate gates pass.
+
+## Discovery, Decision, and Review Experience Repairs (Completed October 15, 2026)
+
+### Problem Solved
+- The inbox and Approval Center were previously flooded with Meesho jobs (including senior, managerial, and director roles unsuited for intern-seeking students).
+- Listings without deadlines or explicit requirements were defaulting to `UNKNOWN` eligibility, generating unapprovable pending approvals with misleading `0/100` match scores and disabled "Approve permitted actions" buttons.
+- The safety rule that prevents approving `UNKNOWN` eligibility was preserved, while completely reforming the user experience around it into a 3-way separation (Actionable Approvals, Needs Information clarifications, and Source Review).
+
+### 1. Database Schema & Worker Boundaries (Migration 0035)
+- **User Opportunity Interactions (`public.user_opportunity_interactions`):**
+  - Durable, private persistence for `is_saved` and `is_hidden` flags with strict RLS (`auth.uid() = user_id`).
+  - Added RPC helpers `toggle_opportunity_save(p_opportunity_id)` and `toggle_opportunity_hide(p_opportunity_id)`.
+- **User Source Preferences (`public.user_source_preferences`):**
+  - Durable source preferences (`normal`, `reduced`, `muted`) with strict RLS and RPC helper `set_source_preference(p_source, p_preference)`.
+- **Deterministic Seniority Classification:**
+  - Added `public.classify_seniority(title, commitment)` returning `intern`, `entry`, `mid`, `senior`, `executive`, or `uncertain`.
+  - Configured with PostgreSQL POSIX regex word boundaries (`\y`) correctly distinguishing `Associate Software Engineer` (entry) from `Associate Director` (executive).
+  - Backfilled on both `opportunityos_private.catalog_opportunities` and `public.opportunities`.
+- **Bounded Projection & Relevance:**
+  - `worker_save_discovery_item` filters out muted sources and excludes senior/executive roles from intern-seekers' active projections.
+  - Rescan deduplication: unchanged sources return `was_created: false` and `rescan_unchanged: true`, avoiding redundant evaluation queues.
+- **Strict Approval Creation Boundary:**
+  - `worker_create_approval` strictly rejects non-eligible matches (`NON_ELIGIBLE_CANNOT_APPROVE`).
+  - Marked legacy unapprovable `UNKNOWN` approvals as `stale`.
+  - Updated `confirm_approval` to support `decision-v2` no-deadline eligible opportunities.
+- **Curated Public Feeds:**
+  - Registered `Cloudflare Careers` (`greenhouse-v1`) and `PostHog Careers` (`ashby-v1`) in `opportunityos_private.source_registry`.
+
+### 2. Discovery Adapters & n8n Workflows
+- **Adapters (`scripts/discovery-adapters.mjs` & `scripts/execute-discovery.mjs`):**
+  - Implemented `normalizeGreenhouseItem` and `normalizeAshbyItem` mapping candidate feeds to `source-item-v2`.
+- **Orchestration (`workflows/03-evaluate.json` & `workflows/08-discovery.json`):**
+  - Re-generated `03-evaluate.json` with `enableMissingDeadlinePolicy: true` (`decision-v2` tracking without calendar event fabrication). Deployed and published in n8n.
+  - Re-generated `08-discovery.json` with Greenhouse and Ashby routes. Deployed and published in n8n.
+
+### 3. Frontend UI Overhaul (`web/src`)
+- **Inbox Feed (`web/src/app/(workspace)/inbox/inbox-feed.tsx`):**
+  - Best Matches view: diversity-capped to display at most 3 listings from any single employer in the first 12 recommendations.
+  - "More from this source" & "All Discoveries" tabs allow viewing all listings from any employer.
+  - Search, Filter by Type, Employer, Eligibility, Decision, Save/Hide controls, and Source Mute.
+- **Three-Way Approval Center (`web/src/app/(workspace)/approvals/page.tsx`):**
+  - **Actionable Approvals:** Strictly `ELIGIBLE` matches requiring human sign-off; renders enabled "Approve permitted actions" button.
+  - **Needs Information:** Grouped clarification questions for missing profile facts (`ClarificationCard`), atomically updating profile and re-evaluating affected opportunities.
+  - **Source Review:** Listings with insufficient requirements (`SourceReviewCard`), displaying "View original listing", Save, and Hide, with zero approval buttons.
+- **Honest Scoring (`web/src/components/decision-panel.tsx`):**
+  - Renders "Insufficient information to score" / "Scoring Not Evaluated" instead of misleading `0/100`.
+
+### 4. Acceptance Criteria Verification Matrix
+
+| Criterion | Target | Result | Evidence / Details |
+|---|---|---|---|
+| 1. Meesho volume & diversity cap | First page diversity | **PASS** | Top 12 contains <= 3 Meesho listings in Best Matches; remaining 7+ accessible via "More from this source". |
+| 2. Multi-source diversity | Diverse employers | **PASS** | CRED Lever, Devpost, Cloudflare (Greenhouse), and PostHog (Ashby) registered and normalized. |
+| 3. UNKNOWN eligibility isolation | Zero disabled buttons | **PASS** | UNKNOWN listings partitioned to "Needs Information" or "Source Review". No approval buttons rendered. |
+| 4. Enabled approval on eligible ASK | Actionable approvals | **PASS** | Actionable approvals filtered to `ELIGIBLE`; `ResolveButtons` renders enabled "Approve permitted actions". |
+| 5. Eligible no-deadline policy | decision-v2 | **PASS** | Produces `ACT` with application tracking and zero calendar event fabrication. |
+| 6. Honest scoring on sparse listings | No 0/100 | **PASS** | Sparse items render "Insufficient information to score" or "Not evaluated". |
+| 7. User interactions persistence & RLS | Save, Hide, Mute | **PASS** | `toggle_opportunity_save`, `toggle_opportunity_hide`, and `set_source_preference` persist and obey strict RLS. |
+| 8. Duplicate rescan deduplication | Rescan idempotency | **PASS** | Existing items return `rescan_unchanged: true` without duplicate cards or evaluations. |
+| 9. Clarification reevaluation | Profile update | **PASS** | Resolving clarification atomically updates profile, increments revision, and reevaluates only affected opportunities without cross-user leakage. |
+| 10. Responsive layout & components | Mobile/desktop | **PASS** | Responsive breakpoints (`grid gap-4 md:grid-cols-2`), search, filters, and capped views render cleanly. |
+
+### 5. Test Suite Verification
+- **Unit & Contract Suite:** 181 / 181 Node tests passed (`node --test scripts/*.test.mjs`).
+- **Database E2E Test (`supabase/tests/0035_discovery_volume_and_review_experience.test.sql`):** Passed with code 0.
+- **Live Journey Audit (`scripts/audit-discovery-live-journey.mjs`):** All 10 criteria passed on the live running system.
+- **TypeScript Typecheck (`npx tsc --noEmit`):** 0 errors.
+- **ESLint (`npx eslint src`):** 0 errors, 0 warnings.
+- **Next.js Production Build (`npm run build`):** Compiled successfully (exit code 0).
+- **Service Status:** Next.js daemon running on port 3000 (HTTP 200); n8n container running on port 5678 (HTTP 200).
+
+## Manifest V3 Browser Extension & Dual Capture Pipeline
+
+Implemented as requested to elevate the capture experience for hackathon demos while retaining the zero-install bookmarklet as a reliable fallback.
+
+### 1. Browser Extension Package (`extension/`)
+- **Manifest V3 (`extension/manifest.json`):** Modern extension specification with permissions `activeTab`, `scripting`, `storage`, `contextMenus`, and host permissions for `http://localhost:3000/*` and `http://127.0.0.1:3000/*`.
+- **Content Extractor (`extension/content.js`):**
+  - Tracking URL cleaner: Strips marketing query parameters (`utm_*`, `ref`, `trk`, `fbclid`, etc.) while keeping functional pagination/ID parameters.
+  - Portal recognition: Automatic detector for LinkedIn, Internshala, Unstop, Greenhouse, Ashby, Lever, Devpost, etc.
+  - Smart container parsing: Detects job posting containers or active user selections, bounds text to 19,500 characters, and extracts outbound links.
+- **Popup UI (`extension/popup.html` & `extension/popup.js`):**
+  - Displays dynamic connection status dot to OpportunityOS (`http://localhost:3000`).
+  - Displays detected portal badge, editable opportunity title and employer/organization.
+  - Snippet preview with character count and discovered links.
+  - 1-click **"Save to OpportunityOS"**: Fetches a single-use cryptographic capture nonce from `/api/capture/nonce`, signs the payload, and sends it directly to `/api/intake` (201 Created).
+  - **"Open Full Review on Dashboard"**: Bridges the captured payload directly into `/capture` for deep review.
+- **Background Service Worker (`extension/background.js`):**
+  - Registers context menu item *"Save to OpportunityOS"* for right-click selections.
+- **Icons & Asset Generation (`extension/icons/`):**
+  - 16px, 32px, 48px, and 128px PNG icons generated via `scripts/generate-extension-icons.mjs`.
+- **Documentation (`extension/README.md`):**
+  - 30-second setup instructions for Chrome, Edge, and Brave via `chrome://extensions` (*Developer mode* -> *Load unpacked*).
+
+### 2. Backend API CORS & Nonce Protection (`web/src/app/api/`)
+- **`api/capture/nonce/route.ts` & `api/intake/route.ts`:**
+  - Added `OPTIONS` preflight handlers.
+  - Configured CORS to allow `chrome-extension://*` origins along with `process.env.APP_ORIGIN`.
+  - Enforced single-use cryptographic capture nonces (`p_nonce`), payload hashing (`p_payload_hash`), and strict user session authentication via cookies.
+
+### 3. Frontend Workspace UI Updates (`web/src/`)
+- **Extension Setup Card (`web/src/components/extension-setup-card.tsx`):**
+  - Embedded prominently on `/sources` above `BookmarkletCard`.
+  - Provides a one-click copy path button (`C:\OpportunityOS\extension`), shortcut indicator (`Alt+S`), and direct links.
+- **Dual Pipeline Capture Page (`web/src/app/(workspace)/capture/capture-client.tsx`):**
+  - Seamlessly receives payloads from both the browser extension and the bookmarklet.
+  - Uses state initializer functions to avoid React 19 render cascade warnings.
+
+### 4. Verification & Contracts
+- **Contract Tests (`scripts/extension-contract.test.mjs`):**
+  - Validates `manifest.json` Manifest V3 compliance.
+  - Verifies presence of all required icon sizes (16, 32, 48, 128).
+  - Validates content extractor functions (`cleanTrackingUrl`, portal detection, container extraction).
+  - Validates popup contract and API request body structure.
+- **Live Flow Script (`scripts/test-extension-live-flow.mjs`):**
+  - End-to-end verified OPTIONS preflight, nonce issuance, and 201 Created intake queuing with live session cookies.
+- **Full Suite:** 188 / 188 Node tests passing; TypeScript 0 errors; ESLint 0 errors, 0 warnings; Next.js production build passing.
+
+## Slice S5 — Resume Onboarding (Implemented & Verified, October 15, 2026)
+
+Objective: A student uploads a text PDF resume, confirms a populated draft profile with literal quote citations, and resolves shared missing-profile questions across their opportunities in under a minute.
+
+### 1. Database Schema & Privilege Isolation (Migration 0036)
+- **Deployed Migration:** Applied `supabase/migrations/0036_resume_onboarding.sql`.
+- **`public.resume_uploads` Table:**
+  - Owner-scoped RLS policies (`auth.uid() = user_id`) for select, insert, and update.
+  - Enforces 5 MiB size constraint (`file_size <= 5242880`) and max 10 pages (`page_count <= 10`).
+  - Strict lifecycle states: `uploaded`, `validating`, `extracting`, `draft_ready`, `confirmed`, `failed`, `deleted`, `expired`.
+- **`public.profile_drafts` Table:**
+  - Owner-scoped RLS policies (`auth.uid() = user_id`).
+  - Stores `contract_version: 'profile-draft-v1'`, `base_profile_revision`, proposed fields with literal evidence, proposed skills with required confirmation, and missing fields list.
+- **Atomic Profile Draft Confirmation (`public.confirm_profile_draft`):**
+  - `security definer` function strictly checking `auth.uid() = draft.user_id`.
+  - Revision fence: Validates `profile.revision = p_expected_revision`; throws `OUTDATED_PROFILE_REVISION` on mismatch to prevent stale overwrites.
+  - Updates `public.profiles` fields atomically and increments revision.
+  - Upserts skills into `public.skills` and `public.profile_skills` with validated experience level (`beginner`, `intermediate`, `advanced`).
+  - Privacy retention D9: scrubs `extracted_text` to `null` and marks `deleted_at = now()` on confirmation.
+  - Emits `profile_draft_confirmed` audit event into `public.events`.
+- **Private Deletion Function (`public.delete_resume_upload`):**
+  - Revokes public/anon access, checks `auth.uid() = user_id`, scrubs text, marks status `'deleted'`, and discards pending drafts.
+- **Database Automated Test:** `supabase/tests/0036_resume_onboarding.test.sql` passed with status success.
+
+### 2. PDF Contract & Extraction Pipeline (`web/src/lib/resume.ts` & `scripts/resume-contract.mjs`)
+- **PDF Binary Signature & Safety (`validatePdfBuffer`):**
+  - Validates `%PDF-` magic bytes header (`0x25, 0x50, 0x44, 0x46`).
+  - Rejects encrypted / password-protected PDFs (`/Encrypt`).
+  - Rejects PDFs with executable scripts or launch actions (`/JavaScript`, `/JS`, `/Launch`).
+  - Enforces 5 MiB byte limit.
+- **Text & Layout Parser (`unpdf`):**
+  - Extracts text per page without native canvas binary dependencies.
+  - Validates total pages <= 10 and rejects scanned/image-only PDFs (character count < 50).
+- **Deterministic Draft Extractor (`extractDraftFromText`):**
+  - Extracts degree, branch, graduation year, and CGPA with literal page/quote citations.
+  - Detects 4.0 vs 10.0 scale: 4.0 scale flags `needs_clarification` to prevent silent conversion.
+  - Extracts skill names while keeping proficiency level strictly `null` (requires human confirmation).
+- **Draft Reconciler (`reconcileDraftWithProfile`):**
+  - Highlights new fields vs conflicts against existing profile values.
+  - Identifies which skills are already present vs newly discovered.
+- **Unit Contract Test:** `scripts/resume-contract.test.mjs` (7/7 tests pass).
+
+### 3. API Endpoints (`web/src/app/api/resume/`)
+- **`POST /api/resume/upload`:**
+  - Authenticated session verification.
+  - Validates multipart PDF file, runs binary security checks, parses text, extracts draft, inserts upload and draft records, and returns reconciled draft payload (201 Created).
+- **`POST /api/resume/confirm`:**
+  - Validates confirmation payload, requires valid experience levels for confirmed skills, calls `confirm_profile_draft` RPC, and returns 200 OK (or 409 Conflict on revision mismatch).
+- **`DELETE /api/resume/upload/[id]`:**
+  - Deletes upload and associated draft for D9 privacy retention.
+
+### 4. Frontend Workspace UI (`web/src`)
+- **Resume Onboarding Card (`web/src/components/resume-onboarding-card.tsx`):**
+  - Drag-and-drop / file-picker upload with format and privacy badges.
+  - Live progress animation during PDF parsing and text layout extraction.
+  - Interactive Review Screen:
+    - Checkbox selection to accept/reject proposed academic fields.
+    - Editable fields with side-by-side comparison (New Field vs Overwrites).
+    - Literal evidence quotes with page numbers.
+    - Required skill experience level selector (`Beginner`, `Intermediate`, `Advanced`).
+    - One-click **"Confirm & Update Profile"** and **"Discard Draft"** buttons.
+- **Profile Integration (`web/src/app/(workspace)/profile/page.tsx`):**
+  - Prominently embeds `ResumeOnboardingCard` at the top of the profile page, followed by manual settings.
+
+### 5. Verification Matrix
+
+| Criterion | Target | Result | Evidence / Details |
+|---|---|---|---|
+| 1. PDF Magic & Security Validation | Magic header, encryption, JS | **PASS** | Rejects non-PDF, encrypted, and executable PDFs; tested in `resume-contract.test.mjs`. |
+| 2. File size & page limits | <= 5 MiB, <= 10 pages | **PASS** | 5 MiB cap enforced in DB and API; page count <= 10 checked via `unpdf`. |
+| 3. Evidence-backed draft | Page & quote citations | **PASS** | Every extracted fact carries `{ page, quote }` literal citation. |
+| 4. User-set skill levels | Never infer proficiency | **PASS** | Extracted draft has `level = null`; confirmation rejects missing level with HTTP 400. |
+| 5. Revision fencing | Outdated revision rejection | **PASS** | `confirm_profile_draft` raises `OUTDATED_PROFILE_REVISION`, API returns HTTP 409. |
+| 6. Privacy retention D9 | Raw text scrubbed on confirm | **PASS** | `extracted_text = null` and `deleted_at` set in database on confirmation. |
+| 7. Cross-user RLS isolation | User B cannot see/confirm User A | **PASS** | Verified in `supabase/tests/0036_resume_onboarding.test.sql`. |
+| 8. Live end-to-end journey | Upload -> Draft -> Confirm -> Clean | **PASS** | `scripts/test-resume-live-flow.mjs` executed live with HTTP 201, 409, 400, 200 checks. |
+| 9. TypeScript & ESLint | Clean compile | **PASS** | 0 errors, 0 warnings. |
+| 10. Next.js production build | Turbopack build | **PASS** | Compiled with exit code 0; server daemon running on port 3000. |
+
+## Slice S6 — Deterministic Weekly Plan
+
+Accepted: October 15, 2026.
+Reference: OpportunityOS Hackathon Demo Build Guide v3.0 (pp. 15-16), Next Phase Guide (Section 11).
+
+### 1. Database Schema & Policies (`supabase/migrations/0037_weekly_planner.sql`)
+- **`public.user_availability` table:**
+  - Stores `user_id` (PK, references auth.users), `weekly_budget_hours` (numeric check 1.0 to 60.0), `working_windows` (jsonb array of `{ day, start, end }`), `busy_blocks` (jsonb array of `{ title, start, end }`), `timezone` (text, default 'Asia/Kolkata'), `revision` (integer, default 1), `updated_at`.
+  - RLS enabled: strict owner-only access for SELECT, INSERT, UPDATE, DELETE (`auth.uid() = user_id`).
+- **`public.weekly_plans` table:**
+  - Stores `id` (uuid PK), `user_id`, `plan_week_start` (date), `contract_version` (check `weekly-plan-v1`), `algorithm_version` (check `deadline-capacity-v1`), `profile_revision`, `availability_revision`, `status` (`'draft'`, `'confirmed'`, `'discarded'`, `'superseded'`), `scheduled_items` (jsonb), `unscheduled_items` (jsonb), `pressure_notes` (jsonb), `created_at`, `confirmed_at`.
+  - RLS enabled: strict owner-only access.
+- **`public.planned_tasks` table:**
+  - Stores scheduled 30-minute block tasks: `id` (uuid PK), `user_id`, `plan_id` (references weekly_plans), `opportunity_id` (references opportunities), `title`, `organization`, `deadline`, `start_at` (timestamptz), `end_at` (timestamptz), `duration_minutes` (check 10 to 240, default 30), `status` (default 'scheduled'), `created_at`.
+  - Unique constraint on `(user_id, plan_id, opportunity_id)`.
+  - RLS enabled: strict owner-only access.
+- **RPC `public.save_user_availability`:**
+  - Validates budget bounds (1.0 to 60.0 hrs), upserts user availability, and increments revision atomically.
+- **RPC `public.confirm_weekly_plan`:**
+  - Security definer: verifies `auth.uid() = user_id`, checks plan exists and is in `'draft'` status.
+  - Enforces availability revision fencing: rejects stale confirmation with `OUTDATED_AVAILABILITY_REVISION`.
+  - Supersedes existing confirmed plans for the target week.
+  - Transitions draft to `'confirmed'`.
+  - Populates `public.planned_tasks` idempotently.
+  - Emits `weekly_plan_confirmed` audit event into `public.events`.
+  - Handles repeated calls idempotently with status `'already_confirmed'`.
+- **Database Automated Test:** `supabase/tests/0037_weekly_planner.test.sql` executed with status `success` and `finished: true`.
+
+### 2. Pure Deterministic Planner Contract (`web/src/lib/planner.ts` & `scripts/planner-contract.mjs`)
+- **Zero AI Model Calls:** 100% deterministic code contract without LLM inference or AI Agent nodes.
+- **Candidate Ranking Hierarchy:**
+  1. Explicit user priority overrides (`high` > `normal` > `low`).
+  2. Earliest confirmed deadline (`candidate.deadline`).
+  3. Match score (`candidate.match_score`).
+  4. Stable deterministic tie-breaker (`candidate.id`).
+- **Slot Allocation & Capacity Management:**
+  - Breaks working windows into 30-minute block slots across the 7-day week starting on `plan_week_start`.
+  - Filters out intervals overlapping with user `busy_blocks` (e.g. Midterm Exams, classes).
+  - Stops allocating when `weekly_budget_hours` is reached.
+- **Unscheduled Categorization:**
+  - Items that cannot be scheduled are preserved and tagged with distinct reasons:
+    - `EXCEEDS_WEEKLY_EFFORT_BUDGET`: Exceeds weekly capacity limit.
+    - `NO_AVAILABLE_WINDOW_BEFORE_DEADLINE`: Deadline arrives before an open working window.
+    - `BLOCKED_BY_BUSY_INTERVAL`: Busy block prevented scheduling before deadline.
+    - `INELIGIBLE_OR_RISK_FLAG`: Ineligible status or critical risk flags.
+- **Pressure vs Overlap Separation:**
+  - Distinguishes same-day deadline pressure (`same_day_deadline_pressure` with list of affected opportunities) from actual time overlap.
+  - Detects high capacity utilization (`high_capacity_utilization` >= 90%).
+- **Unit Contract Test:** `scripts/planner-contract.test.mjs` (7/7 tests passed).
+
+### 3. API Endpoints (`web/src/app/api/plan/`)
+- **`GET /api/plan`:**
+  - Returns current user availability, active confirmed or draft plan, scheduled planned tasks, and eligible opportunity candidates.
+- **`PUT /api/plan/availability`:**
+  - Validates budget bounds (1.0 to 60.0 hours), saves working windows and busy blocks via RPC, returns updated revision.
+- **`POST /api/plan/generate`:**
+  - Deterministically generates weekly plan using `generateWeeklyPlan` contract, persists draft to `public.weekly_plans`, returns draft payload.
+- **`POST /api/plan/confirm`:**
+  - Enforces revision fencing against stale availability, calls `confirm_weekly_plan` RPC, records planned tasks, returns confirmation status.
+
+### 4. Frontend Workspace UI (`web/src/app/(workspace)/plan/`)
+- **Navigation Item:** Added "Weekly plan" (`/plan`) with Calendar icon to workspace navigation.
+- **Plan Client Component (`plan-client.tsx`):**
+  - **Weekly Capacity Bar:** Displays scheduled hours vs budget hours with visual progress meter and status badges.
+  - **Availability & Busy Blocks Editor Drawer:** Allows adjusting weekly budget hours (1-60), toggling daily working window start/end times, and adding/removing busy blocks (e.g. Exams).
+  - **Pressure & Deadline Alerts:** Renders distinct alert cards for same-day deadline pressure and high capacity load.
+  - **7-Day Weekly Grid:** Chronologically maps scheduled 30-minute task cards with start/end time, duration pill, and due date.
+  - **Unscheduled Opportunities Drawer:** Lists overflow items with specific plain-language reason explanations.
+  - **Priority & Estimate Controls:** Inline overrides for user priority and task duration estimates.
+  - **Revision Fencing Alert:** Warns students when availability changes after draft generation and prompts a clean regenerate.
+
+### 5. Verification Matrix
+
+| Criterion | Target | Result | Evidence / Details |
+|---|---|---|---|
+| 1. Zero AI Model Calls | 100% deterministic | **PASS** | Pure algorithmic allocation in `planner.ts`; no AI nodes or LLMs invoked. |
+| 2. Candidate Ranking | Priority > Deadline > Match | **PASS** | Unit tested in `planner-contract.test.mjs`. |
+| 3. Busy Block Avoidance | No tasks during busy intervals | **PASS** | Verified in unit test and live flow test with Midterm Exam block. |
+| 4. Capacity Bounds | Strict budget enforcement | **PASS** | Budget <= 60h, overflow moved to unscheduled with `EXCEEDS_WEEKLY_EFFORT_BUDGET`. |
+| 5. Pressure vs Overlap | Separated indicators | **PASS** | Same-day pressure surfaced in `pressure_notes` without conflating time collision. |
+| 6. Revision Fencing | Stale confirmation rejection | **PASS** | Stale revision returns HTTP 409 Conflict in live API test. |
+| 7. Confirmation Idempotency | No duplicate task generation | **PASS** | Second confirm returns `already_confirmed` with 0 duplicate tasks. |
+| 8. Cross-User RLS Isolation | Strict owner policy | **PASS** | Verified in `supabase/tests/0037_weekly_planner.test.sql`. |
+| 9. Live End-to-End Test | Save Avail -> Gen -> Confirm -> Verify | **PASS** | `scripts/test-plan-live-flow.mjs` passed completely with HTTP 401, 400, 409, 200 checks. |
+| 10. TypeScript, ESLint & Build | Clean production build | **PASS** | Turbopack compiled with 0 errors; all 195 suite tests pass. |
+
+---
+
+## OpportunityOS Comprehensive Build Repairs (Through Slice S6) & End-to-End Verification
+
+### Summary of Completed Repairs
+
+#### Repair 1 — n8n Execution Backlog Stopped & Drained
+- **Root Cause Confirmed:**
+  1. SQLite `execution_entity` queries in n8n previously checked `WHERE status = 'running'` without filtering `AND deletedAt IS NULL`. TypeORM sets `deletedAt` for soft-deleted successful executions without changing `status` when `saveDataSuccessExecution='none'` and `EXECUTIONS_DATA_PRUNE=true`.
+  2. The 05-ask-and-approve workflow had an aggressive 5-second recovery loop querying UNKNOWN matches against Supabase pooler repeatedly.
+- **Fixes Applied:**
+  - In `scripts/generate-ask-workflow.mjs`: Added `and m.eligibility_status = 'ELIGIBLE'` to candidate review query; slowed recovery triggers from 5s to 1m.
+  - Pruned soft-deleted executions in SQLite.
+- **Verification Evidence:**
+  - Active running executions in SQLite: **0** (drained from 262 to 0).
+  - Waiting executions: **80** (legitimate human approval gates preserved).
+  - Scheduled checks run and finish in ~200ms without backlog growth.
+
+#### Repair 2 — Weekly Planning Safety & Guide Compliance
+- **Root Cause:**
+  - Date-only deadlines were erroneously converted to `23:59:59 UTC`, inventing arbitrary cutoffs.
+  - Candidates were queried without joining `matches`, treating UNKNOWN and INELIGIBLE items as ELIGIBLE.
+  - No n8n Weekly Plan workflow was published.
+- **Fixes Applied:**
+  - Pure JS deterministic planner contract created in `scripts/planner-contract.mjs` and updated in `web/src/lib/planner.ts`.
+  - Date-only deadlines evaluated strictly by calendar date (`slotDate <= deadlineDate`).
+  - Added explicit unscheduled candidate categorization: `UNKNOWN_ELIGIBILITY`, `UNVERIFIED_SOURCE`, `EXPIRED_DEADLINE`, `INELIGIBLE_OR_RISK_FLAG`.
+  - Migration 0038: purged 26 unsafe `planned_tasks` (6 INELIGIBLE, 18 UNKNOWN, 2 NO_MATCH) from test database (`remaining_planned_tasks: 0`).
+  - Updated `confirm_weekly_plan` RPC: Enforced plan ownership, draft status, availability revision fence, profile revision fence, active deadlines, verified trust, and complete ELIGIBLE match status.
+  - Generated and published `workflows/09-plan.json` (`opportunityosSlice6Plan`) via `scripts/generate-plan-workflow.mjs` and `scripts/deploy-plan-workflow.ps1`.
+- **Verification Evidence:**
+  - `scripts/planner-contract.test.mjs` (9/9 passed).
+  - `scripts/test-plan-live-flow.mjs` (8/8 live steps passed; 0 tasks created from UNKNOWN items).
+  - `supabase/tests/0037_weekly_planner.test.sql` (passed).
+
+#### Repair 3 & 4 — Discovery Pagination Beyond 10 Results & Save/Hide Ownership
+- **Fixes Applied:**
+  - Migration 0038: Added `cursor_state jsonb not null default '{"offset": 0}'::jsonb` to `opportunityos_private.source_registry`.
+  - Updated `worker_claim_due_discovery` and `worker_finish_discovery_run` to return and update `cursor_state`, supporting both 6-arg and 8-arg call signatures.
+  - Updated `toggle_opportunity_save` and `toggle_opportunity_hide` to verify `exists (select 1 from public.opportunities where id = p_opportunity_id and user_id = auth.uid())` before mutating interactions.
+  - Updated `scripts/execute-discovery.mjs` and `scripts/generate-discovery-workflow.mjs` to slice items using `cursor_state.offset` and advance pagination offsets.
+  - Redeployed `08-discovery` to n8n via `scripts/deploy-discovery-workflow.ps1`.
+- **Verification Evidence:**
+  - `scripts/audit-discovery-live-journey.mjs` (All 10 acceptance criteria PASSED).
+
+#### Repair 5 — Restricted Browser Capture Origins
+- **Fixes Applied:**
+  - In `web/src/app/api/capture/nonce/route.ts` and `web/src/app/api/intake/route.ts`: Implemented `isAllowedCaptureOrigin()` restricting extension origins strictly to configured extension IDs (`OPPORTUNITYOS_EXTENSION_ID` / `EXTENSION_ID` / allowed whitelist).
+- **Verification Evidence:**
+  - `scripts/extension-contract.test.mjs` (4/4 passed).
+  - `scripts/test-extension-live-flow.mjs` verified live 403 rejection of unauthorized extension origins and 200/201 acceptance for allowed extension.
+
+#### Repair 6 — Resume Onboarding & Private Storage Lifecycle
+- **Fixes Applied:**
+  - Migration 0039: Created private `resumes` storage bucket in `storage.buckets` (`public: false`, `file_size_limit: 5242880`, `allowed_mime_types: ['application/pdf']`) and owner-only RLS policies on `storage.objects`.
+  - In `web/src/app/api/resume/upload/route.ts`: Uploads raw PDF buffer to private Supabase Storage at `resumes/${user.id}/${fileHash.slice(0, 16)}.pdf` and verifies object existence before creating database records.
+  - In `web/src/app/api/resume/confirm/route.ts`: On confirmation, deletes the physical PDF file from private Supabase Storage per Privacy D9 retention.
+  - In `web/src/app/api/resume/upload/[id]/route.ts`: On explicit deletion, deletes the physical PDF file from private Supabase Storage per Privacy D9 retention.
+  - Created pure JS resume contract in `scripts/resume-contract.mjs` for standalone n8n embedding and testing.
+  - Created and published `workflows/10-resume.json` (`opportunityosSlice5Resume`) using `scripts/generate-resume-workflow.mjs` and `scripts/deploy-resume-workflow.ps1`.
+- **Verification Evidence:**
+  - `scripts/resume-contract.test.mjs` (7/7 passed).
+  - `scripts/test-resume-live-flow.mjs` (All 8 live steps passed: unauthenticated 401, non-PDF 400, upload 201 + storage verification, revision fence 409, invalid skill level 400, confirmation 200 + D9 storage deletion, fresh upload explicit deletion 200 + D9 storage deletion, n8n resume workflow execution success).
+  - `supabase/tests/0036_resume_onboarding.test.sql` (passed).
+
+---
+
+### Complete Acceptance Verification Matrix
+
+| Verification Check | Target / Boundary | Result | Evidence |
+|---|---|---|---|
+| 1. Contract & Unit Test Suites | 197 tests across all modules | **PASS** | `node --test scripts/*.test.mjs`: 197/197 passed in 3.0s |
+| 2. ESLint | Next.js workspace lint | **PASS** | `npm --prefix web run lint`: exited with 0 errors, 0 warnings |
+| 3. TypeScript Compilation | Static type check | **PASS** | `Finished TypeScript in 4.3s` during production build |
+| 4. Next.js Production Build | App router & API routes | **PASS** | Compiled successfully with Turbopack; 19 routes rendered |
+| 5. Published n8n Workflows | Workflows 01 through 10 | **PASS** | All 10 workflows deployed and active in n8n |
+| 6. n8n Execution Health | Backlog drained & stable | **PASS** | 0 active running executions (`WHERE deletedAt IS NULL`); 79 waiting approvals |
+| 7. SQL Security & RLS Tests | Migrations 0027 to 0039 | **PASS** | `0027`, `0029`, `0030`, `0034`, `0035`, `0036`, `0037` SQL tests all passed |
+| 8. Browser Extension Flow | CORS + Nonce + Intake | **PASS** | `test-extension-live-flow.mjs`: HTTP 403 on bad origin, 201 on valid origin |
+| 9. Weekly Planner Live Flow | Avail + Draft + Confirm | **PASS** | `test-plan-live-flow.mjs`: 8/8 live steps passed; 0 tasks from UNKNOWN |
+| 10. Discovery Review Experience | Capping + Deduplication + Mute | **PASS** | `audit-discovery-live-journey.mjs`: All 10 acceptance criteria PASSED |
+| 11. Resume Private Storage | Upload + Verify + D9 Delete | **PASS** | `test-resume-live-flow.mjs`: Direct Supabase storage verified & scrubbed |
+| 12. S7 UI Day Experience | 4-Workspace Nav & Composed Filters | **PASS** | Home + Opportunities catalog + Server-side pagination (clamped 1-50, default 20) + `/` redirect to `/home` |
+| 13. S8 Smoke Test Suite | 8 core reliability & safety gates | **PASS** | `scripts/smoke-tests.mjs`: 8/8 smoke checks PASSED |
+| 14. S8 Stage Rehearsal Guide | 5-minute timed demo & fallbacks | **PASS** | `docs/demo-rehearsal.md` created with complete beat-by-beat script & Say/Avoid checklist |
+
+---
+
+## Slice S7 — UI Day Implementation & Acceptance
+
+- **4-Destination Primary Navigation (`web/src/components/navigation.tsx`):**
+  - Restructured top-level workspace into 4 primary destinations: Home (`/home`), Opportunities (`/opportunities`), Applications (`/applications`), and Weekly Plan (`/plan`).
+  - Organized settings into secondary group: Profile & Resume (`/profile`), Sources & Feeds (`/sources`), Standing Rules & Ledger (`/rules`), Activity Log (`/activity`), and Approvals (`/approvals`).
+  - Root route (`/`) redirects to `/home`. `/inbox` seamlessly renders the Opportunities catalog for 100% backward compatibility.
+- **Home Dashboard (`web/src/app/(workspace)/home/page.tsx`):**
+  - Autonomy Counter displaying real vs. seeded breakdowns for items read, ignored, acted on, asked, and questions avoided via `get_home_counter` RPC.
+  - Next-Action Suggestion computed deterministically in code based on pending approvals, clarifications, upcoming deadlines, and draft plans.
+  - Actionable Approvals and Grouped Clarifications sections with direct resolution links.
+  - Confirmed Upcoming Deadlines and Strongest Current Matches display.
+- **Opportunities Catalog & Server-Side Pagination (`web/src/app/(workspace)/opportunities/page.tsx` & `inbox-feed.tsx`):**
+  - True server-side database pagination with URL query parameters (`page`, `limit` clamped between 1 and 50, default 20, `q`, `type`, `employer`, `trust`, `deadline`, `location`, `saved`, `hidden`).
+  - Executes bounded database queries with `.range(from, to)` and `{ count: 'exact' }`, allowing items past #200 to be reached without pulling the entire catalog into client memory.
+  - Joins/queries on `matches` and `user_opportunity_interactions` are strictly scoped only to `oppIds` on the current page (`.in('opportunity_id', oppIds)`).
+  - Navigation controls (`Showing 1–20 of X items (Page 1 of Y)`) bind to Next.js `useRouter`, enabling deep-linking and bookmarkable filtered pages.
+  - Responsive empty, delayed, and loading states with filter reset actions.
+
+---
+
+## Slice S8 — Deployment and Rehearsal Implementation & Acceptance
+
+- **Pre-Run Seeded Dataset (`scripts/seed-demo-pack.mjs`):**
+  - Implemented the exact 10 fixture listings specified on Page 19 of Hackathon Demo Build Guide v3.0 (`getStageDemoFixtures()` and `generateStageDemoSeedSql()`), labelled with `[SEEDED]` and `DEMO DATA`:
+    1. Strong eligible match with stated deadline (`ACT` with calendar event).
+    2. Internship with no stated deadline (`ACT` tracker and notification only under D1 policy; zero calendar event).
+    3. Hackathon with no stated deadline (`ASK` schedule confirmation).
+    4. Stated CGPA requirement student fails (`IGNORE`).
+    5. Unclear mandatory requirement (`ASK` with 1 grouped question).
+    6. Expired listing (`IGNORE`).
+    7. Single listing from two sources (deduplicated into one card with multiple source badges).
+    8. Listing carrying prompt injection (neutralized and evaluated strictly as data).
+    9. Listing asking for registration fee or credentials (flagged and blocked from automatic effects).
+    10. Three similar items approved in sequence to trigger standing rule proposal.
+  - Preserved the 15 unit-test fixtures for backwards compatibility with `repair-contract.test.mjs`.
+- **Smoke Test Suite (`scripts/smoke-tests.mjs`):**
+  - Automated smoke test suite verifying all 8 stage gates:
+    1. Zero secret leakage across all 15 exported workflow JSON files.
+    2. Authenticated worker heartbeat & Autonomy Counter RPC.
+    3. Mid-job interruption, privileged worker claim fencing, and stale lease recovery.
+    4. Quota exhaustion handling (`QUOTA_LIMIT` mapped cleanly without retries).
+    5. Cross-user isolation and real two-user authenticated RLS boundaries (User 2 session verified: 0 foreign reads, RPC mutations rejected, direct table insert blocked).
+    6. Decision contract & D1 no-deadline policy enforcement.
+    7. Weekly planner determinism and idempotency without AI model calls.
+    8. Verification of all 10 Page 19 Stage Demo Fixtures (exact decisions, safety gates, rule synthesis, and `[SEEDED]` tagging).
+- **Stage Rehearsal Guide (`docs/demo-rehearsal.md`):**
+  - Complete 5-minute timed presentation script with beat-by-beat screen navigation.
+  - Complete "Say vs. Avoid Saying" reference table matching Page 20 of Guide v3.0.
+  - Replaced unmeasured claims (e.g. "saves 15 hours a week") with factual routine automation descriptions.
+  - Accurately disclosed localhost Next.js / n8n architecture with cloud Supabase Auth and PostgreSQL (ap-southeast-1).
+  - Pre-stage hardware, network, hotspot, and server checklist.
+  - Emergency fallback runbook for offline operation, quota limits, and email delays.
+- **n8n Execution Health & Backlog Diagnosis:**
+  - Root Cause Analysis: Workflows configured with `saveDataSuccessExecution: 'none'` (to prevent sensitive credential retention and disk bloat) execute in ~1 second. Upon completion, n8n sets `deletedAt = NOW()` to soft-delete the row before background vacuuming. n8n retains `status = 'running'` on these soft-deleted rows. A query on `execution_entity WHERE status = 'running'` without `AND deletedAt IS NULL` was misreporting short-lived, already-completed executions as an active backlog.
+  - Actual Active Executions: `SELECT count(*) FROM execution_entity WHERE status = 'running' AND deletedAt IS NULL` returns exactly **0**.
+  - Legitimate Waiting Approvals: The 79 executions with status `'waiting'` are legitimate Slice 4 Ask webhooks (`Wait for authenticated confirmation`) awaiting user action or expiry.
+
+
+
+
+
+
 
 

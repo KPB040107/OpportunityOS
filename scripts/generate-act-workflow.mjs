@@ -7,7 +7,7 @@ const cal=credentials('googleCalendarOAuth2Api','N8N_CALENDAR_CREDENTIAL_ID','N8
 const calendar={__rl:true,value:config.N8N_DEMO_CALENDAR_ID||'YOUR-DEMO-CALENDAR-ID',mode:'id'};
 const contract=`const contract=(${createActionsContract.toString()})();`;
 add('trigger','Act on the saved match','executeWorkflowTrigger',1.1,0,0,{inputSource:'passthrough'});
-add('schedule','Recover queued actions','scheduleTrigger',1.2,0,160,{rule:{interval:[{field:'seconds',secondsInterval:5}]}});
+add('schedule','Recover queued actions','scheduleTrigger',1.2,0,160,{rule:{interval:[{field:'minutes',minutesInterval:1}]}});
 pg('context','Load current owned action context',230,0,'select public.worker_match_context($1::uuid,$2::text,\'04-act\') as result;','={{ [$json.match_id,$execution.id] }}');
 code('policy','Check the code action boundary',460,0,`${contract} const c=$input.first().json.result;if(!c)return [];if(c.match.eligibility_status!=='ELIGIBLE')return [];const hasDeadline=c.opportunity.deadline&&c.opportunity.deadline>contract.day();const isNoDeadline=!c.opportunity.deadline&&['internship','job'].includes(c.opportunity.type);if(!hasDeadline&&!isNoDeadline)return [];for(const type of ['tracker_update','task_create','calendar_link','followup_schedule','calendar_event','email_notification'])contract.validateActionSafety(type);return [{json:c}];`);
 pg('plan','Queue permitted actions atomically',700,0,'select public.worker_plan_actions($1::uuid) as result;','={{ [$json.match_id] }}');

@@ -1,0 +1,178 @@
+{
+  "id": "opportunityosSlice5Resume",
+  "name": "OpportunityOS 10 Resume Processing",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "timezone": "Asia/Kolkata",
+    "errorWorkflow": "opportunityosSlice5ErrorHandler"
+  },
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute resume processing",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "manual",
+      "name": "Manual resume processing",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "upload",
+      "name": "Load pending resume upload",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\nselect\n  u.id as upload_id,\n  u.user_id,\n  u.storage_path,\n  u.file_name,\n  u.file_sha256,\n  u.extracted_text,\n  coalesce(p.revision, 1) as base_profile_revision,\n  coalesce(to_jsonb(p), '{}'::jsonb) as current_profile,\n  coalesce(\n    (select jsonb_agg(jsonb_build_object('name', s.name, 'level', ps.level))\n     from public.profile_skills ps\n     join public.skills s on s.id = ps.skill_id\n     where ps.user_id = u.user_id),\n    '[]'::jsonb\n  ) as current_skills\nfrom public.resume_uploads u\nleft join public.profiles p on p.user_id = u.user_id\nwhere (u.id = $1::uuid or ($1::uuid is null and u.status in ('uploaded', 'validating', 'draft_ready')))\norder by u.created_at desc\nlimit 1;\n",
+        "options": {
+          "queryReplacement": "={{ [$json.upload_id || null] }}"
+        }
+      }
+    },
+    {
+      "id": "extract",
+      "name": "Extract and reconcile profile draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\n\n// Embedded Deterministic Resume Contract\n// Resume Onboarding Contract - Slice S5\n// Pure JS implementation for Node.js test suites and n8n Workflow Code nodes.\n\nconst RESUME_CONTRACT_VERSION = 'profile-draft-v1';\nconst MAX_PDF_BYTES = 5 * 1024 * 1024; // 5 MiB cap\nconst MAX_PDF_PAGES = 10;\nconst MAX_RESUME_CHARS = 20000;\n\n/**\n * Validates the raw binary buffer of an uploaded PDF file before any parsing.\n * Enforces magic header, size limits, encryption checks, and executable code checks.\n */\nfunction validatePdfBuffer(buffer) {\n  if (!buffer || buffer.length === 0) {\n    throw new Error('PDF_EMPTY: Uploaded file is empty.');\n  }\n\n  if (buffer.length > MAX_PDF_BYTES) {\n    throw new Error(`PDF_TOO_LARGE: File size (${buffer.length} bytes) exceeds 5 MiB limit.`);\n  }\n\n  // Check magic number %PDF- (0x25, 0x50, 0x44, 0x46)\n  if (\n    buffer[0] !== 0x25 ||\n    buffer[1] !== 0x50 ||\n    buffer[2] !== 0x44 ||\n    buffer[3] !== 0x46\n  ) {\n    throw new Error('INVALID_PDF_SIGNATURE: File does not have a valid %PDF- header.');\n  }\n\n  // Scan for dangerous keywords or encryption in the raw header/metadata\n  const bufSlice = buffer.subarray(0, Math.min(buffer.length, 65536));\n  const rawHeader = Buffer.from(bufSlice).toString('latin1');\n  const tailSlice = buffer.subarray(Math.max(0, buffer.length - 65536));\n  const rawTail = Buffer.from(tailSlice).toString('latin1');\n  const combinedInspection = rawHeader + '\\n' + rawTail;\n\n  if (/\\/Encrypt\\b/i.test(combinedInspection)) {\n    throw new Error('ENCRYPTED_PDF_REJECTED: Password-protected or encrypted PDFs are not permitted.');\n  }\n\n  if (/\\/JavaScript\\b|\\/JS\\b|\\/Launch\\b/i.test(combinedInspection)) {\n    throw new Error('PDF_CONTAINS_EXECUTABLE_CODE: PDF contains embedded scripts or launch actions.');\n  }\n\n  return {\n    valid: true,\n    fileSize: buffer.length,\n  };\n}\n\n/**\n * Sanitizes plain text extracted from a resume.\n * Replaces null bytes, control characters, and caps maximum length.\n */\nfunction sanitizeResumeText(text) {\n  if (typeof text !== 'string') return '';\n  return text\n    .replace(/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]/g, ' ')\n    .replace(/\\r\\n/g, '\\n')\n    .replace(/\\r/g, '\\n')\n    .slice(0, MAX_RESUME_CHARS);\n}\n\n/**\n * Validates and normalizes an extracted profile draft payload against the profile-draft-v1 contract.\n */\nfunction validateProfileDraft(draft) {\n  if (!draft || typeof draft !== 'object') {\n    throw new Error('INVALID_DRAFT: Draft must be a valid object.');\n  }\n\n  if (draft.contract_version !== RESUME_CONTRACT_VERSION) {\n    throw new Error(`INVALID_CONTRACT_VERSION: Expected ${RESUME_CONTRACT_VERSION}, got ${draft.contract_version}`);\n  }\n\n  if (typeof draft.base_profile_revision !== 'number' || draft.base_profile_revision < 0) {\n    throw new Error('INVALID_BASE_REVISION: Draft must specify non-negative base_profile_revision.');\n  }\n\n  const validFieldNames = new Set([\n    'display_name',\n    'degree',\n    'branch',\n    'academic_year',\n    'graduation_year',\n    'cgpa',\n    'cgpa_scale',\n  ]);\n\n  if (!Array.isArray(draft.fields)) {\n    throw new Error('INVALID_FIELDS: Fields must be an array.');\n  }\n\n  for (const item of draft.fields) {\n    if (!item || typeof item !== 'object') {\n      throw new Error('INVALID_FIELD_ITEM: Field entry must be an object.');\n    }\n    if (!validFieldNames.has(item.field)) {\n      throw new Error(`UNKNOWN_FIELD: Field '${item.field}' is not allowed in profile draft.`);\n    }\n    if (typeof item.state !== 'string') {\n      throw new Error(`INVALID_FIELD_STATE: Field '${item.field}' must declare a state.`);\n    }\n    if (!item.evidence || typeof item.evidence.quote !== 'string') {\n      throw new Error(`MISSING_FIELD_EVIDENCE: Field '${item.field}' must provide a literal evidence quote.`);\n    }\n  }\n\n  if (!Array.isArray(draft.skills)) {\n    throw new Error('INVALID_SKILLS: Skills must be an array.');\n  }\n\n  for (const skill of draft.skills) {\n    if (!skill || typeof skill.name !== 'string' || !skill.name.trim()) {\n      throw new Error('INVALID_SKILL_NAME: Skill entry must have a non-empty name.');\n    }\n    // Proficiency level MUST be null in initial extracted draft (student must set it)\n    if (skill.level !== null && skill.level !== undefined) {\n      throw new Error(`UNCONFIRMED_SKILL_LEVEL: Skill '${skill.name}' level must be set by student, not inferred.`);\n    }\n    if (!skill.evidence || typeof skill.evidence.quote !== 'string') {\n      throw new Error(`MISSING_SKILL_EVIDENCE: Skill '${skill.name}' must provide an evidence quote.`);\n    }\n  }\n\n  if (!Array.isArray(draft.missing_fields)) {\n    throw new Error('INVALID_MISSING_FIELDS: missing_fields must be an array of strings.');\n  }\n\n  return draft;\n}\n\n/**\n * Reconciles an extracted draft with an existing profile to highlight:\n * 1. Proposed values that match existing\n * 2. Proposed values that conflict with existing\n * 3. Newly proposed fields that fill empty profile attributes\n * 4. Existing skills vs newly proposed skills\n */\nfunction reconcileDraftWithProfile(profile, draft) {\n  const currentProfile = profile || {};\n  const rawSkills = Array.isArray(currentProfile.skills) ? currentProfile.skills : [];\n  const currentSkills = new Set(\n    rawSkills.map((s) => (s.skill || s.name || '').toLowerCase())\n  );\n\n  const fieldComparisons = draft.fields.map((fieldItem) => {\n    const existingVal = currentProfile[fieldItem.field];\n    const isNew = existingVal === null || existingVal === undefined || existingVal === '';\n    const hasConflict = !isNew && String(existingVal).toLowerCase() !== String(fieldItem.value).toLowerCase();\n\n    return {\n      field: fieldItem.field,\n      proposedValue: fieldItem.value,\n      existingValue: existingVal ?? null,\n      isNew,\n      hasConflict,\n      evidence: fieldItem.evidence,\n      state: fieldItem.state,\n    };\n  });\n\n  const skillComparisons = draft.skills.map((skillItem) => {\n    const lowerName = skillItem.name.trim().toLowerCase();\n    const alreadyExists = currentSkills.has(lowerName);\n\n    return {\n      name: skillItem.name.trim(),\n      alreadyExists,\n      evidence: skillItem.evidence,\n      state: alreadyExists ? 'already_in_profile' : 'needs_confirmation',\n    };\n  });\n\n  return {\n    baseRevision: typeof currentProfile.revision === 'number' ? currentProfile.revision : 0,\n    fields: fieldComparisons,\n    skills: skillComparisons,\n    missingFields: draft.missing_fields || [],\n  };\n}\n\n/**\n * Validates the student's confirmation payload before submitting to the database.\n * Enforces that any confirmed skill has an explicit level ('beginner'|'intermediate'|'advanced').\n */\nfunction validateConfirmationPayload(payload) {\n  if (!payload || typeof payload !== 'object') {\n    throw new Error('INVALID_PAYLOAD: Confirmation payload must be an object.');\n  }\n\n  if (!payload.draft_id) {\n    throw new Error('MISSING_DRAFT_ID: draft_id is required.');\n  }\n\n  if (typeof payload.expected_revision !== 'number') {\n    throw new Error('MISSING_EXPECTED_REVISION: expected_revision must be an integer.');\n  }\n\n  if (!payload.selected_fields || typeof payload.selected_fields !== 'object') {\n    throw new Error('INVALID_SELECTED_FIELDS: selected_fields must be an object.');\n  }\n\n  const selectedFields = payload.selected_fields;\n\n  // Check CGPA scale clarification\n  if (selectedFields.cgpa !== undefined && selectedFields.cgpa !== null) {\n    const cgpaVal = Number(selectedFields.cgpa);\n    if (isNaN(cgpaVal) || cgpaVal < 0 || cgpaVal > 10) {\n      throw new Error('INVALID_CGPA: CGPA must be a valid number between 0 and 10.');\n    }\n  }\n\n  if (!Array.isArray(payload.skills_with_levels)) {\n    throw new Error('INVALID_SKILLS_CONFIRMATION: skills_with_levels must be an array.');\n  }\n\n  const validLevels = new Set(['beginner', 'intermediate', 'advanced']);\n  for (const s of payload.skills_with_levels) {\n    if (!s || typeof s.name !== 'string' || !s.name.trim()) {\n      throw new Error('INVALID_CONFIRMED_SKILL: Skill must have a valid name.');\n    }\n    if (typeof s.level !== 'string' || !validLevels.has(s.level)) {\n      throw new Error(`INVALID_SKILL_LEVEL: Skill '${s.name}' must have level 'beginner', 'intermediate', or 'advanced'.`);\n    }\n  }\n\n  return true;\n}\n\n/**\n * Pure deterministic pattern extractor for test fixtures and fallback parsing.\n */\nfunction extractDraftFromText(text, pageNum = 1, baseRevision = 0) {\n  const clean = sanitizeResumeText(text);\n  const fields = [];\n  const skills = [];\n  const missing = [];\n\n  // 1. Degree & Branch detection\n  const degreeMatch = clean.match(/\\b(B\\.?Tech|B\\.?E\\.?|B\\.?Sc|BCA|M\\.?Tech|MCA|MS|B\\.?Com)\\b(?:\\s+(?:in|of)\\s+([A-Za-z\\s]+?)(?:,|\\.|\\n|$))?/i);\n  if (degreeMatch) {\n    fields.push({\n      field: 'degree',\n      value: degreeMatch[1].replace(/\\./g, ''),\n      state: 'proposed',\n      evidence: { page: pageNum, quote: degreeMatch[0].trim() },\n    });\n    if (degreeMatch[2] && degreeMatch[2].trim().length < 40) {\n      fields.push({\n        field: 'branch',\n        value: degreeMatch[2].trim(),\n        state: 'proposed',\n        evidence: { page: pageNum, quote: degreeMatch[0].trim() },\n      });\n    }\n  } else {\n    missing.push('degree', 'branch');\n  }\n\n  // 2. CGPA detection with scale\n  const cgpaMatch = clean.match(/\\b(?:CGPA|GPA|Score)[\\s:]*([0-9]+(?:\\.[0-9]+)?)\\s*(?:\\/\\s*([0-9]+))?/i);\n  if (cgpaMatch) {\n    const rawVal = parseFloat(cgpaMatch[1]);\n    const scale = cgpaMatch[2] ? parseFloat(cgpaMatch[2]) : rawVal <= 4.0 ? 4.0 : 10.0;\n\n    fields.push({\n      field: 'cgpa',\n      value: rawVal,\n      state: scale === 4.0 ? 'needs_clarification' : 'proposed',\n      evidence: { page: pageNum, quote: cgpaMatch[0].trim() },\n    });\n    fields.push({\n      field: 'cgpa_scale',\n      value: scale === 4.0 ? '4.0' : '10.0',\n      state: scale === 4.0 ? 'needs_clarification' : 'proposed',\n      evidence: { page: pageNum, quote: cgpaMatch[0].trim() },\n    });\n  } else {\n    missing.push('cgpa');\n  }\n\n  // 3. Graduation year detection\n  const gradMatch = clean.match(/\\b(?:Graduat(?:ing|ion)|Batch of|Class of)\\s*(?:in)?\\s*(202[4-9]|203[0-2])\\b/i) ||\n                    clean.match(/\\b(202[4-9]|203[0-2])\\s*(?:Batch|Graduation)\\b/i);\n  if (gradMatch) {\n    fields.push({\n      field: 'graduation_year',\n      value: parseInt(gradMatch[1], 10),\n      state: 'proposed',\n      evidence: { page: pageNum, quote: gradMatch[0].trim() },\n    });\n  } else {\n    missing.push('graduation_year');\n  }\n\n  // 4. Skills dictionary search\n  const commonSkills = [\n    'Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'Next.js',\n    'PostgreSQL', 'SQL', 'Docker', 'Git', 'Java', 'C++', 'Go', 'Rust',\n    'Kubernetes', 'AWS', 'Linux', 'Tailwind CSS', 'GraphQL', 'Machine Learning'\n  ];\n\n  for (const s of commonSkills) {\n    const escaped = s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n    const regex = new RegExp(`\\\\b${escaped}\\\\b`, 'i');\n    const match = clean.match(regex);\n    if (match) {\n      skills.push({\n        name: s,\n        level: null, // Strictly null per requirement\n        state: 'needs_confirmation',\n        evidence: { page: pageNum, quote: match[0] },\n      });\n    }\n  }\n\n  return {\n    contract_version: RESUME_CONTRACT_VERSION,\n    base_profile_revision: baseRevision,\n    fields,\n    skills,\n    missing_fields: Array.from(new Set(missing)),\n  };\n}\n\n\n\nconst rawItem = $input.first().json;\nif (!rawItem || !rawItem.upload_id || !rawItem.user_id) {\n  return [];\n}\n\nconst text = rawItem.extracted_text || '';\nconst draft = extractDraftFromText(text, 1, rawItem.base_profile_revision);\nvalidateProfileDraft(draft);\n\nconst profileWithSkills = {\n  ...rawItem.current_profile,\n  skills: rawItem.current_skills || []\n};\nconst reconciled = reconcileDraftWithProfile(profileWithSkills, draft);\n\nreturn [{\n  json: {\n    upload_id: rawItem.upload_id,\n    user_id: rawItem.user_id,\n    storage_path: rawItem.storage_path,\n    contract_version: draft.contract_version,\n    base_profile_revision: draft.base_profile_revision,\n    proposed_fields: draft.fields,\n    proposed_skills: draft.skills,\n    missing_fields: draft.missing_fields,\n    reconciled\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "save",
+      "name": "Store profile draft in database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\ninsert into public.profile_drafts (\n  user_id,\n  resume_upload_id,\n  base_profile_revision,\n  contract_version,\n  proposed_fields,\n  proposed_skills,\n  missing_fields,\n  status\n)\nvalues (\n  $1::uuid,\n  $2::uuid,\n  $3::integer,\n  $4::text,\n  $5::jsonb,\n  $6::jsonb,\n  $7::jsonb,\n  'draft_ready'\n)\nreturning id as draft_id, user_id, resume_upload_id, status, created_at;\n",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id, $json.upload_id, $json.base_profile_revision, $json.contract_version, JSON.stringify($json.proposed_fields), JSON.stringify($json.proposed_skills), JSON.stringify($json.missing_fields)] }}"
+        }
+      }
+    },
+    {
+      "id": "update_status",
+      "name": "Mark upload draft ready",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\nupdate public.resume_uploads\nset status = 'draft_ready', updated_at = now()\nwhere id = $1::uuid\nreturning id, status, updated_at;\n",
+        "options": {
+          "queryReplacement": "={{ [$json.resume_upload_id] }}"
+        }
+      }
+    },
+    {
+      "id": "note",
+      "name": "Resume Processing Boundary",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -320
+      ],
+      "parameters": {
+        "content": "## Slice S5 Resume Processing Workflow\\nExtracts academic facts, degree, graduation year, CGPA and detected skills with literal page evidence. Skill proficiency is strictly set to null for student confirmation. Raw file subject to Privacy D9 retention cleanup upon confirmation.",
+        "width": 740,
+        "height": 200
+      }
+    }
+  ],
+  "connections": {
+    "Execute resume processing": {
+      "main": [
+        [
+          {
+            "node": "Load pending resume upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual resume processing": {
+      "main": [
+        [
+          {
+            "node": "Load pending resume upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load pending resume upload": {
+      "main": [
+        [
+          {
+            "node": "Extract and reconcile profile draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract and reconcile profile draft": {
+      "main": [
+        [
+          {
+            "node": "Store profile draft in database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store profile draft in database": {
+      "main": [
+        [
+          {
+            "node": "Mark upload draft ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

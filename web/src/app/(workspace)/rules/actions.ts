@@ -11,6 +11,23 @@ export async function recordDecisionAction(
 ) {
   const { supabase } = await requireUser();
 
+  if (choice === 'approve') {
+    const { data: trackData, error: trackError } = await supabase.rpc('track_student_application', {
+      p_opportunity_id: opportunityId,
+      p_status: 'to_apply',
+      p_notes: reason || 'Approved by student'
+    });
+    if (trackError) {
+      return { success: false, error: trackError.message };
+    }
+    revalidatePath('/inbox');
+    revalidatePath('/rules');
+    revalidatePath('/approvals');
+    revalidatePath('/applications');
+    revalidatePath(`/opportunities/${opportunityId}`);
+    return { success: true, data: trackData };
+  }
+
   const { data, error } = await supabase.rpc('record_student_decision', {
     p_opportunity_id: opportunityId,
     p_choice: choice,
@@ -24,6 +41,8 @@ export async function recordDecisionAction(
 
   revalidatePath('/inbox');
   revalidatePath('/rules');
+  revalidatePath('/approvals');
+  revalidatePath('/applications');
   revalidatePath(`/opportunities/${opportunityId}`);
 
   return { success: true, data };

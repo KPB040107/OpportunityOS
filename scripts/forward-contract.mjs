@@ -11,7 +11,9 @@ export function createForwardContract({hash}){
   const text=subject+'\n'+raw;if(text.length>20000)return null;
   const key=hash(aliases[0]+'\n'+String(email.messageId||email.metadata?.['message-id']||'')+'\n'+text).slice(0,32);
   const request_id=key.slice(0,8)+'-'+key.slice(8,12)+'-5'+key.slice(13,16)+'-a'+key.slice(17,20)+'-'+key.slice(20);
-  return {alias:aliases[0],request_id,text};
+  const from_address=gather([email.from,email.headers?.from,email.metadata?.from]);
+  const message_id=String(email.messageId||email.headers?.['message-id']||email.metadata?.['message-id']||'');
+  return {alias:aliases[0],request_id,text,from_address,subject,message_id};
  }
  return {parse};
 }

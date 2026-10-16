@@ -4,10 +4,12 @@
 export function evaluateRuleProposal({ decisions, existingRules = [] }) {
   if (!Array.isArray(decisions) || decisions.length < 3) return null;
 
+  // Filter out invalid choices: only 'approve' and 'reject' are learning choices (pin is never action consent)
+  const validDecisions = decisions.filter(d => ['approve', 'reject'].includes(d.choice));
+
   // Group decisions by scope and opportunity type
-  const sorted = [...decisions].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const sorted = [...validDecisions].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
   
-  // Inspect the 3 most recent decisions for each scope
   const scopes = new Set(sorted.map(d => `${d.source_scope}:${d.opportunity_type}`));
 
   for (const key of scopes) {
@@ -18,10 +20,15 @@ export function evaluateRuleProposal({ decisions, existingRules = [] }) {
     const recentThree = scopeDecisions.slice(0, 3);
     const firstChoice = recentThree[0].choice;
 
-    // Check consistency: all three must have the exact same choice
+    // Consistency: all three must have the exact same choice ('approve' or 'reject')
     const isConsistent = recentThree.every(d => d.choice === firstChoice);
     if (!isConsistent) {
-      // Disagreement found: no rule proposed for this scope
+      continue;
+    }
+
+    // Must be 3 distinct opportunities (prevent duplicate decisions on same opportunity from triggering rule)
+    const distinctOpportunities = new Set(recentThree.map(d => d.opportunity_id || d.id));
+    if (distinctOpportunities.size < 3) {
       continue;
     }
 
@@ -31,7 +38,7 @@ export function evaluateRuleProposal({ decisions, existingRules = [] }) {
     );
     if (alreadyExists) continue;
 
-    const isApprove = ['approve', 'pin'].includes(firstChoice);
+    const isApprove = firstChoice === 'approve';
     const rule_type = isApprove ? 'preauthorize' : 'ignore';
     const scopeCapitalized = scope.charAt(0).toUpperCase() + scope.slice(1);
     const typeCapitalized = oppType.charAt(0).toUpperCase() + oppType.slice(1);
@@ -89,7 +96,7 @@ export function applyStandingRule({ match, opportunity, rules = [], now = new Da
     return { applied: false, reason: 'UNVERIFIED_OR_RISK' };
   }
 
-  // Hard Gate 4: Rules only resolve baseline ASK (or low-match IGNORE)
+  // Hard Gate 4: Rules only resolve baseline ASK
   if (match.decision !== 'ASK') {
     return { applied: false, reason: 'BASELINE_NOT_ASK' };
   }
@@ -107,8 +114,8 @@ export function applyStandingRule({ match, opportunity, rules = [], now = new Da
   }
 
   if (activeRule.rule_type === 'preauthorize') {
-    const minScore = activeRule.conditions?.min_score ?? 60;
-    const minConfidence = activeRule.conditions?.min_confidence ?? 0.65;
+    const minScore = Math.max(60, activeRule.conditions?.min_score ?? 60);
+    const minConfidence = Math.max(0.65, activeRule.conditions?.min_confidence ?? 0.65);
 
     // Floor requirement (Decision D7): score >= 60, confidence >= 0.65
     if (

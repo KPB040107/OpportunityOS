@@ -1,33 +1,95 @@
 import { writeFileSync, readFileSync } from 'node:fs';
 import { validateIntakeWebhook } from './ingest-contract.mjs';
-import {createForwardContract} from './forward-contract.mjs';
-const runtime=process.argv.includes('--runtime');
-const config=runtime?Object.fromEntries(readFileSync(new URL('../web/.env.local',import.meta.url),'utf8').split(/\r?\n/).filter(line=>line.includes('=')).map(line=>[line.slice(0,line.indexOf('=')),line.slice(line.indexOf('=')+1)])):{};
-const db=runtime?{postgres:{id:config.N8N_POSTGRES_CREDENTIAL_ID,name:config.N8N_POSTGRES_CREDENTIAL_NAME}}:undefined;
-if(runtime && (!config.NEXT_PUBLIC_SUPABASE_URL || !config.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || !config.N8N_POSTGRES_CREDENTIAL_ID)) throw new Error('Configure the public Supabase settings and Postgres credential reference in web/.env.local first.');
-const nodes=[];
-const node=(id,name,type,version,x,y,parameters,extra={})=>nodes.push({id,name,type:`n8n-nodes-base.${type}`,typeVersion:version,position:[x,y],parameters,...extra});
-node('ingest-webhook','Receive a signed-in submission','webhook',2,0,0,{httpMethod:'POST',path:'opportunityos-ingest',responseMode:'responseNode',options:{}},{webhookId:'opportunityos-ingest'});
-node('ingest-validate','Validate the intake contract','code',2,220,0,{jsCode:`const { URL } = require('url'); const validate=${validateIntakeWebhook.toString()}; const input=$input.first().json; return [{json:validate(input.body,input.headers?.authorization)}];`});
-const validIf={conditions:{options:{caseSensitive:true,leftValue:'',typeValidation:'strict',version:2},conditions:[{id:'valid',leftValue:'={{ $json.valid }}',rightValue:true,operator:{type:'boolean',operation:'true',singleValue:true}}],combinator:'and'},options:{}};
-node('ingest-if','Valid submission?','if',2.2,440,0,validIf);
-node('ingest-auth','Verify session with Supabase','httpRequest',4.2,660,-100,{method:'GET',url:`${config.NEXT_PUBLIC_SUPABASE_URL || 'https://YOUR-PROJECT.supabase.co'}/auth/v1/user`,sendHeaders:true,headerParameters:{parameters:[{name:'apikey',value:config.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'YOUR-PUBLIC-PUBLISHABLE-KEY'},{name:'Authorization',value:'={{ $json.authorization }}'}]},options:{timeout:10000,response:{response:{fullResponse:true,neverError:true,responseFormat:'json'}}}},{onError:'continueRegularOutput'});
-node('ingest-owner','Derive verified ownership','code',2,880,-100,{jsCode:"const response=$input.first().json; const body=response.body; if(response.statusCode!==200 || typeof body?.id!=='string' || !/^[0-9a-f-]{36}$/i.test(body.id)) return [{json:{valid:false,http_status:response.statusCode===401||response.statusCode===403?401:503,error:'Session verification failed'}}]; const input=$('Validate the intake contract').first().json; return [{json:{valid:true,user_id:body.id,request_id:input.request_id,source_type:input.source_type,content:input.content}}];"});
-node('ingest-owner-if','Session verified?','if',2.2,1100,-100,validIf);
-node('ingest-save','Atomically save and log intake','postgres',2.6,1320,-200,{operation:'executeQuery',query:'select * from public.ingest_raw_item($1::uuid,$2::uuid,$3::text,$4::text);',options:{queryReplacement:'={{ [$json.user_id,$json.request_id,$json.source_type,$json.content] }}'}},{...(db?{credentials:db}:{}),onError:'continueRegularOutput'});
-node('ingest-result','Check database confirmation','code',2,1540,-200,{jsCode:"const result=$input.first().json; if(typeof result.raw_item_id!=='string') return [{json:{valid:false,http_status:500,error:'Database did not confirm the save'}}]; return [{json:{http_status:result.was_created?201:200,raw_item_id:result.raw_item_id,processing_status:result.processing_status,was_created:result.was_created}}];"});
-node('ingest-respond','Return confirmed result','respondToWebhook',1.4,1760,0,{respondWith:'json',responseBody:'={{ $json.raw_item_id ? {raw_item_id:$json.raw_item_id,processing_status:$json.processing_status,was_created:$json.was_created} : {error:$json.error} }}',options:{responseCode:'={{ $json.http_status }}'}});
-node('ingest-kick','Discard session data before analysis','code',2,1980,0,{jsCode:"return $input.first().json.raw_item_id?[{json:{}}]:[];"});
-node('ingest-understand','Start the Understand workflow','executeWorkflow',1.3,2200,0,{source:'database',workflowId:{__rl:true,value:'opportunityosSlice2Understand',mode:'id'},mode:'once',options:{waitForSubWorkflow:false}},{onError:'continueRegularOutput'});
-node('ingest-note','Ingest boundary','stickyNote',1,0,-400,{content:'## Ingest — verify → save → confirm → Understand\nOwnership comes from Supabase Auth, never the request body. Database writes and activity logging are atomic. Repeated request IDs return the existing item. Confirm the save before starting asynchronous analysis; its queue checker also recovers a missed dispatch. Session data is removed from the child input. Execution data is not retained because the request contains a user session token. Configure the fixed Supabase Auth URL, public API key and Postgres credential.',height:260,width:620});
-const connections={};
-const connect=(from,to,index=0)=>{connections[from]??={main:[]};connections[from].main[index]??=[];connections[from].main[index].push({node:to,type:'main',index:0});};
-connect('Receive a signed-in submission','Validate the intake contract');connect('Validate the intake contract','Valid submission?');connect('Valid submission?','Verify session with Supabase');connect('Valid submission?','Return confirmed result',1);connect('Verify session with Supabase','Derive verified ownership');connect('Derive verified ownership','Session verified?');connect('Session verified?','Atomically save and log intake');connect('Session verified?','Return confirmed result',1);connect('Atomically save and log intake','Check database confirmation');connect('Check database confirmation','Return confirmed result');
-connect('Return confirmed result','Discard session data before analysis');connect('Discard session data before analysis','Start the Understand workflow');
-node('forward-trigger','Read forwarded announcements from the agent mailbox','emailReadImap',2.2,0,400,{mailbox:'INBOX',postProcessAction:'nothing',downloadAttachments:false,format:'simple',options:{trackLastMessageId:true}},runtime?{credentials:{imap:{id:config.N8N_IMAP_CREDENTIAL_ID,name:config.N8N_IMAP_CREDENTIAL_NAME}}}:{});
-node('forward-parse','Validate the personal forwarding alias before AI','code',2,250,400,{jsCode:`const crypto=require('crypto');const c=(${createForwardContract.toString()})({hash:v=>crypto.createHash('sha256').update(v).digest('hex')});return $input.all().flatMap(i=>{const r=c.parse(i.json);return r?[{json:r}]:[];});`});
-node('forward-save','Resolve alias ownership and save forwarded text','postgres',2.6,500,400,{operation:'executeQuery',query:'with saved as materialized (select public.worker_ingest_email($1::text,$2::uuid,$3::text) as result), registered as (insert into opportunityos_private.execution_owners(execution_id,user_id,workflow) select $4::text,r.user_id,\'01-ingest\' from saved s join public.raw_items r on r.id=(s.result->>\'raw_item_id\')::uuid where (s.result->>\'accepted\')::boolean on conflict do nothing) select result from saved;',options:{queryReplacement:'={{ [$json.alias,$json.request_id,$json.text,$execution.id] }}'}},db?{credentials:db}:{});
-node('forward-accepted','Continue only owned saved mail','code',2,750,400,{jsCode:'return $input.all().flatMap(i=>i.json.result.accepted?[{json:{}}]:[]);'});
-connect('Read forwarded announcements from the agent mailbox','Validate the personal forwarding alias before AI');connect('Validate the personal forwarding alias before AI','Resolve alias ownership and save forwarded text');connect('Resolve alias ownership and save forwarded text','Continue only owned saved mail');connect('Continue only owned saved mail','Start the Understand workflow');
-const workflow={id:'opportunityosSlice1Ingest',name:'OpportunityOS 01 Ingest',active:false,settings:{executionOrder:'v1',saveDataErrorExecution:'none',saveDataSuccessExecution:'none',saveManualExecutions:false,errorWorkflow:'opportunityosSlice5ErrorHandler'},nodes,connections,pinData:{},tags:[]};
-writeFileSync(new URL(runtime?'../.local/01-ingest.runtime.json':'../workflows/01-ingest.json',import.meta.url),JSON.stringify(workflow,null,2)+'\n');
+import { createForwardContract } from './forward-contract.mjs';
+import { cleanTrackingUrl, detectPortal, deterministicUUID, parseMultiListingAlert } from './capture-contract.mjs';
+
+const runtime = process.argv.includes('--runtime');
+const config = runtime ? Object.fromEntries(readFileSync(new URL('../web/.env.local', import.meta.url), 'utf8').split(/\r?\n/).filter(line => line.includes('=')).map(line => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)])) : {};
+const db = runtime ? { postgres: { id: config.N8N_POSTGRES_CREDENTIAL_ID, name: config.N8N_POSTGRES_CREDENTIAL_NAME } } : undefined;
+if (runtime && (!config.NEXT_PUBLIC_SUPABASE_URL || !config.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || !config.N8N_POSTGRES_CREDENTIAL_ID)) throw new Error('Configure the public Supabase settings and Postgres credential reference in web/.env.local first.');
+
+const nodes = [];
+const node = (id, name, type, version, x, y, parameters, extra = {}) => nodes.push({ id, name, type: `n8n-nodes-base.${type}`, typeVersion: version, position: [x, y], parameters, ...extra });
+
+node('ingest-webhook', 'Receive a signed-in submission', 'webhook', 2, 0, 0, { httpMethod: 'POST', path: 'opportunityos-ingest', responseMode: 'responseNode', options: {} }, { webhookId: 'opportunityos-ingest' });
+node('ingest-validate', 'Validate the intake contract', 'code', 2, 220, 0, { jsCode: `const { URL } = require('url'); const validate=${validateIntakeWebhook.toString()}; const input=$input.first().json; return [{json:validate(input.body,input.headers?.authorization)}];` });
+const validIf = { conditions: { options: { caseSensitive: true, leftValue: '', typeValidation: 'strict', version: 2 }, conditions: [{ id: 'valid', leftValue: '={{ $json.valid }}', rightValue: true, operator: { type: 'boolean', operation: 'true', singleValue: true } }], combinator: 'and' }, options: {} };
+node('ingest-if', 'Valid submission?', 'if', 2.2, 440, 0, validIf);
+node('ingest-auth', 'Verify session with Supabase', 'httpRequest', 4.2, 660, -100, { method: 'GET', url: `${config.NEXT_PUBLIC_SUPABASE_URL || 'https://YOUR-PROJECT.supabase.co'}/auth/v1/user`, sendHeaders: true, headerParameters: { parameters: [{ name: 'apikey', value: config.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'YOUR-PUBLIC-PUBLISHABLE-KEY' }, { name: 'Authorization', value: '={{ $json.authorization }}' }] }, options: { timeout: 10000, response: { response: { fullResponse: true, neverError: true, responseFormat: 'json' } } } }, { onError: 'continueRegularOutput' });
+node('ingest-owner', 'Derive verified ownership', 'code', 2, 880, -100, { jsCode: "const response=$input.first().json; const body=response.body; if(response.statusCode!==200 || typeof body?.id!=='string' || !/^[0-9a-f-]{36}$/i.test(body.id)) return [{json:{valid:false,http_status:response.statusCode===401||response.statusCode===403?401:503,error:'Session verification failed'}}]; const input=$('Validate the intake contract').first().json; return [{json:{valid:true,user_id:body.id,request_id:input.request_id,source_type:input.source_type,content:input.content}}];" });
+node('ingest-owner-if', 'Session verified?', 'if', 2.2, 1100, -100, validIf);
+node('ingest-save', 'Atomically save and log intake', 'postgres', 2.6, 1320, -200, { operation: 'executeQuery', query: 'select * from public.ingest_raw_item($1::uuid,$2::uuid,$3::text,$4::text);', options: { queryReplacement: '={{ [$json.user_id,$json.request_id,$json.source_type,$json.content] }}' } }, { ...(db ? { credentials: db } : {}), onError: 'continueRegularOutput' });
+node('ingest-result', 'Check database confirmation', 'code', 2, 1540, -200, { jsCode: "const result=$input.first().json; if(typeof result.raw_item_id!=='string') return [{json:{valid:false,http_status:500,error:'Database did not confirm the save'}}]; return [{json:{http_status:result.was_created?201:200,raw_item_id:result.raw_item_id,processing_status:result.processing_status,was_created:result.was_created}}];" });
+node('ingest-respond', 'Return confirmed result', 'respondToWebhook', 1.4, 1760, 0, { respondWith: 'json', responseBody: '={{ $json.raw_item_id ? {raw_item_id:$json.raw_item_id,processing_status:$json.processing_status,was_created:$json.was_created} : {error:$json.error} }}', options: { responseCode: '={{ $json.http_status }}' } });
+node('ingest-kick', 'Discard session data before analysis', 'code', 2, 1980, 0, { jsCode: "return $input.first().json.raw_item_id?[{json:{}}]:[];" });
+node('ingest-understand', 'Start the Understand workflow', 'executeWorkflow', 1.3, 2200, 0, { source: 'database', workflowId: { __rl: true, value: 'opportunityosSlice2Understand', mode: 'id' }, mode: 'once', options: { waitForSubWorkflow: false } }, { onError: 'continueRegularOutput' });
+node('ingest-note', 'Ingest boundary', 'stickyNote', 1, 0, -400, { content: '## Ingest — verify → save → confirm → Understand\nOwnership comes from Supabase Auth, never the request body. Database writes and activity logging are atomic. Repeated request IDs return the existing item. Confirm the save before starting asynchronous analysis; its queue checker also recovers a missed dispatch. Session data is removed from the child input. Execution data is not retained because the request contains a user session token. Configure the fixed Supabase Auth URL, public API key and Postgres credential.', height: 260, width: 620 });
+
+const connections = {};
+const connect = (from, to, index = 0) => { connections[from] ??= { main: [] }; connections[from].main[index] ??= []; connections[from].main[index].push({ node: to, type: 'main', index: 0 }); };
+connect('Receive a signed-in submission', 'Validate the intake contract');
+connect('Validate the intake contract', 'Valid submission?');
+connect('Valid submission?', 'Verify session with Supabase');
+connect('Valid submission?', 'Return confirmed result', 1);
+connect('Verify session with Supabase', 'Derive verified ownership');
+connect('Derive verified ownership', 'Session verified?');
+connect('Session verified?', 'Atomically save and log intake');
+connect('Session verified?', 'Return confirmed result', 1);
+connect('Atomically save and log intake', 'Check database confirmation');
+connect('Check database confirmation', 'Return confirmed result');
+connect('Return confirmed result', 'Discard session data before analysis');
+connect('Discard session data before analysis', 'Start the Understand workflow');
+
+// Forwarding branch: IMAP -> validate alias -> split multi-listing candidates -> save with provenance -> Understand
+node('forward-trigger', 'Read forwarded announcements from the agent mailbox', 'emailReadImap', 2.2, 0, 400, { mailbox: 'INBOX', postProcessAction: 'nothing', downloadAttachments: false, format: 'simple', options: { trackLastMessageId: true } }, runtime ? { credentials: { imap: { id: config.N8N_IMAP_CREDENTIAL_ID, name: config.N8N_IMAP_CREDENTIAL_NAME } } } : {});
+
+node('forward-parse', 'Validate the personal forwarding alias before AI', 'code', 2, 240, 400, {
+  jsCode: `const crypto=require('crypto');const c=(${createForwardContract.toString()})({hash:v=>crypto.createHash('sha256').update(v).digest('hex')});return $input.all().flatMap(i=>{const r=c.parse(i.json);return r?[{json:r}]:[];});`
+});
+
+node('forward-split', 'Parse alert candidates into discrete items', 'code', 2, 480, 400, {
+  jsCode: `const cleanTrackingUrl = ${cleanTrackingUrl.toString()};
+const detectPortal = ${detectPortal.toString()};
+const deterministicUUID = ${deterministicUUID.toString()};
+const parseMultiListingAlert = ${parseMultiListingAlert.toString()};
+
+return $input.all().flatMap(item => {
+  const email = item.json;
+  const candidates = parseMultiListingAlert(email.text, email.from_address, email.request_id);
+  return candidates.map(c => ({
+    json: {
+      alias: email.alias,
+      request_id: c.request_id || email.request_id,
+      text: c.text,
+      metadata: {
+        from_address: email.from_address,
+        subject: email.subject,
+        message_id: email.message_id,
+        parent_request_id: email.request_id,
+        candidate_url: c.application_url,
+        candidate_index: c.candidate_index,
+        portal: c.portal
+      }
+    }
+  }));
+});`
+});
+
+node('forward-save', 'Resolve alias ownership and save forwarded text', 'postgres', 2.6, 720, 400, {
+  operation: 'executeQuery',
+  query: "with saved as materialized (select public.worker_ingest_email($1::text,$2::uuid,$3::text,$4::jsonb) as result), registered as (insert into opportunityos_private.execution_owners(execution_id,user_id,workflow) select $5::text,r.user_id,'01-ingest' from saved s join public.raw_items r on r.id=(s.result->>'raw_item_id')::uuid where (s.result->>'accepted')::boolean on conflict do nothing) select result from saved;",
+  options: { queryReplacement: '={{ [$json.alias,$json.request_id,$json.text,JSON.stringify($json.metadata || {}),$execution.id] }}' }
+}, db ? { credentials: db } : {});
+
+node('forward-accepted', 'Continue only owned saved mail', 'code', 2, 940, 400, {
+  jsCode: 'return $input.all().flatMap(i=>i.json.result?.accepted?[{json:{}}]:[]);'
+});
+
+connect('Read forwarded announcements from the agent mailbox', 'Validate the personal forwarding alias before AI');
+connect('Validate the personal forwarding alias before AI', 'Parse alert candidates into discrete items');
+connect('Parse alert candidates into discrete items', 'Resolve alias ownership and save forwarded text');
+connect('Resolve alias ownership and save forwarded text', 'Continue only owned saved mail');
+connect('Continue only owned saved mail', 'Start the Understand workflow');
+
+const workflow = { id: 'opportunityosSlice1Ingest', name: 'OpportunityOS 01 Ingest', active: false, settings: { executionOrder: 'v1', saveDataErrorExecution: 'none', saveDataSuccessExecution: 'none', saveManualExecutions: false, errorWorkflow: 'opportunityosSlice5ErrorHandler' }, nodes, connections, pinData: {}, tags: [] };
+writeFileSync(new URL(runtime ? '../.local/01-ingest.runtime.json' : '../workflows/01-ingest.json', import.meta.url), JSON.stringify(workflow, null, 2) + '\n');

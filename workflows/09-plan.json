@@ -1,0 +1,150 @@
+{
+  "id": "opportunityosSlice6Plan",
+  "name": "OpportunityOS 09 Weekly Plan",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 480,
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "timezone": "Asia/Kolkata",
+    "errorWorkflow": "opportunityosSlice5ErrorHandler"
+  },
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute weekly plan",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "manual",
+      "name": "Manual plan generation",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "context",
+      "name": "Load student planning context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\nwith target_user as materialized (\n  select coalesce(nullif($1::text, ''), (select id::text from auth.users order by created_at asc limit 1))::uuid as user_id,\n         coalesce(nullif($2::text, ''), to_char(date_trunc('week', current_date) + interval '1 day', 'YYYY-MM-DD')) as week_start\n),\navail as (\n  select a.* from public.user_availability a join target_user u on u.user_id = a.user_id\n),\nprof as (\n  select p.revision as profile_revision from public.profiles p join target_user u on u.user_id = p.user_id\n),\nopps as (\n  select jsonb_agg(\n    jsonb_build_object(\n      'id', o.id,\n      'title', o.title,\n      'organization', o.organization,\n      'deadline', o.deadline,\n      'type', o.type,\n      'trust_tier', coalesce(o.trust_tier, 'unverified'),\n      'risk_flags', coalesce(o.risk_signals, '[]'::text[]),\n      'match_score', m.match_score,\n      'eligibility', coalesce(m.eligibility_status, 'UNKNOWN'),\n      'match_revision', m.revision\n    )\n  ) as candidates\n  from public.opportunities o\n  join target_user u on u.user_id = o.user_id\n  left join public.matches m on m.opportunity_id = o.id and m.user_id = o.user_id and m.status = 'complete'\n)\nselect jsonb_build_object(\n  'user_id', (select user_id from target_user),\n  'week_start', (select week_start from target_user),\n  'profile_revision', coalesce((select profile_revision from prof), 1),\n  'availability', coalesce((select to_jsonb(a) from avail a), '{\"weekly_budget_hours\": 10, \"working_windows\": [{\"day\": 1, \"start\": \"09:00\", \"end\": \"12:00\"}], \"busy_blocks\": [], \"timezone\": \"Asia/Kolkata\", \"revision\": 1}'::jsonb),\n  'candidates', coalesce((select candidates from opps), '[]'::jsonb)\n) as context;\n",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id || \"\", $json.week_start || \"\"] }}"
+        }
+      }
+    },
+    {
+      "id": "plan",
+      "name": "Generate deterministic weekly plan",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "jsCode": "\n\n// Embedded Deterministic Planner\n// Slice S6: Deterministic Weekly Planner Contract\n// Implements pure deterministic scheduling from confirmed deadlines and manual availability.\n// Zero AI calls, strict deadline-capacity allocation, and pressure vs overlap separation.\n\nconst PLANNER_CONTRACT_VERSION = 'weekly-plan-v1';\nconst ALGORITHM_VERSION = 'deadline-capacity-v1';\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\ninterface GeneratePlanOptions {\n  candidates: OpportunityCandidate[];\n  availability: UserAvailability;\n  weekStart; // YYYY-MM-DD (Monday)\n  profileRevision?;\n  customEstimates?; // opportunity_id -> duration_minutes\n  priorities?;\n}\n\n/**\n * Normalizes day of week to 0 (Sunday) through 6 (Saturday).\n */\nfunction normalizeDayIndex(day) {\n  if (day === 7) return 0; // if 7 used for Sunday\n  return day % 7;\n}\n\n/**\n * Parses \"HH:MM\" into minutes from start of day.\n */\nfunction parseTimeToMinutes(timeStr) {\n  const [h, m] = timeStr.split(':').map((v) => parseInt(v, 10));\n  return (h || 0) * 60 + (m || 0);\n}\n\n/**\n * Generates available 30-minute time slots for the given week from working windows,\n * filtering out any slot that overlaps with a busy block.\n */\nfunction generateAvailableSlots(\n  weekStartStr,\n  workingWindows: WorkingWindow[],\n  busyBlocks: BusyBlock[]\n) {\n  const slots = [];\n  const parsedBusy = busyBlocks.map((b) => ({\n    title: b.title,\n    start: new Date(b.start).getTime(),\n    end: new Date(b.end).getTime(),\n  }));\n\n  const startDate = new Date(weekStartStr + 'T00:00:00Z');\n\n  // Generate slots for each of the 7 days of the week\n  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {\n    const currentDay = new Date(startDate.getTime() + dayOffset * 86400000);\n    const dayOfWeek = currentDay.getUTCDay(); // 0=Sun, 1=Mon...\n\n    // Find working windows matching this day\n    const matchingWindows = workingWindows.filter(\n      (w) => normalizeDayIndex(w.day) === dayOfWeek\n    );\n\n    for (const win of matchingWindows) {\n      const winStartMin = parseTimeToMinutes(win.start);\n      const winEndMin = parseTimeToMinutes(win.end);\n\n      let slotStartMin = winStartMin;\n      while (slotStartMin + 30 <= winEndMin) {\n        const slotEndMin = slotStartMin + 30;\n\n        const slotStartDate = new Date(currentDay);\n        slotStartDate.setUTCHours(Math.floor(slotStartMin / 60), slotStartMin % 60, 0, 0);\n\n        const slotEndDate = new Date(currentDay);\n        slotEndDate.setUTCHours(Math.floor(slotEndMin / 60), slotEndMin % 60, 0, 0);\n\n        const slotStartMs = slotStartDate.getTime();\n        const slotEndMs = slotEndDate.getTime();\n\n        // Check overlap with busy blocks\n        const isBlocked = parsedBusy.some(\n          (busy) => slotStartMs < busy.end && slotEndMs > busy.start\n        );\n\n        if (!isBlocked) {\n          slots.push({\n            start: slotStartDate,\n            end: slotEndDate,\n            duration: 30,\n          });\n        }\n\n        slotStartMin += 30;\n      }\n    }\n  }\n\n  // Sort slots chronologically\n  return slots.sort((a, b) => a.start.getTime() - b.start.getTime());\n}\n\n/**\n * Deterministically generates a weekly plan respecting deadlines, availability capacity,\n * 30-minute block slots, and busy intervals without any AI calls.\n */\nfunction generateWeeklyPlan({\n  candidates,\n  availability,\n  weekStart,\n  profileRevision = 1,\n  customEstimates = {},\n  priorities = {},\n}) {\n  const budgetMinutes = Math.round((availability.weekly_budget_hours || 10) * 60);\n  let remainingBudgetMinutes = budgetMinutes;\n\n  // 1. Filter out completely ineligible, unknown, unverified, or expired candidates\n  const validCandidates: OpportunityCandidate[] = [];\n  const unscheduled = [];\n\n  for (const cand of candidates) {\n    if (cand.eligibility === 'INELIGIBLE') {\n      unscheduled.push({\n        opportunity_id: cand.id,\n        title: cand.title,\n        organization: cand.organization,\n        deadline: cand.deadline,\n        reason_code: 'INELIGIBLE_OR_RISK_FLAG',\n        explanation: 'Opportunity does not match mandatory criteria or student profile.',\n      });\n      continue;\n    }\n    if (cand.eligibility === 'UNKNOWN') {\n      unscheduled.push({\n        opportunity_id: cand.id,\n        title: cand.title,\n        organization: cand.organization,\n        deadline: cand.deadline,\n        reason_code: 'UNKNOWN_ELIGIBILITY',\n        explanation: 'Opportunity eligibility is UNKNOWN; student profile facts or opportunity criteria require clarification before scheduling.',\n      });\n      continue;\n    }\n    if (cand.trust_tier === 'unverified') {\n      unscheduled.push({\n        opportunity_id: cand.id,\n        title: cand.title,\n        organization: cand.organization,\n        deadline: cand.deadline,\n        reason_code: 'UNVERIFIED_SOURCE',\n        explanation: 'Opportunity was captured from an unverified source; requires source verification before scheduling.',\n      });\n      continue;\n    }\n    if (cand.risk_flags && (cand.risk_flags.includes('payment_required') || cand.risk_flags.includes('fraud_warning'))) {\n      unscheduled.push({\n        opportunity_id: cand.id,\n        title: cand.title,\n        organization: cand.organization,\n        deadline: cand.deadline,\n        reason_code: 'INELIGIBLE_OR_RISK_FLAG',\n        explanation: 'Opportunity is flagged for risk or required payment.',\n      });\n      continue;\n    }\n    if (cand.deadline) {\n      const deadlineDateStr = cand.deadline.slice(0, 10);\n      if (deadlineDateStr < weekStart) {\n        unscheduled.push({\n          opportunity_id: cand.id,\n          title: cand.title,\n          organization: cand.organization,\n          deadline: cand.deadline,\n          reason_code: 'EXPIRED_DEADLINE',\n          explanation: `Deadline (${deadlineDateStr}) has already passed before plan week start (${weekStart}).`,\n        });\n        continue;\n      }\n    }\n    validCandidates.push(cand);\n  }\n\n  // 2. Deterministic sorting:\n  // Priority (high=3, normal=2, low=1) -> Earliest Confirmed Deadline -> Match Score -> Stable ID\n  const priorityWeight = { high: 3, normal: 2, low: 1 };\n\n  const sortedCandidates = [...validCandidates].sort((a, b) => {\n    // 1. Explicit Priority Override\n    const prioA = priorityWeight[priorities[a.id] || 'normal'] ?? 2;\n    const prioB = priorityWeight[priorities[b.id] || 'normal'] ?? 2;\n    if (prioA !== prioB) return prioB - prioA;\n\n    // 2. Earliest Confirmed Deadline\n    if (a.deadline && b.deadline) {\n      const dateA = a.deadline.slice(0, 10);\n      const dateB = b.deadline.slice(0, 10);\n      if (dateA !== dateB) return dateA.localeCompare(dateB);\n      if (a.deadline.includes('T') && !b.deadline.includes('T')) return -1;\n      if (!a.deadline.includes('T') && b.deadline.includes('T')) return 1;\n      if (a.deadline.includes('T') && b.deadline.includes('T')) {\n        const diff = new Date(a.deadline).getTime() - new Date(b.deadline).getTime();\n        if (diff !== 0) return diff;\n      }\n    } else if (a.deadline && !b.deadline) {\n      return -1; // Items with deadlines placed first\n    } else if (!a.deadline && b.deadline) {\n      return 1;\n    }\n\n    // 3. Match Score (descending)\n    const scoreA = a.match_score ?? 0;\n    const scoreB = b.match_score ?? 0;\n    if (scoreA !== scoreB) return scoreB - scoreA;\n\n    // 4. Stable Opportunity ID (ascending) for deterministic stability\n    return a.id.localeCompare(b.id);\n  });\n\n  // 3. Generate available time slots\n  const availableSlots = generateAvailableSlots(\n    weekStart,\n    availability.working_windows || [],\n    availability.busy_blocks || []\n  );\n\n  const slotUsed = new Array(availableSlots.length).fill(false);\n  const scheduled = [];\n\n  // 4. Place candidates into available slots\n  for (const cand of sortedCandidates) {\n    const duration = customEstimates[cand.id] || 30;\n\n    // Check effort budget\n    if (duration > remainingBudgetMinutes) {\n      unscheduled.push({\n        opportunity_id: cand.id,\n        title: cand.title,\n        organization: cand.organization,\n        deadline: cand.deadline,\n        reason_code: 'EXCEEDS_WEEKLY_EFFORT_BUDGET',\n        explanation: `Requires ${duration} minutes, which exceeds your remaining capacity of ${remainingBudgetMinutes} minutes (budget: ${availability.weekly_budget_hours}h).`,\n      });\n      continue;\n    }\n\n    // Find the earliest free slot before the deadline without inventing precise cutoff times\n    let assignedSlotIdx = -1;\n    for (let i = 0; i < availableSlots.length; i++) {\n      if (!slotUsed[i]) {\n        const slot = availableSlots[i];\n        let isBeforeDeadline = true;\n\n        if (cand.deadline) {\n          if (cand.deadline.includes('T')) {\n            const deadlineMs = new Date(cand.deadline).getTime();\n            isBeforeDeadline = slot.end.getTime() <= deadlineMs;\n          } else {\n            // Pure calendar date comparison: slot calendar date must be <= deadline calendar date\n            const slotDateStr = slot.start.toISOString().slice(0, 10);\n            const dlDateStr = cand.deadline.slice(0, 10);\n            isBeforeDeadline = slotDateStr <= dlDateStr;\n          }\n        }\n\n        if (isBeforeDeadline) {\n          assignedSlotIdx = i;\n          break;\n        }\n      }\n    }\n\n    if (assignedSlotIdx === -1) {\n      // Could not place before deadline or no windows available\n      const reasonCode = availability.busy_blocks.length > 0\n        ? 'BLOCKED_BY_BUSY_INTERVAL'\n        : 'NO_AVAILABLE_WINDOW_BEFORE_DEADLINE';\n\n      unscheduled.push({\n        opportunity_id: cand.id,\n        title: cand.title,\n        organization: cand.organization,\n        deadline: cand.deadline,\n        reason_code: reasonCode,\n        explanation: cand.deadline\n          ? `No open availability windows before deadline (${cand.deadline.slice(0, 10)}).`\n          : 'No available working windows remaining this week.',\n      });\n      continue;\n    }\n\n    // Allocate slot\n    slotUsed[assignedSlotIdx] = true;\n    const slot = availableSlots[assignedSlotIdx];\n    remainingBudgetMinutes -= duration;\n\n    const reasons[] = [];\n    if (priorities[cand.id] === 'high') {\n      reasons.push('USER_PRIORITY_OVERRIDE');\n    }\n    if (cand.deadline) {\n      reasons.push('EARLIEST_CONFIRMED_DEADLINE');\n    } else {\n      reasons.push('MATCH_SCORE_RANK');\n    }\n\n    scheduled.push({\n      opportunity_id: cand.id,\n      title: cand.title,\n      organization: cand.organization,\n      deadline: cand.deadline,\n      start_at: slot.start.toISOString(),\n      end_at: slot.end.toISOString(),\n      duration_minutes: duration,\n      reason_codes: reasons,\n    });\n  }\n\n  // 5. Detect Pressure vs Overlap\n  const pressureNotes = [];\n\n  // Group by deadline calendar date to spot same-day pressure\n  const deadlineGroups = {};\n  for (const cand of candidates) {\n    if (cand.deadline) {\n      const dateKey = cand.deadline.slice(0, 10);\n      deadlineGroups[dateKey] = deadlineGroups[dateKey] || [];\n      deadlineGroups[dateKey].push(cand.title);\n    }\n  }\n\n  for (const [date, titles] of Object.entries(deadlineGroups)) {\n    if (titles.length >= 2) {\n      pressureNotes.push({\n        type: 'same_day_deadline_pressure',\n        date,\n        affected_opportunities: titles,\n        message: `${titles.length} opportunities have deadlines on the same day (${date}): ${titles.join(', ')}. Tasks are staggered across preceding windows.`,\n      });\n    }\n  }\n\n  const totalScheduledMinutes = budgetMinutes - remainingBudgetMinutes;\n  const utilization = totalScheduledMinutes / budgetMinutes;\n  if (utilization >= 0.85) {\n    pressureNotes.push({\n      type: 'high_capacity_utilization',\n      message: `Weekly capacity utilization is high (${Math.round(utilization * 100)}% of ${availability.weekly_budget_hours}h). Consider adjusting working windows or priorities if needed.`,\n    });\n  }\n\n  return {\n    contract_version: PLANNER_CONTRACT_VERSION,\n    algorithm_version: ALGORITHM_VERSION,\n    plan_week_start: weekStart,\n    profile_revision: profileRevision,\n    availability_revision: availability.revision || 1,\n    scheduled_items: scheduled,\n    unscheduled_items: unscheduled,\n    pressure_notes: pressureNotes,\n    total_scheduled_minutes: totalScheduledMinutes,\n    budget_minutes: budgetMinutes,\n  };\n}\n\n\n\nconst rawContext = $input.first().json.context;\nif (!rawContext || !rawContext.user_id) {\n  return [];\n}\n\nconst planResult = generateWeeklyPlan({\n  candidates: rawContext.candidates || [],\n  availability: rawContext.availability || {},\n  weekStart: rawContext.week_start,\n  profileRevision: rawContext.profile_revision || 1,\n  customEstimates: {},\n  priorities: {}\n});\n\nreturn [{\n  json: {\n    user_id: rawContext.user_id,\n    plan_week_start: rawContext.week_start,\n    contract_version: planResult.contract_version,\n    algorithm_version: planResult.algorithm_version,\n    profile_revision: planResult.profile_revision,\n    availability_revision: planResult.availability_revision,\n    scheduled_items: planResult.scheduled_items,\n    unscheduled_items: planResult.unscheduled_items,\n    pressure_notes: planResult.pressure_notes,\n    total_scheduled_minutes: planResult.total_scheduled_minutes,\n    budget_minutes: planResult.budget_minutes\n  }\n}];\n"
+      }
+    },
+    {
+      "id": "save",
+      "name": "Store draft weekly plan in database",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "\ninsert into public.weekly_plans (\n  user_id,\n  plan_week_start,\n  contract_version,\n  algorithm_version,\n  profile_revision,\n  availability_revision,\n  status,\n  scheduled_items,\n  unscheduled_items,\n  pressure_notes\n)\nvalues (\n  $1::uuid,\n  $2::date,\n  $3::text,\n  $4::text,\n  $5::integer,\n  $6::integer,\n  'draft',\n  $7::jsonb,\n  $8::jsonb,\n  $9::jsonb\n)\nreturning id, status, plan_week_start, created_at;\n",
+        "options": {
+          "queryReplacement": "={{ [$json.user_id, $json.plan_week_start, $json.contract_version, $json.algorithm_version, $json.profile_revision, $json.availability_revision, JSON.stringify($json.scheduled_items), JSON.stringify($json.unscheduled_items), JSON.stringify($json.pressure_notes)] }}"
+        }
+      }
+    },
+    {
+      "id": "note",
+      "name": "Deterministic Weekly Planner",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -320
+      ],
+      "parameters": {
+        "content": "## Slice S6 Deterministic Weekly Planner\\nRuns pure code scheduling respecting 30-minute windows, verified capacity, confirmed deadlines, and exam/busy blocks. Rejects UNKNOWN/ineligible items. Zero AI tokens.",
+        "width": 700,
+        "height": 200
+      }
+    }
+  ],
+  "connections": {
+    "Execute weekly plan": {
+      "main": [
+        [
+          {
+            "node": "Load student planning context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual plan generation": {
+      "main": [
+        [
+          {
+            "node": "Load student planning context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load student planning context": {
+      "main": [
+        [
+          {
+            "node": "Generate deterministic weekly plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate deterministic weekly plan": {
+      "main": [
+        [
+          {
+            "node": "Store draft weekly plan in database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "tags": []
+}

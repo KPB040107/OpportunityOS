@@ -24,9 +24,29 @@ export function publicUrl(value: string): string {
       || /^\d+\.\d+\.\d+\.\d+$/.test(host)) throw new Error('Use a public website address.');
   url.hash = ''; return url.toString();
 }
-export const intakeSchema = z.object({ request_id: z.uuid(), source_type: z.enum(['text','url']), content: z.string().trim().min(1).max(20000) }).strict().superRefine((input,ctx) => {
-  if(input.source_type === 'url') {
-    try { if (input.content.length > 2048) throw new Error('Link too long'); publicUrl(input.content); }
-    catch { ctx.addIssue({code:'custom',path:['content'],message:'Enter a public website link (http or https).'}); }
+export const intakeSchema = z.object({
+  request_id: z.string().uuid(),
+  source_type: z.enum(['text', 'url', 'capture']),
+  content: z.string().trim().min(1).max(20000),
+  nonce: z.string().uuid().optional(),
+  payload_hash: z.string().min(16).max(128).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+}).strict().superRefine((input, ctx) => {
+  if (input.source_type === 'url') {
+    try {
+      if (input.content.length > 2048) throw new Error('Link too long');
+      publicUrl(input.content);
+    } catch {
+      ctx.addIssue({ code: 'custom', path: ['content'], message: 'Enter a public website link (http or https).' });
+    }
+  }
+  if (input.source_type === 'capture') {
+    if (!input.nonce) {
+      ctx.addIssue({ code: 'custom', path: ['nonce'], message: 'Capture nonce is required for bookmarklet saves.' });
+    }
+    if (!input.payload_hash) {
+      ctx.addIssue({ code: 'custom', path: ['payload_hash'], message: 'Payload hash binding is required for bookmarklet saves.' });
+    }
   }
 });
+
