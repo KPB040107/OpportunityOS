@@ -235,6 +235,26 @@ test('extractDraftFromText: extracts projects with title, description, technolog
   assert.doesNotThrow(() => validateProfileDraft(draft));
 });
 
+test('extractDraftFromText: separates PDF projects when blank lines are collapsed', () => {
+  const flattenedPdfText = `Projects:
+OpportunityOS
+https://github.com/KPB040107/OpportunityOS
+Built an opportunity tracker.
+Tech: Next.js, TypeScript
+ResumeShortlist
+https://github.com/KPB040107/resumeshortlist
+Built a resume ranking app.
+Tech: Python, Streamlit
+Technical Skills
+Python, TypeScript`;
+
+  const draft = extractDraftFromText(flattenedPdfText, 1, 0);
+  assert.deepEqual(draft.projects.map((project) => [project.title, project.github_url]), [
+    ['OpportunityOS', 'https://github.com/KPB040107/OpportunityOS'],
+    ['ResumeShortlist', 'https://github.com/KPB040107/resumeshortlist'],
+  ]);
+});
+
 test('extractDraftFromText: suggests skill levels with evidence and confidence from repeated use, project context, duration, and self-description', () => {
   const richResume = `
     Kavya Patel
@@ -407,4 +427,64 @@ test('validateConfirmationPayload: supports proposed projects, consents, and yea
     selected_fields: { years_of_experience: -5 },
   }), /INVALID_EXPERIENCE_YEARS/);
 });
+
+test('extractDraftFromText: extracts 4 to 5 projects from resumes without double blank lines', () => {
+  const multiProjectResume = `
+    Kaustubh Borle
+    Education: B.Tech in Computer Science and Engineering
+    Graduation: 2026
+
+    Technical Skills: Python, TypeScript, React, Next.js, Node.js, Go, Docker, PostgreSQL, MySQL, Redis
+
+    Projects:
+    OpportunityOS - Student Opportunity Platform 2026
+    https://github.com/KPB040107/OpportunityOS
+    Tech: Next.js, React, TypeScript, Supabase PostgreSQL, n8n, Docker
+    - Built an autonomous opportunity crawler and decision engine for students.
+    - Implemented approval gates, deadline tracking, and profile reconciliation.
+    Quantum-Resilient Sidecar Proxy 2026
+    - Built a transparent proxy that protects traffic between legacy services using post-quantum key establishment.
+    - Added cryptographic agility with hybrid classical-Kyber key exchange.
+    AI Fitness Coach (Major Project)
+    • Built an AI-powered fitness web application.
+    • Technologies: Next.js, React, Node.js, MySQL
+    Hotel Management System | Java, OOP
+    • Designed and implemented a hotel management system using Java Collections Framework.
+    • Developed features for room booking, availability tracking, and customer management.
+    Distributed Key-Value Engine
+    - Implemented an in-memory distributed store in Go and Redis.
+    - Handled concurrent access with raft consensus and snapshotting.
+
+    Achievements:
+    - Smart India Hackathon finalist
+  `;
+
+  const draft = extractDraftFromText(multiProjectResume, 1, 0);
+  assert.ok(draft.projects, 'Draft should have projects');
+  assert.equal(draft.projects.length, 5, `Expected 5 projects, got ${draft.projects.length}`);
+
+  const titles = draft.projects.map((p) => p.title);
+  assert.ok(titles.some((t) => t.includes('OpportunityOS')), 'OpportunityOS should be present');
+  assert.ok(titles.some((t) => t.includes('Quantum-Resilient Sidecar Proxy')), 'Quantum-Resilient Sidecar Proxy should be present');
+  assert.ok(titles.some((t) => t.includes('AI Fitness Coach')), 'AI Fitness Coach should be present');
+  assert.ok(titles.some((t) => t.includes('Hotel Management System')), 'Hotel Management System should be present');
+  assert.ok(titles.some((t) => t.includes('Distributed Key-Value Engine')), 'Distributed Key-Value Engine should be present');
+
+  // Verify GitHub URL for OpportunityOS
+  const oppOs = draft.projects.find((p) => p.title.includes('OpportunityOS'));
+  assert.equal(oppOs.github_url, 'https://github.com/KPB040107/OpportunityOS');
+  assert.equal(oppOs.dates, '2026');
+
+  // Verify dates for Quantum-Resilient Sidecar Proxy
+  const quantum = draft.projects.find((p) => p.title.includes('Quantum-Resilient Sidecar Proxy'));
+  assert.equal(quantum.dates, '2026');
+  assert.ok(quantum.description.includes('transparent proxy'));
+
+  // Verify Hotel Management System tech
+  const hotel = draft.projects.find((p) => p.title.includes('Hotel Management System'));
+  assert.ok(hotel.technologies.includes('Java'));
+
+  assert.doesNotThrow(() => validateProfileDraft(draft));
+});
+
 

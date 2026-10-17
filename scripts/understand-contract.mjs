@@ -1,8 +1,37 @@
 // Shared by the n8n Code node and deterministic fixture tests.
 export function createUnderstandContract({hash, URL}) {
   const version='extract-v1';
-  const canon=value=>value.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
-  const clean=value=>value.normalize('NFKC').replace(/\r\n?/g,'\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+  const canon=value=>(value||'')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035']/g,"'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036"]/g,'"')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g,'-')
+    .replace(/&amp;/gi,'&')
+    .replace(/&nbsp;/gi,' ')
+    .replace(/&lt;/gi,'<')
+    .replace(/&gt;/gi,'>')
+    .replace(/&quot;/gi,'"')
+    .replace(/&#39;/gi,"'")
+    .replace(/[\u200B-\u200D\uFEFF\u00AD]/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+  const clean=value=>(value||'')
+    .normalize('NFKC')
+    .replace(/\r\n?/g,'\n')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,'')
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035']/g,"'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036"]/g,'"')
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g,'-')
+    .replace(/&amp;/gi,'&')
+    .replace(/&nbsp;/gi,' ')
+    .replace(/&lt;/gi,'<')
+    .replace(/&gt;/gi,'>')
+    .replace(/&quot;/gi,'"')
+    .replace(/&#39;/gi,"'")
+    .replace(/[ \t]+/g,' ')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
   const aliases={'js':'javascript','javascript':'javascript','react.js':'react','reactjs':'react','react':'react','node.js':'nodejs','node':'nodejs','nodejs':'nodejs','py':'python','python':'python','c++':'cpp','cpp':'cpp','c#':'csharp','csharp':'csharp','postgresql':'postgresql','postgres':'postgresql','bangalore':'bengaluru','bengaluru':'bengaluru','bombay':'mumbai','mumbai':'mumbai'};
   const normalize=value=>aliases[canon(value)]||canon(value);
   function publicLink(value) {
@@ -18,6 +47,7 @@ export function createUnderstandContract({hash, URL}) {
     const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
     const month=months[m-1];
     if(new RegExp(`\\b${y}[/-]0?${m}[/-]0?${d}(?:t|\\b)`).test(q)) return true;
+    if(new RegExp(`\\b0?${d}[/-]0?${m}[/-]${y}\\b`).test(q)) return true;
     const monthDayYear = new RegExp(`\\b${month}[a-z]*[\\s,/-]+(?:\\d{1,2}(?:st|nd|rd|th)?[\\s,/-]*(?:-|–|—|to)[\\s,/-]*(?:${month}[a-z]*[\\s,/-]+)?)?0?${d}(?:st|nd|rd|th)?[\\s,/-]+${y}\\b`);
     if(monthDayYear.test(q)) return true;
     const dayMonthYear = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?[\\s,/-]*(?:-|–|—|to)[\\s,/-]*)?0?${d}(?:st|nd|rd|th)?[\\s,/-]+${month}[a-z]*[\\s,/-]+${y}\\b`);
@@ -108,10 +138,17 @@ export function createUnderstandContract({hash, URL}) {
       }
       const pairedEvidence=raw.skills.filter(skill=>typeof skill!=='string').map(skill=>({field:'skills',quote:skill.quote}));
       for(const e of pairedEvidence)(quotes.skills??=[]).push(e.quote);
-      for(const field of ['title','organization','location','description','application_url']) {
-        if(raw[field]!==null&&!(quotes[field]||[]).some(q=>canon(q).includes(canon(raw[field])))) fail();
-      }
       const derivedEvidence=[];
+      for(const field of ['title','organization','location','description','application_url']) {
+        if(raw[field]!==null&&!(quotes[field]||[]).some(q=>canon(q).includes(canon(raw[field])))) {
+          if(original.includes(canon(raw[field]))) {
+            (quotes[field] ??= []).push(raw[field]);
+            derivedEvidence.push({field, quote: raw[field]});
+          } else {
+            fail();
+          }
+        }
+      }
       if(raw.type!=='unknown'&&!(quotes.type||[]).some(q=>new RegExp({internship:'intern',hackathon:'hackathon',scholarship:'scholarship',program:'program|programme|fellowship',job:'job|position|hiring|vacancy'}[raw.type],'i').test(q))) {
         // An explicit Job Title heading and its adjacent title are source proof.
         const escapedTitle=raw.title?.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -122,7 +159,7 @@ export function createUnderstandContract({hash, URL}) {
         if(!(quotes.deadline||[]).some(q=>dateFromQuote(raw.deadline,q)))fail();
         // A real date alone cannot prove a deadline: publication/event dates
         // must not become application cutoffs. Require an explicit source label.
-        const deadlineDates=sourceFlat.matchAll(/\b(?:(?:submission|project|application|registration)?\s*deadlines?|last\s+date(?:\s+(?:to\s+apply|for\s+(?:applications?|registration|submissions?)))?|closing\s+date|(?:applications?|submissions?|registrations?)\s+(?:closes?|due)|(?:apply|register|submit)\s+by|due\s+date|(?:closes?|ends?)\s+(?:on|at)|dates?|hackathon\s+dates?)\s*[:–-]?\s*(?:(?:is|on|by|at|from)\s+)?(?:\d{4}-\d{2}-\d{2}(?:t[\d:.]+(?:[+-]\d{2}:?\d{2}|z)?)?|[a-z]+[\s,/-]+(?:\d{1,2}(?:st|nd|rd|th)?[\s,/-]*(?:-|–|—|to)[\s,/-]*)?\d{1,2}(?:st|nd|rd|th)?[\s,/-]+\d{4}|(?:\d{1,2}(?:st|nd|rd|th)?[\s,/-]*(?:-|–|—|to)[\s,/-]*)?\d{1,2}(?:st|nd|rd|th)?[\s,/-]+[a-z]+[\s,/-]+\d{4})(?:\s*(?:@|at|,)?\s*\d{1,2}(?::\d{2})?(?::\d{2})?\s*(?:am|pm)?(?:\s+[a-z]{2,5}|\s+[+-]\d{2}:?\d{2})?)?\b/gi);
+        const deadlineDates=sourceFlat.matchAll(/\b(?:(?:submission|project|application|registration|form)?\s*deadlines?|last\s+date(?:\s+(?:to\s+apply|for\s+(?:applications?|registration|submissions?)))?|closing\s+date|(?:applications?|submissions?|registrations?)\s+(?:closes?|due)|(?:apply|register|submit|valid)\s+(?:by|before|until|on|till)|due\s+date|(?:closes?|ends?)\s+(?:on|at|by)|dates?|hackathon\s+dates?|valid\s+till|valid\s+until|until|before)\s*[:–-]?\s*(?:(?:is|on|by|at|from|before|till|until)\s+)?(?:\d{4}-\d{2}-\d{2}(?:t[\d:.]+(?:[+-]\d{2}:?\d{2}|z)?)?|[a-z]+[\s,/-]+(?:\d{1,2}(?:st|nd|rd|th)?[\s,/-]*(?:-|–|—|to)[\\s,/-]*)?\d{1,2}(?:st|nd|rd|th)?[\s,/-]+\d{4}|(?:\d{1,2}(?:st|nd|rd|th)?[\s,/-]*(?:-|–|—|to)[\\s,/-]*)?\d{1,2}(?:st|nd|rd|th)?[\s,/-]+[a-z]+[\s,/-]+\d{4})(?:\s*(?:@|at|,)?\s*\d{1,2}(?::\d{2})?(?::\d{2})?\s*(?:am|pm)?(?:\s+[a-z]{2,5}|\s+[+-]\d{2}:?\d{2})?)?\b/gi);
         const proof=[...deadlineDates].find(m=>dateFromQuote(raw.deadline,m[0]));
         if(!proof)fail();derivedEvidence.push({field:'deadline',quote:proof[0]});
       }
@@ -152,7 +189,7 @@ export function createUnderstandContract({hash, URL}) {
         const quote=r.quote||r.evidence;
         return {...r,evidence,quote,requirement_class,normalized_value};
       });
-      if(skillNames.some(s=>!(quotes.skills||[]).some(q=>canon(q).includes(canon(s)))&&!requirements.some(r=>r.kind==='skill'&&(canon(r.value)===canon(s)||canon(r.normalized_value?.name)===canon(s)||canon(s).includes(canon(r.value)))))) fail();
+      if(skillNames.some(s=>!(quotes.skills||[]).some(q=>canon(q).includes(canon(s)))&&!requirements.some(r=>r.kind==='skill'&&(canon(r.value)===canon(s)||canon(r.normalized_value?.name)===canon(s)||canon(s).includes(canon(r.value))))&&!original.includes(canon(s)))) fail();
       const flags=raw.ambiguity_flags.map(f=>canon(f).replace(/\s+/g,'_').replace(/^(title|organization|deadline|location)_missing$/,'missing_$1'));
       if(/ignore.{0,30}instructions|system prompt|mark.{0,12}\bact\b|reveal.{0,20}(secret|key|password)/i.test(source)) flags.push('source_contains_instructions');
       if(/\b(?:fully remote|telecommuting is ok)\b/i.test(source)&&/\bno telecommuting\b/i.test(source)) {

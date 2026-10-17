@@ -22,6 +22,7 @@ import {
   opportunityFields,
   deadlineLabel,
   trustBadgeDetails,
+  extractCompensationDetails,
   type Opportunity,
   type Requirement,
   type Evidence
@@ -65,6 +66,65 @@ function generateRoleSummary(
   );
 }
 
+function extractFallbackRequirements(description: string | null): Requirement[] {
+  if (!description || description.trim().length < 30) return [];
+  const lines = description.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const reqs: Requirement[] = [];
+  let inQualSection = false;
+  let isPreferredSection = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^(?:###?\s*)?(?:qualifications|requirements|who you are|what we(?:'re| are) looking for|skills required|basic qualifications|eligibility criteria|candidate profile)[\s:]*$/i.test(line)) {
+      inQualSection = true;
+      isPreferredSection = false;
+      continue;
+    }
+    if (/^(?:###?\s*)?(?:preferred qualifications|bonus skills|nice to have|good to have|preferred)[\s:]*$/i.test(line)) {
+      inQualSection = true;
+      isPreferredSection = true;
+      continue;
+    }
+    if (/^(?:###?\s*)?(?:about us|company description|role description|what you(?:'ll| will) do|responsibilities|benefits|compensation|how to apply)[\s:]*$/i.test(line)) {
+      inQualSection = false;
+      isPreferredSection = false;
+      continue;
+    }
+
+    const isBullet = /^[•\-\*\u2022\u2023\u25E6\u2043\u2219]\s+/.test(line) || /^\d+\.\s+/.test(line);
+    const cleanLine = line.replace(/^[•\-\*\u2022\u2023\u25E6\u2043\u2219\d\.\s]+/, '').trim();
+
+    if ((inQualSection && isBullet) || (!inQualSection && isBullet && /\b(?:degree|bachelor|master|b\.?tech|computer science|experience|proficien|knowledge|familiar|skills?)\b/i.test(cleanLine))) {
+      if (cleanLine.length < 10) continue;
+
+      let kind: Requirement['kind'] = 'other';
+      if (/\b(?:degree|bachelor|master|b\.?tech|b\.?e\.?|diploma)\b/i.test(cleanLine)) kind = 'degree';
+      else if (/\b(?:computer science|information technology|engineering|branch|major)\b/i.test(cleanLine)) kind = 'branch';
+      else if (/\b(?:cgpa|gpa|marks|percentage)\b/i.test(cleanLine)) kind = 'cgpa';
+      else if (/\b(?:graduation|batch of|passout|academic year)\b/i.test(cleanLine)) kind = 'graduation_year';
+      else if (/\b(?:react|javascript|python|java|c\+\+|node|sql|git|html|css|aws|docker)\b/i.test(cleanLine)) kind = 'skill';
+
+      const isMandatory = !isPreferredSection && !/\b(?:preferred|bonus|plus|good to have|beneficial|advantage|optional)\b/i.test(cleanLine);
+      const reqClass: Requirement['requirement_class'] = isPreferredSection || !isMandatory
+        ? 'preferred_skill'
+        : (['degree', 'branch', 'cgpa', 'graduation_year'].includes(kind) ? 'mandatory_eligibility' : 'required_skill');
+
+      reqs.push({
+        id: `fallback-${i}`,
+        kind,
+        value: cleanLine,
+        mandatory: isMandatory,
+        evidence_snippet: line,
+        normalized_value: null,
+        requirement_class: reqClass,
+        quote: cleanLine
+      });
+    }
+  }
+
+  return reqs;
+}
+
 export default async function OpportunityPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
@@ -72,7 +132,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
 
   const [oppRes, reqsRes, sourcesRes, evalRes, decisionRes, profileRes, profileSkillsRes] = await Promise.all([
     supabase.from('opportunities').select(opportunityFields).eq('id', id).eq('user_id', user.id).maybeSingle(),
-    supabase.from('opportunity_requirements').select('id,kind,value,mandatory,evidence_snippet,normalized_value').eq('opportunity_id', id).eq('user_id', user.id),
+    supabase.from('opportunity_requirements').select('id,kind,value,mandatory,evidence_snippet,normalized_value,requirement_class,quote').eq('opportunity_id', id).eq('user_id', user.id),
     supabase.from('opportunity_sources').select('raw_item_id,extracted_json').eq('opportunity_id', id).eq('user_id', user.id).order('first_seen_at', { ascending: true }).limit(50),
     supabase.from('matches').select(matchFields).eq('opportunity_id', id).eq('user_id', user.id).maybeSingle(),
     supabase.from('student_decisions').select('choice,created_at').eq('opportunity_id', id).eq('user_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -107,12 +167,6 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
     if (canonical) studentSkillSet.add(canonical.toLowerCase());
   }
 
-  const statedSkills = opportunity.skills || [];
-  const matchedSkills = statedSkills.filter(s => studentSkillSet.has(s.toLowerCase()));
-  const missingSkills = statedSkills.filter(s => !studentSkillSet.has(s.toLowerCase()));
-  const totalStatedSkills = statedSkills.length;
-  const skillCoveragePct = totalStatedSkills > 0 ? Math.round((matchedSkills.length / totalStatedSkills) * 100) : 100;
-
   // Merge requirements from DB and extracted_json
   const extractedJsonReqs = provenance[0]?.extracted_json?.requirements || [];
   const mergedReqs: Requirement[] = [...rawRequirements];
@@ -140,6 +194,20 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
     }
   }
 
+  // Resilient fallback: If no requirements were extracted from DB/provenance, parse qualifications from description
+  if (mergedReqs.length === 0 && opportunity.description) {
+    const fallbackReqs = extractFallbackRequirements(opportunity.description);
+    mergedReqs.push(...fallbackReqs);
+  }
+
+  const statedSkills = (opportunity.skills && opportunity.skills.length > 0)
+    ? opportunity.skills
+    : mergedReqs.filter(r => r.kind === 'skill').map(r => r.value.split(/\s+/)[0]).filter(Boolean);
+  const matchedSkills = statedSkills.filter(s => studentSkillSet.has(s.toLowerCase()));
+  const missingSkills = statedSkills.filter(s => !studentSkillSet.has(s.toLowerCase()));
+  const totalStatedSkills = statedSkills.length;
+  const skillCoveragePct = totalStatedSkills > 0 ? Math.round((matchedSkills.length / totalStatedSkills) * 100) : 100;
+
   // Requirement Categorization (X-02)
   const requiredSkillsReqs = mergedReqs.filter(
     r => r.requirement_class === 'required_skill' || (r.kind === 'skill' && r.mandatory)
@@ -160,19 +228,20 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
   );
 
   const trustBadge = trustBadgeDetails(opportunity.trust_tier, opportunity.source_badge);
-  const extJson = (provenance[0]?.extracted_json as Record<string, any>) || {};
-  const extFields = (extJson.fields as Record<string, any>) || extJson;
-  const oppRecord = opportunity as unknown as Record<string, any>;
+  const extJson = (provenance[0]?.extracted_json as Record<string, unknown>) || {};
+  const extFields = (extJson.fields as Record<string, unknown>) || extJson;
+  const oppRecord = opportunity as unknown as Record<string, unknown>;
+  const oppFields = oppRecord.fields as Record<string, unknown> | undefined;
   const deadlineDisplay =
-    extFields.deadline_display ||
-    extJson.deadline_display ||
-    oppRecord.deadline_display ||
-    oppRecord.fields?.deadline_display;
+    (typeof extFields.deadline_display === 'string' ? extFields.deadline_display : undefined) ||
+    (typeof extJson.deadline_display === 'string' ? extJson.deadline_display : undefined) ||
+    (typeof oppRecord.deadline_display === 'string' ? oppRecord.deadline_display : undefined) ||
+    (typeof oppFields?.deadline_display === 'string' ? oppFields.deadline_display : undefined);
   const deadlineTime =
-    extFields.deadline_time ||
-    extJson.deadline_time ||
-    oppRecord.deadline_time ||
-    oppRecord.fields?.deadline_time;
+    (typeof extFields.deadline_time === 'string' ? extFields.deadline_time : undefined) ||
+    (typeof extJson.deadline_time === 'string' ? extJson.deadline_time : undefined) ||
+    (typeof oppRecord.deadline_time === 'string' ? oppRecord.deadline_time : undefined) ||
+    (typeof oppFields?.deadline_time === 'string' ? oppFields.deadline_time : undefined);
 
   const formattedDeadline = deadlineDisplay || (() => {
     const base = deadlineLabel(opportunity.deadline);
@@ -189,6 +258,8 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
     opportunity.description,
     opportunity.skills
   );
+
+  const comp = extractCompensationDetails(opportunity);
 
   return (
     <>
@@ -237,7 +308,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
 
       {/* Core Meta & Concise Generated Summary ("What you would do") */}
       <Card className="mt-6 p-6">
-        <dl className="grid gap-6 sm:grid-cols-2">
+        <dl className="grid gap-6 sm:grid-cols-3">
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Deadline</dt>
             <dd className="mt-1 text-sm font-semibold text-foreground">{formattedDeadline}</dd>
@@ -245,6 +316,19 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Location</dt>
             <dd className="mt-1 text-sm font-semibold text-foreground">{opportunity.location || 'Not stated'}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{comp.label}</dt>
+            <dd className="mt-1 text-sm font-semibold text-foreground flex items-center gap-2">
+              <span>{comp.value}</span>
+              {comp.paidStatus && comp.paidStatus !== 'Not disclosed' && (
+                <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                  comp.paidStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                }`}>
+                  {comp.paidStatus}
+                </span>
+              )}
+            </dd>
           </div>
         </dl>
 
@@ -432,7 +516,11 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
 
         {mergedReqs.length === 0 ? (
           <p className="mt-4 text-sm text-muted-foreground">
-            No explicit requirements were extracted from this listing. This does not automatically establish eligibility.
+            {opportunity.requirements_status === 'EXTRACTION_INCOMPLETE'
+              ? 'Extraction of requirements was incomplete. Please review the original listing text below.'
+              : opportunity.requirements_status === 'NO_REQUIREMENTS_STATED'
+              ? 'This opportunity states no restrictive eligibility requirements; open to all students.'
+              : 'No explicit requirements were extracted from this listing. This does not automatically establish eligibility.'}
           </p>
         ) : (
           <div className="mt-6 space-y-6">

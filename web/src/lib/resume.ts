@@ -111,7 +111,10 @@ export function validateProfileDraft(draft: ProfileDraftPayload): ProfileDraftPa
     throw new Error(`INVALID_CONTRACT_VERSION: Expected ${RESUME_CONTRACT_VERSION}, got ${draft.contract_version}`);
   }
 
-  if (typeof draft.base_profile_revision !== 'number' || draft.base_profile_revision < 0) {
+  const rev = typeof draft.base_profile_revision === 'number'
+    ? draft.base_profile_revision
+    : parseInt(String(draft.base_profile_revision), 10);
+  if (!Number.isFinite(rev) || rev < 0) {
     throw new Error('INVALID_BASE_REVISION: Draft must specify non-negative base_profile_revision.');
   }
 
@@ -341,6 +344,71 @@ export function validateConfirmationPayload(payload: Record<string, unknown>): b
   return true;
 }
 
+export function isBulletLine(line: string): boolean {
+  const clean = line.trim();
+  return /^[•\-\*o\u2022\u2023\u25E6\u2043\u2219\u00B7\u25AA\u25CF\u2192∩é╖ΓÇó]\s+/i.test(clean) ||
+         /^\d+[\.\)]\s+/.test(clean);
+}
+
+export function isMetaLine(line: string): boolean {
+  const clean = line.replace(/^[•\-\*o\u2022\u2023\u25E6\u2043\u2219\u00B7\u25AA\u25CF\u2192∩é╖ΓÇó\s\d\.)]+/, '').trim();
+  return /^(?:Tech(?:nologies| stack)?|Built with|Tools?|Stack|Languages|Frameworks?|Libraries|GitHub|Link|Live|Demo)\s*[:\-]/i.test(clean) ||
+         /^(?:https?:\/\/|github\.com)/i.test(clean);
+}
+
+const ACTION_VERB_START = /^(?:Built|Implemented|Developed|Designed|Created|Engineered|Led|Worked|Maintained|Responsible|Handled|Utilized|Added|Architected|Spearheaded|Collaborated|Optimized|Automated|Deployed|Integrated|Authored|Wrote|Configured|Tested|Managed|Conducted|Generated)\b/i;
+
+export function splitProjectChunks(secText: string): string[] {
+  const doubleNewlineBlocks = secText.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  const resultChunks: string[] = [];
+
+  for (const block of doubleNewlineBlocks) {
+    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) continue;
+
+    let currentProjectLines: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const isBullet = isBulletLine(line);
+      const isMeta = isMetaLine(line);
+
+      const prevLine = currentProjectLines[currentProjectLines.length - 1];
+      const prevEndsSentence = prevLine && (/[.!;]$/.test(prevLine) || isBulletLine(prevLine) || isMetaLine(prevLine));
+      const prevCanEndProject = currentProjectLines.length >= 2 || prevEndsSentence;
+
+      const isActionVerb = ACTION_VERB_START.test(line);
+
+      const looksLikeTitle = !isBullet && !isMeta && !isActionVerb && line.length >= 3 && line.length <= 110 &&
+        (!/^[a-z]/.test(line) || line.includes('|') || line.includes(' - ') || line.includes('–')) &&
+        (
+          line.includes('|') ||
+          /\b20\d{2}\b/.test(line) ||
+          /\((?:major|minor|personal|academic|full[- ]stack|web|app|mobile|client|server)[^)]*\)/i.test(line) ||
+          line.includes(' - ') ||
+          line.includes('–') ||
+          line.includes('—') ||
+          /^(?:Project\s+\d+|[A-Z][A-Za-z0-9_\s]{2,40}\s*:)/i.test(line) ||
+          (i + 1 < lines.length && (isBulletLine(lines[i + 1]) || isMetaLine(lines[i + 1]))) ||
+          (prevEndsSentence && !/[.!;]$/.test(line) && line.length <= 80 && i + 1 < lines.length)
+        );
+
+      if (looksLikeTitle && prevCanEndProject && currentProjectLines.length > 0) {
+        resultChunks.push(currentProjectLines.join('\n'));
+        currentProjectLines = [line];
+      } else {
+        currentProjectLines.push(line);
+      }
+    }
+
+    if (currentProjectLines.length > 0) {
+      resultChunks.push(currentProjectLines.join('\n'));
+    }
+  }
+
+  return resultChunks;
+}
+
 /**
  * Pure deterministic pattern extractor for test fixtures and fallback parsing.
  */
@@ -350,6 +418,8 @@ export function extractDraftFromText(
   baseRevision: number = 0
 ): ProfileDraftPayload {
   const clean = sanitizeResumeText(text);
+  const rawRev = typeof baseRevision === 'number' ? baseRevision : parseInt(String(baseRevision), 10);
+  const safeBaseRevision = Number.isFinite(rawRev) && rawRev >= 0 ? rawRev : 0;
   const fields: ProfileDraftItem[] = [];
   const skills: ProfileDraftSkillItem[] = [];
   const projects: ProfileDraftProjectItem[] = [];
@@ -437,15 +507,15 @@ export function extractDraftFromText(
     'Kubernetes', 'AWS', 'Linux', 'Tailwind CSS', 'GraphQL', 'Machine Learning'
   ];
 
-  const projectHeaderMatch = clean.match(/(?:^|\n)\s*(?:[#*=-]+\s*)?(?:Key\s+|Academic\s+|Personal\s+|Featured\s+|Selected\s+|Recent\s+)?Projects?\s*[:\n]/i);
+  const projectHeaderMatch = clean.match(/(?:^|\n)\s*(?:[#*=-]+\s*)?(?:Key|Academic|Personal|Featured|Selected|Recent|Technical|Software|Major|Course|Independent)?\s*Projects?(?:\s+(?:Work|Experience|Portfolio|Undertaken|Accomplishments))?\s*[:\n]/i);
 
   if (projectHeaderMatch) {
     const afterHeader = clean.slice(projectHeaderMatch.index! + projectHeaderMatch[0].length);
-    const nextHeaderMatch = afterHeader.match(/\n\s*(?:[#*=-]+\s*)?(?:Work\s+Experience|Experience|Professional\s+Experience|Employment|Education|Technical\s+Skills|Skills|Certifications|Achievements|Publications|Awards|Interests|Extracurricular)\s*[:\n]/i);
+    const nextHeaderMatch = afterHeader.match(/\n\s*(?:[#*=-]+\s*)?(?:Work\s+Experience|Experience|Professional\s+Experience|Employment|Education|Technical\s+Skills|Skills|Certifications?|Achievements?|Publications?|Awards?|Interests|Extracurricular(?:\s+Activities)?|Leadership|Positions\s+of\s+Responsibility|Volunteer(?:ing|\s+Experience)?|Coursework|Declaration|References)\s*[:\n]/i);
     const secText = nextHeaderMatch ? afterHeader.slice(0, nextHeaderMatch.index).trim() : afterHeader.trim();
 
     if (secText) {
-      const rawChunks = secText.split(/\n\s*\n/).map((c) => c.trim()).filter(Boolean);
+      const rawChunks = splitProjectChunks(secText);
 
       for (const chunk of rawChunks) {
         const lines = chunk.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -455,8 +525,9 @@ export function extractDraftFromText(
                         chunk.match(/\bgithub\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/i);
         const githubUrl = ghMatch ? (ghMatch[0].startsWith('http') ? ghMatch[0] : `https://${ghMatch[0]}`) : null;
 
-        const dateMatch = chunk.match(/\b(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{4})\s*[-–—to]+\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{4}|Present|Current)\b/i);
-        const dates = dateMatch ? dateMatch[0].trim() : null;
+        const rangeDateMatch = chunk.match(/\b(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{4})\s*[-–—to]+\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{4}|Present|Current)\b/i);
+        const singleYearMatch = chunk.match(/\b(20\d{2})\b/);
+        const dates = rangeDateMatch ? rangeDateMatch[0].trim() : (singleYearMatch ? singleYearMatch[1] : null);
 
         const detectedTech: string[] = [];
         const techLineMatch = chunk.match(/(?:Tech(?:nologies| stack)?|Built with|Tools?|Stack)\s*[:\-]\s*([^\n]+)/i);
@@ -464,15 +535,10 @@ export function extractDraftFromText(
           const parts = techLineMatch[1].split(/[,|/•]+/).map((t) => t.trim()).filter(Boolean);
           detectedTech.push(...parts);
         }
-        for (const s of commonSkills) {
-          const sRegex = new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-          if (sRegex.test(chunk) && !detectedTech.some((t) => t.toLowerCase() === s.toLowerCase())) {
-            detectedTech.push(s);
-          }
-        }
 
         let rawTitle = lines[0]
           .replace(/^[#*•\-\d\.)\s]+/, '')
+          .replace(/^(?:Project\s+\d+[:\s\-]*)/i, '')
           .replace(/https?:\/\/github\.com\/[^\s]+/gi, '')
           .replace(/github\.com\/[^\s]+/gi, '')
           .trim();
@@ -480,13 +546,29 @@ export function extractDraftFromText(
         if (rawTitle.includes('|')) {
           const parts = rawTitle.split('|').map((p) => p.trim());
           rawTitle = parts[0];
+          if (parts[1]) {
+            const extraTech = parts.slice(1).join(' ').split(/[,/]+/).map((t) => t.trim()).filter(Boolean);
+            detectedTech.push(...extraTech);
+          }
         }
-        if (dateMatch && rawTitle.includes(dateMatch[0])) {
-          rawTitle = rawTitle.replace(dateMatch[0], '').replace(/[()\-–—]/g, '').trim();
+        if (rangeDateMatch && rawTitle.includes(rangeDateMatch[0])) {
+          rawTitle = rawTitle.replace(rangeDateMatch[0], '').replace(/[()\-–—]/g, '').trim();
+        }
+        rawTitle = rawTitle.replace(/\s+20\d{2}$/, '').trim();
+
+        for (const s of commonSkills) {
+          const sRegex = new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+          if (sRegex.test(chunk) && !detectedTech.some((t) => t.toLowerCase() === s.toLowerCase())) {
+            detectedTech.push(s);
+          }
         }
 
         if (rawTitle.length >= 3 && rawTitle.length <= 100) {
-          const descLines = lines.slice(1).filter((l) => !l.match(/^(?:Tech|Built with|Tools|GitHub|Link)/i));
+          const descLines = lines.slice(1).filter((l) => {
+            const cleanL = l.replace(/^[#*•\-\d\.)\s]+/, '').trim();
+            return !cleanL.match(/^(?:Tech(?:nologies| stack)?|Built with|Tools?|Stack|Languages|Frameworks?|Libraries|GitHub|Link|Live|Demo)\s*[:\-]/i) &&
+                   !cleanL.match(/^(?:https?:\/\/|github\.com)/i);
+          });
           const description = descLines.join(' ').replace(/^[#*•\-\s]+/, '').trim() || lines[0];
 
           projects.push({
@@ -610,7 +692,7 @@ export function extractDraftFromText(
 
   return {
     contract_version: RESUME_CONTRACT_VERSION,
-    base_profile_revision: baseRevision,
+    base_profile_revision: safeBaseRevision,
     fields,
     skills,
     projects,

@@ -53,7 +53,8 @@ if (!rawItem || !rawItem.upload_id || !rawItem.user_id) {
 }
 
 const text = rawItem.extracted_text || '';
-const draft = extractDraftFromText(text, 1, rawItem.base_profile_revision);
+const baseRev = parseInt(rawItem.base_profile_revision || 0, 10);
+const draft = extractDraftFromText(text, 1, isNaN(baseRev) ? 0 : baseRev);
 validateProfileDraft(draft);
 
 const profileWithSkills = {
@@ -71,6 +72,8 @@ return [{
     base_profile_revision: draft.base_profile_revision,
     proposed_fields: draft.fields,
     proposed_skills: draft.skills,
+    proposed_projects: draft.projects || [],
+    proposed_experience_years: draft.years_of_experience || null,
     missing_fields: draft.missing_fields,
     reconciled
   }
@@ -88,6 +91,8 @@ insert into public.profile_drafts (
   contract_version,
   proposed_fields,
   proposed_skills,
+  proposed_projects,
+  proposed_experience_years,
   missing_fields,
   status
 )
@@ -99,13 +104,15 @@ values (
   $5::jsonb,
   $6::jsonb,
   $7::jsonb,
+  $8::numeric,
+  $9::jsonb,
   'draft_ready'
 )
 returning id as draft_id, user_id, resume_upload_id, status, created_at;
 `;
 
 pg('save', 'Store profile draft in database', 720, 0, saveDraftSql,
-  '={{ [$json.user_id, $json.upload_id, $json.base_profile_revision, $json.contract_version, JSON.stringify($json.proposed_fields), JSON.stringify($json.proposed_skills), JSON.stringify($json.missing_fields)] }}'
+  '={{ [$json.user_id, $json.upload_id, $json.base_profile_revision, $json.contract_version, JSON.stringify($json.proposed_fields), JSON.stringify($json.proposed_skills), JSON.stringify($json.proposed_projects), $json.proposed_experience_years, JSON.stringify($json.missing_fields)] }}'
 );
 
 // 5. Update public.resume_uploads status to draft_ready

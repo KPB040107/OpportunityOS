@@ -1,10 +1,37 @@
 export function createForwardContract({hash}){
  const gather=v=>typeof v==='string'?v:Array.isArray(v)?v.map(gather).join(' '):v&&typeof v==='object'?[v.address,v.text,v.value].map(gather).join(' '):'';
  function parse(email){
-  const recipients=gather([email.to,email.headers?.to,email.headers?.['delivered-to'],email.metadata?.to,email.metadata?.['delivered-to']]).toLowerCase();
+  const recipients=gather([
+    email.to,
+    email.headers?.to,
+    email.headers?.['delivered-to'],
+    email.headers?.['x-forwarded-to'],
+    email.headers?.['x-original-to'],
+    email.headers?.['envelope-to'],
+    email.headers?.['x-delivered-to'],
+    email.headers?.['resent-to'],
+    email.metadata?.to,
+    email.metadata?.['delivered-to']
+  ]).toLowerCase();
   const aliases=[...new Set([...recipients.matchAll(/opportunityos0001\+([a-f0-9]{32})@gmail\.com/g)].map(m=>m[1]))];
   if(aliases.length!==1)return null;
-  const raw=String(email.textPlain||email.text||email.textHtml||email.html||'');
+  let raw=String(email.textPlain||email.text||'');
+  if(!raw.trim()&&(email.textHtml||email.html)){
+    const html=String(email.textHtml||email.html||'');
+    raw=html
+      .replace(/<style[\s\S]*?<\/style>/gi,'')
+      .replace(/<script[\s\S]*?<\/script>/gi,'')
+      .replace(/<[^>]+>/g,' ')
+      .replace(/&nbsp;/gi,' ')
+      .replace(/&amp;/gi,'&')
+      .replace(/&lt;/gi,'<')
+      .replace(/&gt;/gi,'>')
+      .replace(/&quot;/gi,'"')
+      .replace(/&#39;/gi,"'")
+      .replace(/[ \t]+/g,' ')
+      .replace(/\n{3,}/g,'\n\n')
+      .trim();
+  }
   if(!raw.trim()||raw.length>20000)return null;
   const subject=String(email.subject||email.metadata?.subject||'').slice(0,300);
   if(!/internship|scholarship|hackathon|fellowship|applications?|apply|deadline|opportunit|program|vacanc|hiring|\bjob\b/i.test(subject+' '+raw))return null;

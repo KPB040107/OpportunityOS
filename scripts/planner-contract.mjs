@@ -105,15 +105,22 @@ export function generateWeeklyPlan({
       continue;
     }
     if (cand.trust_tier === 'unverified') {
-      unscheduled.push({
-        opportunity_id: cand.id,
-        title: cand.title,
-        organization: cand.organization,
-        deadline: cand.deadline,
-        reason_code: 'UNVERIFIED_SOURCE',
-        explanation: 'Opportunity was captured from an unverified source; requires source verification before scheduling.',
-      });
-      continue;
+      const isUserAuthorized = Boolean(
+        cand.is_user_submitted ||
+        (cand.source_type && ['email', 'capture', 'url', 'text'].includes(cand.source_type)) ||
+        (cand.source_badge && /user|forward|capture|pasted|saved/i.test(cand.source_badge))
+      );
+      if (!isUserAuthorized) {
+        unscheduled.push({
+          opportunity_id: cand.id,
+          title: cand.title,
+          organization: cand.organization,
+          deadline: cand.deadline,
+          reason_code: 'UNVERIFIED_SOURCE',
+          explanation: 'Opportunity was captured from an unverified source; requires source verification before scheduling.',
+        });
+        continue;
+      }
     }
     if (cand.risk_flags && (cand.risk_flags.includes('payment_required') || cand.risk_flags.includes('fraud_warning'))) {
       unscheduled.push({

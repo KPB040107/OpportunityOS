@@ -13,6 +13,14 @@ export function DecisionSummary({match}:{match:Match|undefined}){
    match.reason_codes?.includes('UNKNOWN_ELIGIBILITY') ||
    (match.match_score === 0 && (!match.confidence || match.confidence === 0));
 
+ const sanitizedExplanation = isInsufficient && match.explanation
+   ? match.explanation
+       .replace(/\s*Match score\s+[\d.]+\/100;?/gi, '')
+       .replace(/\s*Confidence\s+[\d.]+%?;?/gi, '')
+       .replace(/\s*confidence\s+[\d.]+%?;?/gi, '')
+       .trim()
+   : match.explanation;
+
  return (
    <div className="mt-4">
      <div className="flex flex-wrap items-center gap-2">
@@ -33,7 +41,7 @@ export function DecisionSummary({match}:{match:Match|undefined}){
          </span>
        )}
      </div>
-     <p className="mt-2 text-sm">{match.explanation}</p>
+     <p className="mt-2 text-sm">{sanitizedExplanation}</p>
    </div>
  );
 }

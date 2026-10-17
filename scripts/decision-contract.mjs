@@ -37,6 +37,8 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
         add('requirements','PASS','Hackathon participation has no restrictive eligibility criteria stated.');
       } else if(reqStatus==='NO_REQUIREMENTS_STATED'){
         add('requirements','PASS','This opportunity states no restrictive eligibility requirements; open to all students.');
+      } else if(enableMissingDeadlinePolicy && ['internship','job'].includes(o.type)){
+        add('requirements','NOT_STATED','No restrictive prerequisite eligibility requirements stated in listing.');
       } else if(reqStatus==='EXTRACTION_INCOMPLETE'){
         add('requirements','UNKNOWN','Extraction of requirements was incomplete; manual review is required.');
       } else {
@@ -283,14 +285,40 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
       const result=policy(elig,0,0,mode);return {policy_version:version,match_version:matchVersion,eligibility_status:elig.status,eligibility_checks:elig.checks,expired:elig.expired,days_to_deadline:elig.days_to_deadline,component_scores:null,match_score:null,confidence:null,confidence_inputs:null,semantic_evidence:[],...result,explanation:elig.checks.filter(c=>c.status==='FAIL').map(c=>c.reason).join(' '),mode};
     }
     const match=validateMatch(rawMatch,input);
-    const location=o.location?norm(o.location):null,preferences=(p.preferred_locations||[]).map(norm);
-    // Only a literal normalized location/remote indication earns a soft preference match.
-    const loc=location&&preferences.length?(preferences.some(l=>l===location||location.split(/[,();]/).map(norm).includes(l)||(l==='remote'&&/\bremote\b/.test(location)))?1:0):null;
+    const isHackathon=o.type==='hackathon';
+    const isJobOrInternship=['job','internship'].includes(o.type);
     const allReqs=input.requirements?.length?input.requirements:(o.requirements?.length?o.requirements:(o.extracted_json?.fields?.requirements||o.extracted_json?.requirements||[]));
+    const hasStatedSkills=((o.skills||[]).length>0)||allReqs.some(r=>r.kind==='skill');
+
+    // For jobs and internships with missing deadline policy enabled:
+    // If no clear required skills are stated in the listing, do not tell the student they are ineligible.
+    // Instead, route decision to IGNORE with reason NO_CLEAR_SKILLS_STATED.
+    if(enableMissingDeadlinePolicy&&isJobOrInternship&&!hasStatedSkills){
+      const explanation='This listing does not clearly state required technical skills; skipped to protect your application time.';
+      return {policy_version:version,match_version:matchVersion,eligibility_status:elig.status,eligibility_checks:elig.checks,expired:false,days_to_deadline:elig.days_to_deadline,component_scores:null,match_score:null,confidence:null,confidence_inputs:null,semantic_evidence:match?.evidence||[],required_skill_coverage:null,preferred_skill_coverage:null,matched_skills:[],missing_skills:[],decision:'IGNORE',reason_codes:['NO_CLEAR_SKILLS_STATED'],explanation,mode};
+    }
+
+    const location=o.location?norm(o.location):null,preferences=(p.preferred_locations||[]).map(norm);
+    const isVirtualOrOpen=isHackathon&&(!location||/\b(?:remote|online|virtual|global|anywhere)\b/i.test(location));
+    const loc=isVirtualOrOpen?1:(location&&preferences.length?(preferences.some(l=>l===location||location.split(/[,();]/).map(norm).includes(l)||(l==='remote'&&/\bremote\b/.test(location)))?1:0):(isHackathon?1:null));
+
     const yearBranch=allReqs.filter(r=>['academic_year','graduation_year','branch','degree'].includes(r.kind));
     const profChecks=eligibility({...input,requirements:yearBranch.map(r=>({...r,mandatory:true}))},now).checks.filter(c=>['academic_year','graduation_year','branch','degree'].includes(c.kind));
-    const academicFit=profChecks.some(c=>c.status!=='UNKNOWN')?profChecks.filter(c=>c.status==='PASS').length/yearBranch.length:null;
-    const values={skill_fit:(p.skills||[]).length&&(o.skills||[]).length?match.skill_fit:null,career_alignment:p.career_goals?match.career_alignment:null,interest_fit:(p.interest_types||[]).length&&o.type!=='unknown'?(p.interest_types.includes(o.type)?1:0):null,location_fit:loc,profile_fit:academicFit,urgency:elig.days_to_deadline===null?null:elig.days_to_deadline<=7?1:elig.days_to_deadline<=14?.75:elig.days_to_deadline<=30?.5:.25};
+    const academicFit=profChecks.some(c=>c.status!=='UNKNOWN')?profChecks.filter(c=>c.status==='PASS').length/yearBranch.length:(isHackathon&&yearBranch.length===0?1:null);
+
+    const studentHasSkills=(p.skills||[]).length>0;
+    const oppHasSkills=(o.skills||[]).length>0;
+    const hackathonOpenSkillFit=isHackathon&&!oppHasSkills&&studentHasSkills?1:null;
+    const hackathonOpenCareerFit=isHackathon&&!p.career_goals&&(p.interest_types||[]).includes('hackathon')?1:null;
+
+    const values={
+      skill_fit:oppHasSkills&&studentHasSkills?match.skill_fit:hackathonOpenSkillFit,
+      career_alignment:p.career_goals?match.career_alignment:hackathonOpenCareerFit,
+      interest_fit:(p.interest_types||[]).length&&o.type!=='unknown'?(p.interest_types.includes(o.type)?1:0):null,
+      location_fit:loc,
+      profile_fit:academicFit,
+      urgency:elig.days_to_deadline===null?null:elig.days_to_deadline<=7?1:elig.days_to_deadline<=14?.75:elig.days_to_deadline<=30?.5:.25
+    };
     const component_scores=Object.fromEntries(Object.entries(weights).map(([k,w])=>[k,{value:values[k],weight:w,points:round((values[k]??0)*w)}]));
 
     const studentSkills=new Set((p.skills||[]).map(s=>norm(s.name)));
@@ -343,7 +371,7 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
     // Complete fields cannot cancel the model's explicit uncertainty.
     const confidence=round(Math.min(model,.3*completeness+.3*verified+.25*clarity+.15*model));
     const result=policy(elig,match_score,confidence,mode);
-    const reasons={UNKNOWN_ELIGIBILITY:'Some required facts need clarification.',LOW_MATCH:'The match score is below 40.',BELOW_MODE_SCORE:`The score is below the ${mode} threshold.`,LOW_CONFIDENCE:`Confidence is below the ${mode} threshold.`,ELIGIBLE_STRONG_MATCH:`Eligible and above both ${mode} thresholds.`,ELIGIBLE_NO_DEADLINE_TRACK:`Eligible with no stated deadline; queued for tracking and notification.`};
+    const reasons={UNKNOWN_ELIGIBILITY:'Some required facts need clarification.',LOW_MATCH:'The match score is below 40.',BELOW_MODE_SCORE:`The score is below the ${mode} threshold.`,LOW_CONFIDENCE:`Confidence is below the ${mode} threshold.`,ELIGIBLE_STRONG_MATCH:`Eligible and above both ${mode} thresholds.`,ELIGIBLE_NO_DEADLINE_TRACK:`Eligible with no stated deadline; queued for tracking and notification.`,NO_CLEAR_SKILLS_STATED:`This listing does not clearly state required technical skills; skipped to protect your application time.`};
     const isUnknown=elig.status==='UNKNOWN';
     let explanation;
     if(isUnknown){

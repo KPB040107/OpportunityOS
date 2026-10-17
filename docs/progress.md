@@ -999,3 +999,87 @@ The repair was divided among three parallel subagents with disjoint file ownersh
     * `Match Score: 75/100`
     * Contradictory "Insufficient information" badge completely eliminated.
   - Authenticated request to `http://127.0.0.1:3000/opportunities?type=hackathon` confirmed pure hackathon card rendered with verified deadline and Devpost badge.
+
+## Discovered Listing Qualifications & Requirements Atomic Refresh Repair (Ecera System Bug Fix)
+
+### 1. Root Cause Identification
+- **Primary Reproduction:** Ecera System — Software Engineer Intern (Paid) (`catalog_id: 10d1f304-e763-458f-84ed-6507a29c62a9`, `opportunity_id: a6337821-6347-4417-bf58-b1b6becf054e`).
+- **Gaps Identified:**
+  1. *Projection Catch-up Skip:* In `0057_prevent_duplicate_catalog_cards.sql`, when rescanning or updating catalog items, existing user cards were skipped if content hash matched; if content hash differed, opportunity text fields were updated but `public.opportunity_requirements` and `requirements_status` were never refreshed.
+  2. *Backfill Skip on Existing Cards:* In `0060` and `0062`, `backfill_profile_catalog` checked `where not exists (select 1 from public.opportunities where user_id = p_user and catalog_id = cat.id)` and `on conflict (user_id, fingerprint) do nothing returning id into v_opp; if v_opp is null then continue; end if;`, skipping existing cards even when their requirements were empty or stale.
+  3. *Missing Structured Requirements in Catalog:* For older ingested catalog items, `catalog_opportunities.structured_fields` lacked `requirements` and `skills` arrays.
+  4. *Contradictory UI Display:* When information was insufficient or UNKNOWN, `match.explanation` retained legacy numerical score text (e.g. `Match score 25/100; confidence 50%.`), directly contradicting the amber badge `Insufficient information to score` and the panel header `Scoring Not Evaluated · Verification Needed`.
+
+### 2. Architectural Repairs Implemented
+1. **Forward Database Migration `supabase/migrations/0067_atomic_catalog_requirement_refresh.sql`:**
+   - Redefined `public.worker_save_discovery_item`:
+     - Ensures `catalog_opportunities` stores structured requirements and skills in `structured_fields` and sets `requirements_status`.
+     - When projecting to matching users, checks if opportunity exists; if content changed OR requirements are empty while present in update, atomically updates `public.opportunities`, deletes and re-inserts validated requirement rows in `public.opportunity_requirements`, and enqueues evaluation.
+     - Enforces case-insensitive quote verification: only inserts requirements whose quotes actually occur in stored source text.
+     - Preserves student's save/hide/applied status, action history, approvals, and notes without duplicate cards.
+   - Redefined `opportunityos_private.backfill_profile_catalog`:
+     - Detects existing opportunities with empty or stale requirements and refreshes them from catalog structured requirements instead of skipping them.
+2. **UI Score & Explanation Sanitization:**
+   - In `web/src/components/decision-panel.tsx` (`DecisionSummary`): when `isInsufficient` is true, sanitizes `match.explanation` to strip any residual numerical match score and confidence values, ensuring complete consistency with "Scoring Not Evaluated · Verification Needed".
+   - In `web/src/app/(workspace)/inbox/inbox-feed.tsx`: applies the same sanitization to card explanations in the feed when `isInsufficient` is true.
+   - In `web/src/app/(workspace)/opportunities/[id]/page.tsx`: selects `requirement_class` and `quote` from `public.opportunity_requirements` so structured requirement categories display accurately with quotes.
+3. **Controlled Idempotent Backfill Script (`scripts/backfill-unextracted-requirements.mjs`):**
+   - Supports safe preview mode (default) and atomic apply mode (`--apply`).
+   - Scanned all opportunities with descriptions, extracted skills and requirements using `extractSkillsAndRequirements`, and generated a single atomic transaction of 667 SQL operations executed via `scripts/run-database.ps1`.
+   - Updated Ecera System: 12 structured requirements with quotes, 7 skills, `requirements_status: 'REQUIREMENTS_PRESENT'`, decision `ASK`, `eligibility_status: 'UNKNOWN'`, `match_score: null`.
+4. **Automated Test Suite (`scripts/catalog-refresh.test.mjs`):**
+   - 5 comprehensive tests verifying Ecera qualification extraction, exact quotes in source text, UNKNOWN decision evaluation without numerical score, safe quote validation rejecting hallucinations, UI score sanitization, and multi-user isolation.
+
+### 3. Empirical Verification Results
+- **Node Contract & Unit Test Suite (`scripts/*.test.mjs`):** **246 / 246 tests passing (0 failures)**.
+- **Slice S8 Smoke Test Suite (`scripts/smoke-tests.mjs`):** **8 / 8 smoke gates passing (100%)**.
+- **Primary Acceptance Journey (`scripts/test-primary-acceptance-journey.mjs`):** **100% PASS**.
+- **Next.js Production Build (`npm --prefix web run build`):** **18 / 18 routes compiled cleanly, 0 errors**.
+- **Live Running Website Verification (`http://127.0.0.1:3000/opportunities/a6337821-6347-4417-bf58-b1b6becf054e`):**
+  - `HTTP Status: 200`
+  - "No explicit requirements were extracted": **PASS (absent)**
+  - Extracted requirements ("Data Structures", "Algorithms", "Python", "Git", "Bengaluru"): **PASS (rendered)**
+  - "Scoring Not Evaluated · Verification Needed": **PASS (rendered)**
+  - Contradictory "Match X/100": **PASS (completely absent)**
+- **Opportunities Feed Verification (`http://127.0.0.1:3000/opportunities`):**
+  - `HTTP Status: 200`
+  - Ecera System card present: **PASS**
+  - "Insufficient information to score" badge rendered without contradictory score: **PASS**
+
+## Global All-User Requirements Extraction & Root Cause Resolution (OptiGrit Bug Fix)
+
+### 1. Root Cause Identification ("What is actually the issue?")
+When examining the OptiGrit Frontend Development Intern listing (`catalog_id: f913cd9a-4738-4c93-a916-d4ebde406685`, user opportunity `67c26366-d91c-4dea-a5d5-fdc4b9810c59` belonging to user `d94bd3b6-a6aa-478e-a2dc-3cd197bf8153` / `borlekaustubh040107@gmail.com`), the opportunity visibly contained a full "Qualifications" section in its description, yet OpportunityOS displayed:
+- `Eligibility: UNKNOWN`
+- `NOT_STATED · deadline — The application deadline is not stated.`
+- `UNKNOWN · requirements — No explicit requirements were extracted; eligibility needs clarification.`
+- `Scoring Not Evaluated · Verification Needed`
+
+Four interconnected root causes were identified:
+1. **Aggregator Ingestion Missing Text Extraction:** Plain-text aggregator discovery (e.g. JSearch) populated `raw_text` and `title` into `catalog_opportunities` and `public.opportunities`, but `worker_save_discovery_item` only read from `p_item->'requirements'`, which was empty `[]` for aggregator feeds. Across the catalog, 297 opportunities were ingested with rich text descriptions but 0 rows in `public.opportunity_requirements`.
+2. **`claim_evaluation` Blindly Passed Empty Requirements:** In `0005_evaluate_decide.sql`, `claim_evaluation` assembled `requirements: coalesce((select jsonb_agg(...) from public.opportunity_requirements ...), '[]')`. When 0 rows existed, it passed `requirements: []` to the evaluation engine, triggering the hardcoded fallback: `UNKNOWN · requirements — No explicit requirements were extracted; eligibility needs clarification.`
+3. **RLS Token Isolation in Initial Backfill:** The initial Ecera repair script was executed using a client authenticated as the DEMO Repair Student (`def0125f-f742-4578-a41f-7108baa74d16`). Because Row-Level Security (RLS) is strictly active on `public.opportunities`, it only repaired cards belonging to that demo user. Real logged-in accounts like Kaustubh's (`d94bd3b6-a6aa-478e-a2dc-3cd197bf8153`) were untouched.
+4. **UI Lacked Dynamic Fallback:** In `web/src/app/(workspace)/opportunities/[id]/page.tsx`, if `mergedReqs.length === 0`, it displayed the static message: *"No explicit requirements were extracted from this listing. This does not automatically establish eligibility."* even when `opportunity.description` visibly had qualifications.
+
+### 2. Architectural Repairs Implemented
+1. **Global All-User Database Repair (`.local/repair-all-users-requirements.mjs`):**
+   - Scanned all 440 opportunities and 7 user profiles across the entire PostgreSQL database.
+   - Identified 58 catalog items and 187 user-owned opportunities with descriptions but 0 requirements.
+   - Extracted verified skills and requirements using `extractSkillsAndRequirements` and `buildStructuredRequirements`.
+   - Executed a single atomic transaction of 2,875 SQL operations via `scripts/run-database.ps1`.
+   - Result for Kaustubh's OptiGrit card: 9 structured requirements with verified quotes, skills `["JavaScript", "React"]`, `requirements_status: 'REQUIREMENTS_PRESENT'`, decision **`ACT`**, eligibility **`ELIGIBLE`**, match score **`75/100`**, confidence **`85%`**.
+2. **Forward Database Migration `0068_claim_evaluation_catalog_fallback.sql`:**
+   - Updated `public.claim_evaluation` to automatically self-heal: if an opportunity lacks rows in `public.opportunity_requirements` at evaluation time, it dynamically pulls quote-verified requirements from `opportunityos_private.catalog_opportunities.structured_fields->'requirements'`.
+3. **Resilient Dynamic UI Fallback (`web/src/app/(workspace)/opportunities/[id]/page.tsx`):**
+   - Added `extractFallbackRequirements(description)`: if `mergedReqs` is ever empty and `opportunity.description` contains text, parses qualification sections, bullet points, skills, degrees, and requirements dynamically so that the page always renders structured qualifications and skill gaps.
+   - Replaced static "no requirements" message with context-aware text matching `requirements_status`.
+
+### 3. Verification Results
+- **Node Contract & Unit Test Suite (`scripts/*.test.mjs`):** **246 / 246 tests passing (100%)**.
+- **Catalog Refresh & Isolation Tests (`scripts/catalog-refresh.test.mjs`):** **5 / 5 tests passing (100%)**.
+- **Next.js Production Build (`npm --prefix web run build`):** **18 / 18 routes compiled cleanly, 0 errors**.
+- **Database Verification for User `d94bd3b6-a6aa-478e-a2dc-3cd197bf8153`:**
+  - OptiGrit (`67c26366-d91c-4dea-a5d5-fdc4b9810c59`): `req_count = 9`, `skills = ["JavaScript", "React"]`, `decision = ACT`, `match_score = 75/100`, `eligibility_status = ELIGIBLE`.
+  - Zero cards in user's active feed displaying "No explicit requirements were extracted" when qualifications exist.
+
+

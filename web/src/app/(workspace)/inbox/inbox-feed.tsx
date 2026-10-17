@@ -19,7 +19,7 @@ import {
   VolumeX,
   Volume2
 } from 'lucide-react';
-import { deadlineLabel, trustBadgeDetails } from '@/lib/analysis';
+import { deadlineLabel, trustBadgeDetails, extractCompensationDetails } from '@/lib/analysis';
 import { isRoleRelevantToField } from '@/lib/field-relevance';
 import { toggleSaveAction, toggleHideAction, setSourcePreferenceAction } from './actions';
 
@@ -40,6 +40,10 @@ export interface FeedOpportunity {
   created_at: string;
   is_saved: boolean;
   is_hidden: boolean;
+  fields?: Record<string, unknown> | null;
+  extracted_json?: Record<string, unknown> | null;
+  raw_content?: string | null;
+  description?: string | null;
   match?: {
     id: string;
     decision: 'ACT' | 'ASK' | 'IGNORE' | null;
@@ -683,6 +687,7 @@ export function InboxFeed({
           {displayedOpportunities.map((opp) => {
             const badge = trustBadgeDetails(opp.trust_tier, opp.source_badge);
             const match = opp.match;
+            const comp = extractCompensationDetails(opp);
             const isInsufficient =
               match?.eligibility_status === 'UNKNOWN' ||
               match?.reason_codes?.includes('UNKNOWN_ELIGIBILITY') ||
@@ -768,7 +773,7 @@ export function InboxFeed({
                   )}
 
                   {/* Details dl */}
-                  <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <dl className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
                     <div>
                       <dt className="text-[11px]">Deadline</dt>
                       <dd className="font-medium text-foreground">{deadlineLabel(opp.deadline)}</dd>
@@ -776,6 +781,23 @@ export function InboxFeed({
                     <div>
                       <dt className="text-[11px]">Location</dt>
                       <dd className="font-medium text-foreground truncate">{opp.location || 'Unknown'}</dd>
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <dt className="text-[11px]">{comp.label}</dt>
+                      <dd className="font-medium text-foreground truncate flex items-center gap-1.5">
+                        <span>{comp.value}</span>
+                        {comp.paidStatus && comp.paidStatus !== 'Not disclosed' && (
+                          <span
+                            className={`rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase ${
+                              comp.paidStatus === 'Paid'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {comp.paidStatus}
+                          </span>
+                        )}
+                      </dd>
                     </div>
                   </dl>
 
@@ -829,7 +851,13 @@ export function InboxFeed({
                     </div>
                     {match?.explanation && (
                       <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                        {match.explanation}
+                        {isInsufficient
+                          ? match.explanation
+                              .replace(/\s*Match score\s+[\d.]+\/100;?/gi, '')
+                              .replace(/\s*Confidence\s+[\d.]+%?;?/gi, '')
+                              .replace(/\s*confidence\s+[\d.]+%?;?/gi, '')
+                              .trim()
+                          : match.explanation}
                       </p>
                     )}
                   </div>

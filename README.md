@@ -64,18 +64,18 @@ flowchart TD
 ## Core Pillars & Key Features
 
 ### 1. Three Focused Opportunity Categories
-- **Internships**: Student-tailored work-experience opportunities with branch, degree, CGPA, and technical skill matching.
-- **Jobs**: Full-time graduate roles, associate software engineer positions, and technical openings.
-- **Hackathons**: Competitive team builds and coding events. Evaluated strictly on participation rules (legal age of majority, eligible countries/regions, verified submission deadlines) with **zero academic bias** (degree, branch, and CGPA are never used to disqualify hackathon participants).
+- **Internships**: Student-tailored work-experience opportunities with branch, degree, CGPA, and technical skill matching. Supports explicit stipend extraction (`Paid`, `Unpaid`, or `Not disclosed`).
+- **Jobs**: Full-time graduate roles, associate software engineer positions, and technical openings. Supports salary/CTC extraction (`LPA`, `INR`, `USD`, or `Not disclosed`). Missing deadline policy protects valid postings without declaring artificial deadlines.
+- **Hackathons**: Competitive team builds and coding events. Evaluated strictly on participation rules (legal age of majority, eligible countries/regions, verified submission deadlines) with **zero academic bias** (degree, branch, and CGPA are never used to disqualify hackathon participants). Open hackathons without pre-declared hard skill requirements award full skill and academic credit (40/40 skill fit, 10/10 academic fit), achieving 95–100 match scores in the `ACT` tab.
 - *Retired Categories*: Scholarship and Program categories have been retired per PRD specifications to maintain high-signal focus.
 
-### 2. Autonomous Multi-Source Discovery
+### 2. Autonomous Multi-Source Discovery & User-Attributed Submissions
 - **Zero-Auth Company Feeds**: Continuously scans Lever (CRED, Meesho), Greenhouse, and Ashby feeds.
 - **Hackathon Registries**: Continuously scans Devpost for live developer hackathons.
 - **Aggregated Feeds**: Integrated JSearch adapter for LinkedIn, Indeed, and Glassdoor searches.
 - **Tiered Trust System**:
   - `corroborated`: Direct company career feeds.
-  - `attributed`: Public aggregators and hackathon portals.
+  - `attributed`: Public aggregators, hackathon portals, and authenticated user submissions (browser bookmarklet and inbound Gmail forwards auto-attributed without source verification failure).
   - `unverified`: Flagged if upfront fees, suspicious compensation, or prompt-injection attempts are detected.
 
 ### 3. Automatic Full-Listing Reading & Bounded Extraction Pipeline
@@ -92,6 +92,9 @@ flowchart TD
 - **Explicit Deadline & Timezone Recognition**:
   - Detects submission deadlines with exact times and timezones (e.g., `Oct 27, 2026 @ 1:00pm UTC` / `6:30 PM IST`, `2026-10-27T09:00:00-04:00`, `Nov 15, 2026 11:59pm IST`).
   - Distinguishes application submission deadlines from hackathon start dates, prize announcements, or page update timestamps.
+- **Compensation & Stipend Transparency**:
+  - Automatically extracts compensation, stipends, and prize pools from listing text and structured fields.
+  - Badges internships clearly as **Paid** or **Unpaid**, displaying exact monthly stipend figures or `Paid (Amount not disclosed)`. If unstated, marks as `Not disclosed`.
 - **4-Way Requirement Classification**:
   - `mandatory_eligibility`: Stated hard eligibility criteria (e.g., age of majority, country eligibility, explicit degree/batch years).
   - `required_skill`: Technical skills declared as mandatory in the requirements section.
@@ -100,9 +103,9 @@ flowchart TD
 
 ### 4. Deterministic Decision & Policy Engine
 - **Three-Tier Policy Routing**:
-  - `ACT`: High-confidence match meeting all mandatory requirements. Automatically queues permitted actions (calendar, tracker, alerts).
+  - `ACT`: High-confidence match meeting all mandatory requirements. Automatically queues permitted actions (calendar, tracker, alerts). Open hackathons with 95–100 scores route directly here.
   - `ASK`: Ambiguous requirements, unstated facts requiring clarification, or borderline match scores. Surfaces interactive cards in the Approval Center.
-  - `IGNORE`: Expired deadlines, failing mandatory constraints, or roles below the student's relevance threshold.
+  - `IGNORE`: Expired deadlines, failing mandatory constraints, roles below relevance thresholds, or jobs without stated required skills (`NO_CLEAR_SKILLS_STATED` protects application time without declaring student ineligibility).
 - **Non-Contradictory UI State**:
   - When facts are insufficient or eligibility is `UNKNOWN`, the system suppresses numerical scores and explicitly names the unresolved facts (e.g., *"The hackathon submission deadline is not stated"*), eliminating confusing `"Insufficient information to score"` badges displayed alongside numerical scores.
 - **Configurable Autonomy Thresholds**:
@@ -115,9 +118,9 @@ flowchart TD
 - **Bidirectional Trigger Synchronization**: Database triggers synchronize consent preferences across UI actions, worker context, and notification dispatches.
 - **Calendar Dispatch**: Google Calendar API integration writes events for opted-in demo accounts while providing universal `.ics` download links for all students.
 
-### 6. Resume-First Onboarding
+### 6. Resume-First Onboarding & Multi-Project Extraction
 - **Comprehensive PDF Parsing**: Extracts degree, major, expected graduation year, CGPA, and years of professional experience.
-- **Projects & GitHub Links**: Detects portfolio projects, descriptions, tech stacks, and source code links.
+- **Multi-Project Extraction (4–5 Projects)**: Robust parsing extracts all 4 to 5 portfolio projects, titles, descriptions, tech stacks, and GitHub repositories even when PDF text extraction collapses blank lines between projects.
 - **Evidence-Backed Skill Levels**: Proposes skill proficiencies (`Beginner`, `Intermediate`, `Advanced`) accompanied by verbatim resume quotes, allowing students to review and adjust before saving.
 - **Privacy D9 Protocol**: Physical resume PDFs are automatically purged from storage upon profile confirmation.
 
@@ -167,7 +170,7 @@ OpportunityOS/
 │   ├── run-database.ps1            # Database migration runner via n8n Postgres credentials
 │   └── deploy-*-workflow.ps1       # Automated workflow import and activation scripts
 ├── supabase/
-│   └── migrations/                 # Migrations 0001 through 0066 (RLS, schema, procedures, triggers)
+│   └── migrations/                 # Migrations 0001 through 0070 (RLS, schema, procedures, triggers)
 ├── extension/                       # Chrome Extension (Manifest V3)
 │   ├── manifest.json               # Extension configuration
 │   ├── popup.html / popup.js       # Extension UI for one-click capture
@@ -206,11 +209,11 @@ Essential variables in `web/.env.local` and `.env`:
 
 ### 3. Database Migrations
 
-Apply database migrations sequentially from `0001` through `0066` using your Supabase SQL editor or the provided database runner:
+Apply database migrations sequentially from `0001` through `0070` using your Supabase SQL editor or the provided database runner:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run-database.ps1 -SqlFile supabase/migrations/0001_foundation.sql
-# ... sequentially through migration 0066
+# ... sequentially through migration 0070
 ```
 
 ### 4. Workflow Deployment in n8n
@@ -242,10 +245,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Verification & Testing
 
-OpportunityOS maintains a comprehensive test suite of 241+ unit and contract tests, 8 deployment smoke gates, and an end-to-end primary acceptance journey:
+OpportunityOS maintains a comprehensive test suite of 251 unit and contract tests, 8 deployment smoke gates, and an end-to-end primary acceptance journey:
 
 ```bash
-# 1. Run all core contract and unit tests (241 passing tests)
+# 1. Run all core contract and unit tests (251 passing tests)
 node --test scripts/*.test.mjs
 
 # 2. Run the deployment smoke test suite (8 gates)

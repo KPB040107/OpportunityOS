@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
-import {normalizeLeverItem, normalizeDevpostItem, normalizeJSearchItem, normalizeGreenhouseItem, normalizeAshbyItem} from './discovery-adapters.mjs';
+import {classifySeniority, normalizeLeverItem, normalizeDevpostItem, normalizeJSearchItem, normalizeGreenhouseItem, normalizeAshbyItem} from './discovery-adapters.mjs';
 
 const require = createRequire(new URL('../web/package.json', import.meta.url));
 const { createClient } = require('@supabase/supabase-js');
@@ -97,17 +97,24 @@ export async function runAutonomousDiscovery({supabaseClient, fetchFn = fetch, d
   }
 
   // 2. Bound run: paginated slice from cursor_state, at most 10 items saved per dispatch
-  // Prioritize internships so student opportunities are surfaced first
-  rawItems.sort((a, b) => {
-    const aIntern = a?.type === 'internship' ? 1 : 0;
-    const bIntern = b?.type === 'internship' ? 1 : 0;
+  // Pre-filter: discard senior and executive positions so student opportunities are processed
+  const studentEligibleItems = rawItems.filter(item => {
+    const seniority = item.seniority_level || classifySeniority(item.title || '');
+    return seniority !== 'senior' && seniority !== 'executive';
+  });
+
+  const candidatesToQueue = studentEligibleItems.length > 0 ? studentEligibleItems : rawItems;
+
+  candidatesToQueue.sort((a, b) => {
+    const aIntern = (a?.type === 'internship' || a?.seniority_level === 'intern') ? 1 : 0;
+    const bIntern = (b?.type === 'internship' || b?.seniority_level === 'intern') ? 1 : 0;
     return bIntern - aIntern;
   });
 
   const currentOffset = Number(claimResult.cursor_state?.offset || 0);
-  const boundedItems = rawItems.slice(currentOffset, currentOffset + 10);
-  const nextOffset = rawItems.length > 0 ? (currentOffset + 10) % rawItems.length : 0;
-  const nextCursor = { offset: nextOffset, total: rawItems.length };
+  const boundedItems = candidatesToQueue.slice(currentOffset, currentOffset + 10);
+  const nextOffset = candidatesToQueue.length > 0 ? (currentOffset + 10) % candidatesToQueue.length : 0;
+  const nextCursor = { offset: nextOffset, total: candidatesToQueue.length };
   let newCount = 0;
   let updatedCount = 0;
   let errorCount = 0;

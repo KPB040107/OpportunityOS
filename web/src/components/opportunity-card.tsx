@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
-import { deadlineLabel, trustBadgeDetails } from '@/lib/analysis';
+import { deadlineLabel, trustBadgeDetails, extractCompensationDetails } from '@/lib/analysis';
 
 export interface OpportunityCardProps {
   opportunity: {
@@ -16,7 +16,7 @@ export interface OpportunityCardProps {
     fields?: {
       deadline_display?: string | null;
       deadline_time?: string | null;
-      [key: string]: any;
+      [key: string]: unknown;
     };
     extracted_json?: {
       fields?: {
@@ -25,7 +25,7 @@ export interface OpportunityCardProps {
       };
       deadline_display?: string | null;
       deadline_time?: string | null;
-      [key: string]: any;
+      [key: string]: unknown;
     };
     skills?: string[];
     trust_tier?: string;
@@ -48,10 +48,11 @@ export interface OpportunityCardProps {
   onHide?: (id: string) => void;
 }
 
-export function OpportunityCard({ opportunity, onSave, onHide }: OpportunityCardProps) {
+export function OpportunityCard({ opportunity }: OpportunityCardProps) {
   const opp = opportunity;
   const badge = trustBadgeDetails(opp.trust_tier || '', opp.source_badge || null);
   const match = opp.match;
+  const comp = extractCompensationDetails(opp);
 
   const isUnknown =
     match?.eligibility_status === 'UNKNOWN' ||
@@ -130,14 +131,27 @@ export function OpportunityCard({ opportunity, onSave, onHide }: OpportunityCard
         )}
 
         {/* Details dl */}
-        <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+        <dl className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
           <div>
             <dt className="text-[11px]">Deadline</dt>
-            <dd className="font-medium text-foreground">{formattedDeadline}</dd>
+            <dd className="font-medium text-foreground truncate">{formattedDeadline}</dd>
           </div>
           <div>
             <dt className="text-[11px]">Location</dt>
             <dd className="font-medium text-foreground truncate">{opp.location || 'Unknown'}</dd>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <dt className="text-[11px]">{comp.label}</dt>
+            <dd className="font-medium text-foreground truncate flex items-center gap-1.5">
+              <span>{comp.value}</span>
+              {comp.paidStatus && comp.paidStatus !== 'Not disclosed' && (
+                <span className={`rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase ${
+                  comp.paidStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {comp.paidStatus}
+                </span>
+              )}
+            </dd>
           </div>
         </dl>
 

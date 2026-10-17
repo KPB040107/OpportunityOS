@@ -390,4 +390,47 @@ Submission deadline: Oct 27, 2026 @ 1:00pm UTC. Apply: https://example.com/apply
   assert.ok(ageRule);
 });
 
+test('email resilient validation: accepts smart quotes, en-dashes, and email deadline phrases without failing', () => {
+  const emailSource = `Fwd: Opportunity at Aurora &amp; Co
+We’re excited to announce our Software Internship – Summer 2026.
+Aurora & Co is hiring an intern in Bangalore.
+Required skills: React.js, Python.
+Submit before: 20 October 2026.
+Apply: https://example.com/apply/aurora`;
+
+  const parsed = {
+    is_opportunity: true,
+    items: [
+      {
+        title: 'Software Internship - Summer 2026',
+        organization: 'Aurora & Co',
+        deadline: '2026-10-20',
+        location: 'Bangalore',
+        type: 'internship',
+        application_url: 'https://example.com/apply/aurora',
+        description: null,
+        requirements: [],
+        skills: ['React.js', 'Python'],
+        confidence: 0.95,
+        ambiguity_flags: [],
+        evidence: [
+          { field: 'title', quote: 'Software Internship – Summer 2026' },
+          { field: 'organization', quote: 'Aurora & Co' },
+          { field: 'deadline', quote: 'Submit before: 20 October 2026.' },
+          { field: 'location', quote: 'intern in Bangalore' },
+          { field: 'type', quote: 'Software Internship' },
+          { field: 'application_url', quote: 'https://example.com/apply/aurora' },
+          { field: 'skills', quote: 'Required skills: React.js, Python.' }
+        ]
+      }
+    ]
+  };
+
+  const res = contract.validate(parsed, emailSource);
+  assert.equal(res.items.length, 1);
+  assert.equal(res.items[0].organization, 'Aurora & Co');
+  assert.equal(res.items[0].deadline, '2026-10-20');
+  assert.deepEqual(res.items[0].skills, ['react', 'python']);
+});
+
 

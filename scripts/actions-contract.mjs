@@ -11,8 +11,9 @@ export function createActionsContract(){
   if(c.type==='error_notification'&&!c.match_id&&(c.claimed!==true||c.email_enabled!==true))throw new Error('UNVERIFIED_ACTION_CONTEXT');
   if(['approval_notification','error_notification'].includes(c.type))return true;
   if(c.match?.decision==='ACT'&&c.approved!==true){
-    if(c.opportunity?.trust_tier==='unverified'||(c.opportunity?.risk_signals&&c.opportunity.risk_signals.length>0))throw new Error('UNVERIFIED_SOURCE_BLOCKED');
-    if(c.opportunity?.trust_tier==='attributed'&&['calendar_event','calendar_link','followup_schedule','deadline_reminder'].includes(c.type))throw new Error('ATTRIBUTED_SOURCE_CALENDAR_BLOCKED');
+    const isUserAuthorized=Boolean(c.user_approved||c.opportunity?.is_user_submitted||(c.opportunity?.source_type&&['email','capture','url','text'].includes(c.opportunity.source_type))||(c.opportunity?.source_badge&&/user|forward|capture|pasted|saved/i.test(c.opportunity.source_badge)));
+    if(!isUserAuthorized&&(c.opportunity?.trust_tier==='unverified'||(c.opportunity?.risk_signals&&c.opportunity.risk_signals.length>0)))throw new Error('UNVERIFIED_SOURCE_BLOCKED');
+    if(!isUserAuthorized&&c.opportunity?.trust_tier==='attributed'&&['calendar_event','calendar_link','followup_schedule','deadline_reminder'].includes(c.type))throw new Error('ATTRIBUTED_SOURCE_CALENDAR_BLOCKED');
   }
   const hasValidDeadline=c.opportunity?.deadline&&c.opportunity.deadline>day(now);
   const isNoDeadlineAllowed=!c.opportunity?.deadline&&['internship','job'].includes(c.opportunity?.type)&&['tracker_update','email_notification'].includes(c.type);

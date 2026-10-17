@@ -401,5 +401,68 @@ test('UNKNOWN eligibility does not produce contradictory explanation or definiti
   assert.ok(internRes.explanation.includes('Scoring deferred until required facts are clarified'));
 });
 
+test('open hackathon with unstated skills awards full fit and achieves strong match', () => {
+  const h = clone();
+  h.opportunity.type = 'hackathon';
+  h.opportunity.skills = [];
+  h.opportunity.location = 'Virtual / Online';
+  h.opportunity.deadline = '2026-10-25';
+  h.requirements = [];
+  h.profile.interest_types = ['hackathon'];
+  h.profile.skills = [{ name: 'python' }, { name: 'react' }];
+  h.profile.career_goals = 'Software Engineer';
+
+  const emptyMatch = {
+    skill_fit: 0,
+    career_alignment: 0,
+    interest_fit: 1,
+    confidence: 0.9,
+    evidence: []
+  };
+
+  const res = contract.decide(h, emptyMatch, pack.now);
+  assert.equal(res.eligibility_status, 'ELIGIBLE');
+  // Hackathon must NOT score 20 or be penalized on skills
+  assert.ok(res.match_score >= 75, `Expected score >= 75, got ${res.match_score}`);
+  assert.equal(res.component_scores.skill_fit.value, 1);
+  assert.equal(res.component_scores.skill_fit.points, 40);
+  assert.equal(res.component_scores.profile_fit.value, 1);
+  assert.equal(res.component_scores.profile_fit.points, 10);
+  assert.equal(res.component_scores.location_fit.value, 1);
+  assert.equal(res.decision, 'ACT');
+});
+
+test('job or internship with no clearly stated required skills is ignored without marking ineligible', () => {
+  const c2 = createDecisionContract({
+    hash: s => createHash('sha256').update(s).digest('hex'),
+    enableMissingDeadlinePolicy: true
+  });
+
+  const vagueJob = clone();
+  vagueJob.opportunity.type = 'job';
+  vagueJob.opportunity.skills = [];
+  vagueJob.opportunity.deadline = '2026-10-30';
+  vagueJob.requirements = [];
+
+  const elig = c2.eligibility(vagueJob, pack.now);
+  // Must NOT declare candidate ineligible
+  assert.equal(elig.status, 'ELIGIBLE');
+
+  const emptyMatch = {
+    skill_fit: 0,
+    career_alignment: 0,
+    interest_fit: 1,
+    confidence: 0.8,
+    evidence: []
+  };
+
+  const dec = c2.decide(vagueJob, emptyMatch, pack.now);
+  assert.equal(dec.eligibility_status, 'ELIGIBLE');
+  assert.equal(dec.decision, 'IGNORE');
+  assert.ok(dec.reason_codes.includes('NO_CLEAR_SKILLS_STATED'));
+  assert.ok(dec.explanation.includes('does not clearly state required technical skills'));
+});
+
+
 
 
