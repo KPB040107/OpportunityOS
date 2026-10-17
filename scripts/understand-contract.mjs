@@ -28,7 +28,7 @@ export function createUnderstandContract({hash, URL}) {
     // never infer mandatory status across a blank line or another heading.
     function mandatoryEvidence(quote) {
       if(/\b(preferred|optional|nice[- ]to[- ]have|not (?:required|mandatory))\b/i.test(quote))return null;
-      const isHeading=line=>/^(?:mandatory (?:eligibility )?requirements|eligibility (?:requirements|criteria)|required (?:skills|qualifications)(?:[ \t]*\([^\n]*\))?)[ \t]*:?$/i.test(line.trim());
+      const isHeading=line=>/^(?:mandatory (?:eligibility )?requirements|eligibility(?: (?:requirements|criteria))?|required (?:skills|qualifications)(?:[ \t]*\([^\n]*\))?|mandatory|requirements|basic qualifications|minimum qualifications|must[- ]haves?)[ \t]*:?$/i.test(line.trim());
       const literal=original.includes(canon(quote));
       if(literal&&/\b(minimum|min\.?|must|required|mandatory|only|eligible|at least|eligibility)\b/i.test(quote)) return quote;
       let heading=null,bullet=quote;
@@ -45,8 +45,10 @@ export function createUnderstandContract({hash, URL}) {
       for(let i=0;i<lines.length;i++) {
         if(!isHeading(lines[i])||(heading&&canon(lines[i])!==canon(heading)))continue;
         let section=lines[i];
-        for(let j=i+1;j<lines.length&&lines[j].trim();j++) {
-          if(/^(?:preferred|optional|nice[- ]to[- ]have|about|responsibilities|learning outcomes|location|duration|how to apply|required|mandatory|eligibility)\b/i.test(lines[j].trim()))break;
+        let start=i+1;
+        if(start<lines.length&&!lines[start].trim())start++;
+        for(let j=start;j<lines.length&&lines[j].trim();j++) {
+          if(/^(?:preferred|optional|nice[- ]to[- ]have|about|responsibilities|learning outcomes|location|duration|how to apply|required|mandatory|eligibility|good to have)\b/i.test(lines[j].trim()))break;
           section+='\n'+lines[j];
           if(section.length>2000)break;
           if(canon(section).includes(canon(bullet)))return section;

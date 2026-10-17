@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Upload,
   FileText,
@@ -63,6 +64,7 @@ export function ResumeOnboardingCard({
   currentSkills,
   onProfileUpdated,
 }: ResumeOnboardingCardProps) {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -202,6 +204,7 @@ export function ResumeOnboardingCard({
       if (onProfileUpdated) {
         onProfileUpdated();
       }
+      router.refresh();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to confirm profile draft.');
     } finally {

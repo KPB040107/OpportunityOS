@@ -37,7 +37,7 @@ export default async function ProfilePage() {
 
       <div className="border-t border-border pt-6">
         <h2 className="mb-4 text-xl font-semibold text-foreground">Manual Profile Settings</h2>
-        <ProfileForm profile={profileRes.data} skills={skillRows} />
+        <ProfileForm key={profileRes.data?.revision ?? 'empty'} profile={profileRes.data} skills={skillRows} />
       </div>
     </div>
   );
