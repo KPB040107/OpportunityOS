@@ -79,6 +79,13 @@ export async function POST(request: NextRequest) {
       console.warn('Storage removal warning during confirmation:', cleanupErr);
     }
 
+    // Backfill matching opportunities from discovery catalog for the confirmed profile
+    try {
+      await supabase.rpc('catch_up_discovery_catalog');
+    } catch (catchUpErr) {
+      console.warn('Catalog catch-up warning after resume confirmation:', catchUpErr);
+    }
+
     return NextResponse.json({ success: true, data }, { status: 200 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unexpected server error';

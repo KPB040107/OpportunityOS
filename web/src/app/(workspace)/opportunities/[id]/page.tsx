@@ -35,7 +35,7 @@ export default async function OpportunityPage({params}:{params:Promise<{id:strin
   return (
     <>
       <LiveUpdates userId={user.id}/>
-      <Link href="/inbox" className="mb-6 inline-flex items-center gap-2 text-sm text-primary"><ArrowLeft className="size-4"/>Back to inbox</Link>
+      <Link href="/opportunities" className="mb-6 inline-flex items-center gap-2 text-sm text-primary"><ArrowLeft className="size-4"/>Back to opportunities</Link>
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-primary">{opportunity.type==='unknown'?'Opportunity':opportunity.type} · Details ready</p>
         {opportunity.trust_tier&&<span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${trustBadgeDetails(opportunity.trust_tier,opportunity.source_badge).className}`}>{trustBadgeDetails(opportunity.trust_tier,opportunity.source_badge).label}</span>}
