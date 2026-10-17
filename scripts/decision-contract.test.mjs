@@ -211,3 +211,195 @@ test('discovery opportunity evaluates grounded quotes from description, title, s
  assert.throws(() => unlocked.validateMatch(fabricatedProfileMatch, discoveryInput), /INVALID_MATCH/);
 });
 
+test('hackathon ignores academic requirements and passes without them if deadline is verified',()=>{
+  const h=clone();
+  h.opportunity.type='hackathon';
+  h.opportunity.deadline='2026-10-25';
+  h.requirements=[];
+  const eligNoReqs=contract.eligibility(h,pack.now);
+  assert.equal(eligNoReqs.status,'ELIGIBLE');
+
+  h.profile.branch='Civil Engineering';
+  h.profile.cgpa=5.0;
+  h.profile.graduation_year=2030;
+  h.requirements=[
+    {kind:'branch',value:'Computer Science',mandatory:true,normalized_value:{allowed:['computer science']},evidence_snippet:'Open to CS branch only.'},
+    {kind:'cgpa',value:'8.0',mandatory:true,normalized_value:{minimum:8.0,scale:10},evidence_snippet:'Minimum CGPA 8.0.'},
+    {kind:'graduation_year',value:'2028',mandatory:true,normalized_value:{allowed:[2028]},evidence_snippet:'Graduating in 2028.'}
+  ];
+  const eligAcademic=contract.eligibility(h,pack.now);
+  assert.equal(eligAcademic.status,'ELIGIBLE');
+  assert.ok(eligAcademic.checks.some(c=>c.kind==='branch'&&c.status==='PASS'));
+});
+
+test('internship and job type-specific eligibility rules for other_requirement and NO_REQUIREMENTS_STATED',()=>{
+  const openIntern=clone();
+  openIntern.requirements=[];
+  openIntern.opportunity.requirements_status='NO_REQUIREMENTS_STATED';
+  const openElig=contract.eligibility(openIntern,pack.now);
+  assert.equal(openElig.status,'ELIGIBLE');
+  assert.ok(openElig.checks.some(c=>c.kind==='requirements'&&c.status==='PASS'));
+
+  const infoIntern=clone();
+  infoIntern.requirements.push({
+    kind:'other',
+    value:'Strong communication and teamwork',
+    mandatory:true,
+    requirement_class:'other_requirement',
+    evidence_snippet:'Strong communication and teamwork'
+  });
+  const infoElig=contract.eligibility(infoIntern,pack.now);
+  assert.equal(infoElig.status,'ELIGIBLE');
+});
+
+test('required skills pass or track gaps without marking entire eligibility UNKNOWN unless hard constraint',()=>{
+  const s=clone();
+  s.requirements=[
+    {
+      kind:'skill',
+      value:'Python',
+      mandatory:true,
+      normalized_value:{name:'python'},
+      requirement_class:'required_skill',
+      evidence_snippet:'Python is required.'
+    },
+    {
+      kind:'skill',
+      value:'Rust',
+      mandatory:true,
+      normalized_value:{name:'rust'},
+      requirement_class:'required_skill',
+      evidence_snippet:'Rust is required.'
+    }
+  ];
+  const elig=contract.eligibility(s,pack.now);
+  assert.equal(elig.status,'ELIGIBLE');
+  assert.ok(elig.checks.some(c=>c.kind==='skill'&&c.reason.includes('profile lists the required Python')));
+  assert.ok(elig.checks.some(c=>c.kind==='skill'&&c.reason.includes('Skill Rust is missing from profile')));
+
+  const hard=clone();
+  hard.requirements=[
+    {
+      kind:'skill',
+      value:'Rust',
+      mandatory:true,
+      normalized_value:{name:'rust'},
+      requirement_class:'mandatory_eligibility',
+      evidence_snippet:'Rust is strictly required for this position.'
+    }
+  ];
+  const hardElig=contract.eligibility(hard,pack.now);
+  assert.equal(hardElig.status,'UNKNOWN');
+});
+
+test('match scoring separates required and preferred skill coverage in component_scores',()=>{
+  const inp=clone();
+  inp.profile.skills=[{name:'python',level:'intermediate'},{name:'sql',level:'intermediate'}];
+  inp.requirements=[
+    {kind:'skill',value:'Python',mandatory:true,normalized_value:{name:'python'},requirement_class:'required_skill'},
+    {kind:'skill',value:'React',mandatory:true,normalized_value:{name:'react'},requirement_class:'required_skill'},
+    {kind:'skill',value:'Docker',mandatory:false,normalized_value:{name:'docker'},requirement_class:'preferred_skill'}
+  ];
+  inp.opportunity.skills=['python','react','docker'];
+
+  const m={...base.match,skill_fit:0.8};
+  const decision=contract.decide(inp,m,pack.now);
+
+  assert.ok(decision.component_scores.required_skill_coverage);
+  assert.ok(decision.component_scores.preferred_skill_coverage);
+  assert.equal(decision.component_scores.required_skill_coverage.value,0.5);
+  assert.deepEqual(decision.component_scores.required_skill_coverage.matched,['python']);
+  assert.deepEqual(decision.component_scores.required_skill_coverage.missing,['react']);
+  assert.equal(decision.component_scores.preferred_skill_coverage.value,0);
+  assert.deepEqual(decision.component_scores.preferred_skill_coverage.missing,['docker']);
+  assert.equal(Object.values(decision.component_scores).reduce((s,c)=>s+c.weight,0),100);
+});
+
+test('hackathon eligibility passes with stated deadline, participation rules, and no academic blocking',()=>{
+  const h=clone();
+  h.opportunity.type='hackathon';
+  h.opportunity.deadline='2026-10-27';
+  h.opportunity.location='Online';
+  h.profile.country='India';
+  h.profile.branch='Mechanical Engineering';
+  h.profile.cgpa=6.0;
+  h.requirements=[
+    {kind:'participation',value:'Above legal age of majority in country of residence',mandatory:true,evidence_snippet:'Above legal age of majority in country of residence.'},
+    {kind:'participation',value:'Specific countries/territories excluded',mandatory:true,evidence_snippet:'Specific countries/territories excluded: Cuba, Iran, North Korea, Syria, Crimea.'},
+    {kind:'location',value:'Participation location: Online',mandatory:true,evidence_snippet:'Participation location: Online.'},
+    {kind:'cgpa',value:'8.5',mandatory:true,evidence_snippet:'Minimum CGPA 8.5.'},
+    {kind:'branch',value:'Computer Science',mandatory:true,evidence_snippet:'Only CS branch eligible.'}
+  ];
+
+  // With now='2026-10-12' (from pack.now), deadline 2026-10-27 is 15 days away
+  const elig=contract.eligibility(h,pack.now);
+  assert.equal(elig.status,'ELIGIBLE');
+
+  const deadlineCheck=elig.checks.find(c=>c.kind==='deadline');
+  assert.ok(deadlineCheck);
+  assert.equal(deadlineCheck.status,'PASS');
+  assert.match(deadlineCheck.reason,/The deadline is in \d+ days\./);
+
+  const ageCheck=elig.checks.find(c=>c.kind==='participation'&&c.reason.includes('age of majority'));
+  assert.ok(ageCheck);
+  assert.equal(ageCheck.status,'PASS');
+
+  const countryCheck=elig.checks.find(c=>c.kind==='participation'&&c.reason.includes('eligible country'));
+  assert.ok(countryCheck);
+  assert.equal(countryCheck.status,'PASS');
+
+  const locationCheck=elig.checks.find(c=>c.kind==='location');
+  assert.ok(locationCheck);
+  assert.equal(locationCheck.status,'PASS');
+
+  // Academic requirements are not evaluated for hackathons
+  const cgpaCheck=elig.checks.find(c=>c.kind==='cgpa');
+  assert.ok(cgpaCheck);
+  assert.equal(cgpaCheck.status,'PASS');
+  assert.match(cgpaCheck.reason,/not evaluated for hackathons/);
+
+  // Full decide with strong match produces ELIGIBLE and calculated match_score
+  const result=contract.decide(h,base.match,pack.now);
+  assert.equal(result.eligibility_status,'ELIGIBLE');
+  assert.ok(typeof result.match_score==='number'&&result.match_score>=70);
+  assert.ok(result.explanation.includes(`Match score ${result.match_score}/100`));
+});
+
+test('UNKNOWN eligibility does not produce contradictory explanation or definitive match score',()=>{
+  // Hackathon with missing deadline
+  const h=clone();
+  h.opportunity.type='hackathon';
+  h.opportunity.deadline=null;
+  h.requirements=[];
+
+  const elig=contract.eligibility(h,pack.now);
+  assert.equal(elig.status,'UNKNOWN');
+
+  const res=contract.decide(h,base.match,pack.now);
+  assert.equal(res.eligibility_status,'UNKNOWN');
+  assert.equal(res.decision,'ASK');
+  assert.equal(res.match_score,null);
+  assert.equal(res.component_scores,null);
+
+  // Explanation must NOT have contradictory statements
+  assert.ok(!res.explanation.includes('Match score'));
+  assert.ok(!res.explanation.includes('Some required facts need clarification.'));
+  assert.ok(res.explanation.includes('The hackathon submission deadline is not stated.'));
+  assert.ok(res.explanation.includes('Scoring deferred until required facts are clarified; confidence'));
+
+  // Internship with unverified mandatory requirement
+  const intern=clone();
+  intern.requirements=[
+    {kind:'branch',value:'Any relevant branch',mandatory:true,evidence_snippet:'Any relevant branch.'}
+  ];
+  const internRes=contract.decide(intern,base.match,pack.now);
+  assert.equal(internRes.eligibility_status,'UNKNOWN');
+  assert.equal(internRes.match_score,null);
+  assert.ok(!internRes.explanation.includes('Match score'));
+  assert.ok(!internRes.explanation.includes('Some required facts need clarification.'));
+  assert.ok(internRes.explanation.includes('cannot be verified from the current profile'));
+  assert.ok(internRes.explanation.includes('Scoring deferred until required facts are clarified'));
+});
+
+
+

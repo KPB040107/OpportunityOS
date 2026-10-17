@@ -13,10 +13,17 @@ import {
   ArrowRight,
   ShieldCheck,
   RefreshCw,
+  Plus,
+  ExternalLink,
+  Calendar,
+  Mail,
+  Check,
+  FolderGit2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import type { Profile, Skill } from '@/lib/types';
 
 interface ResumeOnboardingCardProps {
@@ -36,8 +43,22 @@ interface RawFieldResponse {
 
 interface RawSkillResponse {
   name: string;
+  level: 'beginner' | 'intermediate' | 'advanced' | null;
+  suggestedLevel: 'beginner' | 'intermediate' | 'advanced' | null;
+  confidence: number | null;
   alreadyExists: boolean;
   evidence: { page: number; quote: string };
+}
+
+interface RawProjectResponse {
+  title: string;
+  description: string;
+  technologies: string[];
+  github_url: string | null;
+  dates: string | null;
+  alreadyExists: boolean;
+  evidence: { page: number; quote: string };
+  state: string;
 }
 
 interface ExtractedField {
@@ -54,6 +75,20 @@ interface ExtractedField {
 interface ExtractedSkill {
   name: string;
   level: 'beginner' | 'intermediate' | 'advanced' | '';
+  suggestedLevel: 'beginner' | 'intermediate' | 'advanced' | null;
+  confidence: number | null;
+  alreadyExists: boolean;
+  evidence: { page: number; quote: string };
+  selected: boolean;
+}
+
+interface ExtractedProject {
+  id: string;
+  title: string;
+  description: string;
+  technologies: string[];
+  github_url: string;
+  dates: string;
   alreadyExists: boolean;
   evidence: { page: number; quote: string };
   selected: boolean;
@@ -76,8 +111,13 @@ export function ResumeOnboardingCard({
   const [expectedRevision, setExpectedRevision] = useState<number>(currentProfile?.revision ?? 0);
   const [fields, setFields] = useState<ExtractedField[]>([]);
   const [skills, setSkills] = useState<ExtractedSkill[]>([]);
+  const [projects, setProjects] = useState<ExtractedProject[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [totalPages, setTotalPages] = useState<number>(1);
+
+  // Consent toggles (default off per P-05)
+  const [emailConsent, setEmailConsent] = useState(false);
+  const [calendarConsent, setCalendarConsent] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -131,17 +171,43 @@ export function ResumeOnboardingCard({
       }));
       setFields(mappedFields);
 
-      // Map reconciled skills (strictly require student to set level)
-      const mappedSkills: ExtractedSkill[] = (data.reconciled?.skills || []).map((s: RawSkillResponse) => ({
-        name: s.name,
-        level: s.alreadyExists
-          ? (currentSkills.find((cs) => cs.name.toLowerCase() === s.name.toLowerCase())?.level || 'intermediate')
-          : '', // Must be chosen by student
-        alreadyExists: s.alreadyExists,
-        evidence: s.evidence,
-        selected: true,
-      }));
+      // Map reconciled skills with suggested level and evidence (P-04)
+      const mappedSkills: ExtractedSkill[] = (data.reconciled?.skills || []).map((s: RawSkillResponse) => {
+        const existingLevel = s.alreadyExists
+          ? currentSkills.find((cs) => cs.name.toLowerCase() === s.name.toLowerCase())?.level
+          : undefined;
+
+        return {
+          name: s.name,
+          level: existingLevel || s.suggestedLevel || '',
+          suggestedLevel: s.suggestedLevel || null,
+          confidence: s.confidence || null,
+          alreadyExists: s.alreadyExists,
+          evidence: s.evidence,
+          selected: true,
+        };
+      });
       setSkills(mappedSkills);
+
+      // Map reconciled projects (P-02, P-03)
+      const mappedProjects: ExtractedProject[] = (data.reconciled?.projects || []).map(
+        (p: RawProjectResponse, idx: number) => ({
+          id: `proj-${idx}-${Date.now()}`,
+          title: p.title,
+          description: p.description || '',
+          technologies: Array.isArray(p.technologies) ? p.technologies : [],
+          github_url: p.github_url || '',
+          dates: p.dates || '',
+          alreadyExists: p.alreadyExists,
+          evidence: p.evidence,
+          selected: true,
+        })
+      );
+      setProjects(mappedProjects);
+
+      // Reset consent toggles to false (default off per P-05)
+      setEmailConsent(false);
+      setCalendarConsent(false);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred while uploading.');
       setFile(null);
@@ -178,6 +244,17 @@ export function ResumeOnboardingCard({
           level: s.level,
         }));
 
+      const confirmedProjects = projects
+        .filter((p) => p.selected && p.title.trim())
+        .map((p) => ({
+          title: p.title.trim(),
+          description: p.description.trim(),
+          technologies: p.technologies,
+          github_url: p.github_url.trim() || null,
+          dates: p.dates.trim() || null,
+          source: 'resume',
+        }));
+
       const res = await fetch('/api/resume/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -186,6 +263,11 @@ export function ResumeOnboardingCard({
           selected_fields: selectedFieldsObj,
           skills_with_levels: confirmedSkills,
           expected_revision: expectedRevision,
+          projects: confirmedProjects,
+          consents: {
+            email_notifications_enabled: emailConsent,
+            calendar_sync_enabled: calendarConsent,
+          },
         }),
       });
 
@@ -195,10 +277,11 @@ export function ResumeOnboardingCard({
         throw new Error(data.message || data.error || 'Confirmation failed.');
       }
 
-      setSuccess(`Profile updated successfully! Revision #${data.data?.new_revision ?? expectedRevision + 1}. Unlocked matching questions are now being re-evaluated.`);
+      setSuccess(`Profile updated successfully! Revision #${data.data?.new_revision ?? expectedRevision + 1}. Projects and consents recorded.`);
       setDraftId(null);
       setFields([]);
       setSkills([]);
+      setProjects([]);
       setFile(null);
 
       if (onProfileUpdated) {
@@ -225,7 +308,25 @@ export function ResumeOnboardingCard({
     setUploadId(null);
     setFields([]);
     setSkills([]);
+    setProjects([]);
     setError(null);
+  }
+
+  function addEmptyProject() {
+    setProjects([
+      ...projects,
+      {
+        id: `proj-manual-${Date.now()}`,
+        title: '',
+        description: '',
+        technologies: [],
+        github_url: '',
+        dates: '',
+        alreadyExists: false,
+        evidence: { page: 1, quote: 'Added manually during resume review' },
+        selected: true,
+      },
+    ]);
   }
 
   return (
@@ -239,7 +340,7 @@ export function ResumeOnboardingCard({
             <h2 className="text-xl font-semibold text-foreground">1-Minute Resume Onboarding</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Upload your text PDF resume. We extract your academic facts and detected skills with page quotes so you only have to review and confirm once.
+            Upload your text PDF resume. We extract your academic facts, projects, and suggested skill levels with evidence quotes for 1-click confirmation.
           </p>
         </div>
         <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
@@ -362,7 +463,7 @@ export function ResumeOnboardingCard({
                         className="rounded border-border text-primary focus:ring-primary"
                       />
                       <span className="text-xs font-semibold uppercase text-foreground">
-                        {field.field.replace('_', ' ')}
+                        {field.field.replace(/_/g, ' ')}
                       </span>
                     </label>
                     {field.isNew ? (
@@ -406,7 +507,163 @@ export function ResumeOnboardingCard({
             </div>
           </div>
 
-          {/* Skills Section */}
+          {/* Proposed Projects Section (P-02, P-03) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <FolderGit2 className="size-4 text-primary" />
+                  Proposed Projects ({projects.filter((p) => p.selected).length})
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Review, edit, or remove detected projects before applying to your profile
+                </p>
+              </div>
+              <Button type="button" size="sm" variant="outline" onClick={addEmptyProject} className="text-xs h-7">
+                <Plus className="mr-1 size-3.5" />
+                Add Project
+              </Button>
+            </div>
+
+            {projects.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                No project sections detected in this resume. Click &ldquo;Add Project&rdquo; to add one.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {projects.map((project, idx) => (
+                  <div
+                    key={project.id}
+                    className={`rounded-lg border p-4 transition-colors ${
+                      project.selected ? 'border-primary/30 bg-card' : 'border-border/60 bg-muted/10 opacity-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={project.selected}
+                          onChange={(e) => {
+                            const updated = [...projects];
+                            updated[idx].selected = e.target.checked;
+                            setProjects(updated);
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary"
+                        />
+                        <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                          Project #{idx + 1}
+                        </span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {project.alreadyExists && (
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            Existing
+                          </span>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setProjects(projects.filter((_, j) => j !== idx))}
+                          className="h-6 px-1.5 text-muted-foreground hover:text-red-500"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground">Project Title</label>
+                        <Input
+                          placeholder="e.g. Distributed Task Queue"
+                          value={project.title}
+                          disabled={!project.selected}
+                          onChange={(e) => {
+                            const updated = [...projects];
+                            updated[idx].title = e.target.value;
+                            setProjects(updated);
+                          }}
+                          className="mt-1 h-8 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-medium text-muted-foreground flex items-center justify-between">
+                          <span>GitHub URL</span>
+                          {project.github_url && (
+                            <a
+                              href={project.github_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline flex items-center gap-0.5"
+                            >
+                              <span>open</span>
+                              <ExternalLink className="size-2.5" />
+                            </a>
+                          )}
+                        </label>
+                        <Input
+                          placeholder="https://github.com/username/repo"
+                          value={project.github_url}
+                          disabled={!project.selected}
+                          onChange={(e) => {
+                            const updated = [...projects];
+                            updated[idx].github_url = e.target.value;
+                            setProjects(updated);
+                          }}
+                          className="mt-1 h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="text-[11px] font-medium text-muted-foreground">Technologies (comma-separated)</label>
+                      <Input
+                        placeholder="e.g. React, TypeScript, PostgreSQL"
+                        value={project.technologies.join(', ')}
+                        disabled={!project.selected}
+                        onChange={(e) => {
+                          const updated = [...projects];
+                          updated[idx].technologies = e.target.value
+                            .split(',')
+                            .map((t) => t.trim())
+                            .filter(Boolean);
+                          setProjects(updated);
+                        }}
+                        className="mt-1 h-8 text-sm"
+                      />
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="text-[11px] font-medium text-muted-foreground">Description</label>
+                      <Textarea
+                        placeholder="Brief summary of architecture, scope, or accomplishments"
+                        value={project.description}
+                        disabled={!project.selected}
+                        onChange={(e) => {
+                          const updated = [...projects];
+                          updated[idx].description = e.target.value;
+                          setProjects(updated);
+                        }}
+                        className="mt-1 min-h-[60px] text-xs"
+                      />
+                    </div>
+
+                    {project.evidence?.quote && (
+                      <div className="mt-2 flex items-start gap-1 text-[11px] text-muted-foreground">
+                        <BookOpen className="size-3 shrink-0 mt-0.5 text-primary/70" />
+                        <span className="italic">
+                          &ldquo;{project.evidence.quote}&rdquo; (p. {project.evidence.page})
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Detected Skills Section (P-04) */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
@@ -414,39 +671,82 @@ export function ResumeOnboardingCard({
                   Detected Skills ({skills.filter((s) => s.selected).length})
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Select your experience level for newly detected skills (required)
+                  Suggested proficiency levels are pre-calculated with evidence. Accept, adjust, or remove levels.
                 </p>
               </div>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {skills.map((skill, idx) => (
                 <div
                   key={skill.name}
-                  className={`flex flex-col justify-between rounded-lg border p-3 transition-colors ${
+                  className={`flex flex-col justify-between rounded-lg border p-3.5 transition-colors ${
                     skill.selected ? 'border-border bg-card' : 'border-border/60 bg-muted/10 opacity-50'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={skill.selected}
-                        onChange={(e) => {
-                          const updated = [...skills];
-                          updated[idx].selected = e.target.checked;
-                          setSkills(updated);
-                        }}
-                        className="rounded border-border text-primary focus:ring-primary"
-                      />
-                      <span className="text-sm font-medium text-foreground">{skill.name}</span>
-                    </label>
-                    {skill.alreadyExists && (
-                      <span className="text-[10px] text-muted-foreground">Existing</span>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={skill.selected}
+                          onChange={(e) => {
+                            const updated = [...skills];
+                            updated[idx].selected = e.target.checked;
+                            setSkills(updated);
+                          }}
+                          className="rounded border-border text-primary focus:ring-primary"
+                        />
+                        <span className="text-sm font-semibold text-foreground">{skill.name}</span>
+                      </label>
+                      {skill.alreadyExists && (
+                        <span className="text-[10px] text-muted-foreground rounded bg-muted px-1.5 py-0.5">Existing</span>
+                      )}
+                    </div>
+
+                    {/* Suggested level pill with confidence */}
+                    {skill.suggestedLevel ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-full bg-primary/10 border border-primary/20 px-2 py-0.5 text-[10px] font-medium text-primary capitalize">
+                          Suggested: {skill.suggestedLevel} ({Math.round((skill.confidence ?? 0.8) * 100)}% conf)
+                        </span>
+                        {skill.level !== skill.suggestedLevel && skill.selected && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const updated = [...skills];
+                              updated[idx].level = skill.suggestedLevel!;
+                              setSkills(updated);
+                            }}
+                            className="h-5 px-1.5 text-[10px] text-primary hover:bg-primary/10"
+                          >
+                            <Check className="mr-0.5 size-2.5" />
+                            Accept
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-2">
+                        <span className="text-[10px] text-muted-foreground italic">
+                          Level unset &bull; please choose
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Evidence quote */}
+                    {skill.evidence?.quote && (
+                      <div className="mt-2 flex items-start gap-1 text-[11px] text-muted-foreground">
+                        <BookOpen className="size-3 shrink-0 mt-0.5 text-primary/70" />
+                        <span className="italic line-clamp-2">
+                          &ldquo;{skill.evidence.quote}&rdquo;
+                        </span>
+                      </div>
                     )}
                   </div>
 
-                  <div className="mt-2.5">
+                  <div className="mt-3 flex items-center gap-2">
                     <select
                       value={skill.level}
                       disabled={!skill.selected}
@@ -466,9 +766,76 @@ export function ResumeOnboardingCard({
                       <option value="intermediate">Intermediate</option>
                       <option value="advanced">Advanced</option>
                     </select>
+
+                    {skill.level && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const updated = [...skills];
+                          updated[idx].level = '';
+                          setSkills(updated);
+                        }}
+                        className="h-8 px-2 text-[10px] text-muted-foreground hover:text-red-500"
+                        title="Clear level"
+                      >
+                        Clear
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Notification and Calendar Consents (P-05) */}
+          <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Permissions & Consents
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              OpportunityOS respects your privacy. Both integrations default to disabled and can be revoked anytime in Profile settings.
+            </p>
+
+            <div className="space-y-3 pt-1">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={emailConsent}
+                  onChange={(e) => setEmailConsent(e.target.checked)}
+                  className="mt-0.5 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="text-xs">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground">
+                    <Mail className="size-3.5 text-primary" />
+                    <span>OpportunityOS Email Notifications & Reminders</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">(Default off)</span>
+                  </div>
+                  <p className="mt-0.5 text-muted-foreground">
+                    Receive verified opportunity alerts and approaching deadline reminders at your email address.
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={calendarConsent}
+                  onChange={(e) => setCalendarConsent(e.target.checked)}
+                  className="mt-0.5 rounded border-border text-primary focus:ring-primary"
+                />
+                <div className="text-xs">
+                  <div className="flex items-center gap-1.5 font-medium text-foreground">
+                    <Calendar className="size-3.5 text-primary" />
+                    <span>Google Calendar Sync Permission</span>
+                    <span className="text-[10px] text-muted-foreground font-normal">(Default off)</span>
+                  </div>
+                  <p className="mt-0.5 text-muted-foreground">
+                    Allow OpportunityOS to automatically create and update verified deadline events on your Google Calendar. When disabled or disconnected, direct event links and downloadable .ICS calendar files are offered instead.
+                  </p>
+                </div>
+              </label>
             </div>
           </div>
 

@@ -98,10 +98,11 @@ export async function POST(request: NextRequest) {
 
     const fileHash = crypto.createHash('sha256').update(buffer).digest('hex');
 
-    // 4. Fetch user's current profile and skills
-    const [profileRes, skillsRes] = await Promise.all([
+    // 4. Fetch user's current profile, skills, and projects
+    const [profileRes, skillsRes, projectsRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
       supabase.from('profile_skills').select('level, skills(name)').eq('user_id', user.id),
+      supabase.from('profile_projects').select('*').eq('user_id', user.id),
     ]);
 
     const currentProfile = profileRes.data || { revision: 0 };
@@ -109,14 +110,16 @@ export async function POST(request: NextRequest) {
       skill: (row.skills as unknown as { name: string })?.name || '',
       level: row.level,
     }));
-    const profileWithSkills = {
+    const currentProjects = projectsRes.data || [];
+    const profileWithSkillsAndProjects = {
       ...currentProfile,
       skills: currentSkills,
+      projects: currentProjects,
     };
 
-    // 5. Extract draft fields and skills (strictly null level for new skills)
+    // 5. Extract draft fields, skills, and projects
     const draft = extractDraftFromText(sanitizedText, 1, currentProfile.revision ?? 0);
-    const reconciled = reconcileDraftWithProfile(profileWithSkills, draft);
+    const reconciled = reconcileDraftWithProfile(profileWithSkillsAndProjects, draft);
 
     // 6. Upload PDF buffer to Supabase private Storage bucket 'resumes'
     const objectPath = `${user.id}/${fileHash.slice(0, 16)}.pdf`;
@@ -181,6 +184,8 @@ export async function POST(request: NextRequest) {
         contract_version: draft.contract_version,
         proposed_fields: draft.fields,
         proposed_skills: draft.skills,
+        proposed_projects: draft.projects ?? [],
+        proposed_experience_years: draft.years_of_experience ?? null,
         missing_fields: draft.missing_fields,
         status: 'draft_ready',
       })

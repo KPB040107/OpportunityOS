@@ -24,7 +24,8 @@ export function createSourceTools({URL,isIP,lookup,http,https,Buffer,zlib}) {
     return value.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi,(_,key)=>{if(key[0]==='#'){const n=key[1].toLowerCase()==='x'?parseInt(key.slice(2),16):Number(key.slice(1));return n>0&&n<=0x10ffff?String.fromCodePoint(n):' ';}return names[key.toLowerCase()]||' ';});
   }
   function htmlText(html,baseUrl) {
-    let source=html.replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|noscript|svg|nav|footer|header)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ');
+    let source=html.replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|noscript|svg|nav|footer|header|aside)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ');
+    source=source.replace(/<(?:div|section|aside)\b[^>]*(?:id|class)=["'][^"']*\b(?:advertisement|banner-ad|ad-container|adsbygoogle)\b[^"']*["'][^>]*>[\s\S]*?<\/(?:div|section|aside)>/gi, ' ');
     // Preserve public link targets as source evidence rather than asking AI to guess.
     source=source.replace(/<a\b[^>]*href\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a\s*>/gi,(_,q,href,label)=>{let target='';try{target=parseUrl(new URL(decode(href),baseUrl).href).href;}catch{}return label+(target?' '+target:'');});
     return decode(source.replace(/<\/(?:p|div|li|h[1-6]|tr|section|article)>|<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,' '));
@@ -47,7 +48,7 @@ export function createSourceTools({URL,isIP,lookup,http,https,Buffer,zlib}) {
     return !rules.length||rules[0].allow;
   }
   async function fetchPage(value,options={}) {
-    const started=Date.now(),timeoutMs=options.timeoutMs||10000,maxBytes=options.maxBytes||350000;
+    const started=Date.now(),timeoutMs=options.timeoutMs||10000,maxBytes=options.maxBytes||500000;
     let url=parseUrl(value);
     if(!options.robotsRequest) {
       const robots=await fetchPage(new URL('/robots.txt',url).href,{robotsRequest:true,timeoutMs,maxBytes:100000});
@@ -95,7 +96,7 @@ export function createSourceTools({URL,isIP,lookup,http,https,Buffer,zlib}) {
       if(options.robotsRequest) return {text:response.body};
       const text=type==='text/plain'?response.body:htmlText(response.body,url.href);
       if(text.trim().length<50) throw new Error('SOURCE_NO_READABLE_TEXT');
-      if(text.length>20000) throw new Error('SOURCE_TEXT_TOO_LARGE');
+      if(text.length>100000) throw new Error('SOURCE_TEXT_TOO_LARGE');
       return {text,final_url:url.href,fetched_at:new Date().toISOString()};
     }
     throw new Error('SOURCE_REDIRECT_LIMIT');

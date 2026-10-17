@@ -73,11 +73,27 @@ export function DecisionPanel({match,id}:{match:Match|undefined;id:string}){
        </ul>
        {isInsufficient ? (
          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
-           <h4 className="text-sm font-semibold text-amber-950">Scoring Not Evaluated</h4>
+           <h4 className="text-sm font-semibold text-amber-950">Scoring Not Evaluated · Verification Needed</h4>
            <p className="mt-1 text-xs text-amber-900 leading-relaxed">
              This listing did not contain sufficient verifiable requirements or facts to compute a meaningful match score.
              Numerical scores are only calculated when mandatory criteria and profile evidence can be evaluated.
            </p>
+           {(() => {
+             const unknownChecks = (match.eligibility_checks || []).filter(c => c.status === 'UNKNOWN');
+             if (!unknownChecks.length) return null;
+             return (
+               <div className="mt-3 pt-3 border-t border-amber-200/60">
+                 <p className="text-xs font-semibold text-amber-950">Eligibility checks requiring verification:</p>
+                 <ul className="mt-1.5 list-disc pl-4 space-y-1 text-xs text-amber-900">
+                   {unknownChecks.map((c, i) => (
+                     <li key={i}>
+                       <strong className="capitalize">{c.kind.replaceAll('_', ' ')}:</strong> {c.reason}
+                     </li>
+                   ))}
+                 </ul>
+               </div>
+             );
+           })()}
          </div>
        ) : match.component_scores && (
          <>

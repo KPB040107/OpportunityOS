@@ -7,7 +7,12 @@ export function hashString(str) {
 
 export function htmlToCleanText(html = '') {
   if (!html) return '';
-  let text = String(html)
+  let source = String(html)
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style|noscript|svg|nav|footer|header|aside)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+    .replace(/<(?:div|section|aside)\b[^>]*(?:id|class)=["'][^"']*\b(?:advertisement|banner-ad|ad-container|adsbygoogle)\b[^"']*["'][^>]*>[\s\S]*?<\/(?:div|section|aside)>/gi, ' ');
+
+  let text = source
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -104,6 +109,92 @@ export function classifySeniority(title = '', commitment = '') {
   return 'uncertain';
 }
 
+export function buildStructuredRequirements(extractedReqs = [], extractedSkills = [], rawText = '') {
+  const reqs = [];
+  const seenSkills = new Set();
+
+  for (const r of extractedReqs || []) {
+    let reqClass = r.requirement_class;
+    if (!reqClass) {
+      if (r.kind === 'skill') {
+        reqClass = r.mandatory ? 'required_skill' : 'preferred_skill';
+      } else if (['degree', 'cgpa', 'academic_year', 'branch'].includes(r.kind)) {
+        reqClass = 'mandatory_eligibility';
+      } else {
+        reqClass = r.mandatory ? 'mandatory_eligibility' : 'other_requirement';
+      }
+    }
+
+    let evidence = r.evidence || r.evidence_snippet || r.value || '';
+    if (!rawText.includes(evidence)) {
+      const lines = rawText.split(/\r?\n/);
+      const matchLine = lines.find(l => (evidence && l.includes(evidence)) || (r.value && l.includes(r.value)));
+      if (matchLine && matchLine.trim()) {
+        evidence = matchLine.trim();
+      } else if (r.value && rawText.includes(r.value)) {
+        evidence = r.value;
+      } else {
+        evidence = rawText.slice(0, 100);
+      }
+    }
+
+    reqs.push({
+      kind: r.kind || 'other',
+      value: r.value,
+      mandatory: Boolean(r.mandatory),
+      requirement_class: reqClass,
+      evidence,
+      evidence_snippet: evidence
+    });
+
+    if (r.kind === 'skill') {
+      seenSkills.add(r.value.toLowerCase());
+    }
+  }
+
+  for (const skill of extractedSkills || []) {
+    const skLower = skill.toLowerCase();
+    const existing = reqs.find(
+      r => r.kind === 'skill' && (r.value.toLowerCase() === skLower || r.value.toLowerCase().includes(skLower))
+    );
+    if (existing) {
+      existing.requirement_class = 'required_skill';
+      existing.mandatory = true;
+    } else {
+      let quote = '';
+      const lines = rawText.split(/\r?\n/);
+      for (const line of lines) {
+        if (line.toLowerCase().includes(skLower)) {
+          quote = line.trim();
+          break;
+        }
+      }
+      if (!quote || !rawText.includes(quote)) {
+        const re = new RegExp(`\\b${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        const m = rawText.match(re);
+        if (m) quote = m[0];
+        else {
+          const idx = rawText.toLowerCase().indexOf(skLower);
+          if (idx !== -1) quote = rawText.slice(idx, idx + skill.length);
+        }
+      }
+
+      if (quote && rawText.includes(quote)) {
+        reqs.push({
+          kind: 'skill',
+          value: skill,
+          mandatory: true,
+          requirement_class: 'required_skill',
+          evidence: quote,
+          evidence_snippet: quote
+        });
+      }
+    }
+  }
+
+  return reqs;
+}
+
 export function normalizeLeverItem(company, item) {
   if (!item || !item.id || !item.text) {
     throw new Error('INVALID_LEVER_PAYLOAD: Missing id or title');
@@ -144,6 +235,8 @@ export function normalizeLeverItem(company, item) {
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
   const seniority = classifySeniority(title, commitment);
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(descParts);
+  const structuredReqs = buildStructuredRequirements(extractedReqs, extractedSkills, rawText);
+  const requirementsStatus = structuredReqs.length > 0 ? 'REQUIREMENTS_PRESENT' : 'NO_REQUIREMENTS_STATED';
 
   const evidence = [
     { field: 'title', quote: title },
@@ -181,7 +274,8 @@ export function normalizeLeverItem(company, item) {
     risk_signals: riskSignals,
     seniority_level: seniority,
     skills: extractedSkills,
-    requirements: extractedReqs,
+    requirements: structuredReqs,
+    requirements_status: requirementsStatus,
     evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
@@ -193,7 +287,8 @@ export function normalizeLeverItem(company, item) {
       deadline: null,
       seniority_level: seniority,
       skills: extractedSkills,
-      requirements: extractedReqs,
+      requirements: structuredReqs,
+      requirements_status: requirementsStatus,
       evidence
     },
     field_provenance: [
@@ -204,35 +299,251 @@ export function normalizeLeverItem(company, item) {
   };
 }
 
-export function parseDevpostDeadline(datesStr) {
-  if (!datesStr) return null;
-  // Match month day, year format at the end of the date range: e.g. "Aug 15 - Oct 25, 2026"
-  const endMatch = datesStr.match(/(?:^|[-–—])\s*([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})\s*$/);
-  const fallback = datesStr.match(/([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})/g);
-  const target = endMatch ? endMatch[0] : (fallback ? fallback[fallback.length - 1] : null);
-  if (!target) return null;
+export function parseDevpostDeadline(datesStr, returnDetails = false) {
+  if (!datesStr || typeof datesStr !== 'string') return null;
+  const str = datesStr.trim();
+  if (!str) return null;
 
-  const parts = target.match(/([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})/);
-  if (!parts) return null;
-
-  const [_, monthStr, dayStr, yearStr] = parts;
   const months = {
-    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
-    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+    jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2,
+    apr: 3, april: 3, may: 4, jun: 5, june: 5, jul: 6, july: 6,
+    aug: 7, august: 7, sep: 8, sept: 8, september: 8,
+    oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11
   };
-  const m = months[monthStr.toLowerCase()];
-  if (m === undefined) return null;
 
+  const tzOffsets = {
+    utc: 0, gmt: 0, z: 0,
+    est: -300, edt: -240,
+    cst: -360, cdt: -300,
+    mst: -420, mdt: -360,
+    pst: -480, pdt: -420,
+    akst: -540, akdt: -480,
+    hst: -600,
+    ist: 330, bst: 60,
+    cet: 60, cest: 120,
+    eet: 120, eest: 180,
+    jst: 540, kst: 540,
+    sgt: 480, hkt: 480,
+    aedt: 660, aest: 600,
+    nzst: 720, nzdt: 780
+  };
+
+  // Clean common prefixes
+  const cleanStr = str.replace(/^(?:deadline|submissions?\s+(?:close|period)|ends?)\s*[:\-–—]?\s*/i, '').trim();
+
+  // 1. Direct ISO 8601 match (e.g. 2026-10-27T09:00:00-04:00, 2026-10-27T13:00:00Z, 2026-10-27)
+  const isoMatch = cleanStr.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?([+-]\d{2}:?\d{2}|Z)?)?/i);
+  if (isoMatch) {
+    const y = parseInt(isoMatch[1], 10);
+    const mo = parseInt(isoMatch[2], 10) - 1;
+    const d = parseInt(isoMatch[3], 10);
+    const testDate = new Date(Date.UTC(y, mo, d));
+    if (testDate.getUTCFullYear() !== y || testDate.getUTCMonth() !== mo || testDate.getUTCDate() !== d) return null;
+    const dateStr = testDate.toISOString().slice(0, 10);
+
+    if (isoMatch[4] !== undefined) {
+      const dt = new Date(cleanStr);
+      if (!isNaN(dt.getTime())) {
+        if (!returnDetails) return dateStr;
+        return {
+          date: dateStr,
+          time: dt.toISOString().slice(11, 19) + 'Z',
+          iso: dt.toISOString(),
+          display: str
+        };
+      }
+    }
+    if (!returnDetails) return dateStr;
+    return {
+      date: dateStr,
+      time: null,
+      iso: testDate.toISOString(),
+      display: str
+    };
+  }
+
+  // 2. Date ranges or single dates
+  let targetStr = cleanStr;
+  const dashIdx = cleanStr.search(/[-–—]/);
+  if (dashIdx !== -1) {
+    const left = cleanStr.slice(0, dashIdx).trim();
+    const right = cleanStr.slice(dashIdx + 1).trim();
+    const monthRegex = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
+    if (!monthRegex.test(right)) {
+      const leftMonthMatch = left.match(monthRegex);
+      if (leftMonthMatch) {
+        targetStr = leftMonthMatch[0] + ' ' + right;
+      } else {
+        targetStr = right;
+      }
+    } else {
+      targetStr = right;
+    }
+  }
+
+  // Match month, day, year and optional time
+  const dateMatch = targetStr.match(/([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?\s*,\s*(\d{4})(.*)$/i);
+  if (!dateMatch) return null;
+
+  const [_, monthName, dayStr, yearStr, timePart = ''] = dateMatch;
+  const mo = months[monthName.toLowerCase()];
+  if (mo === undefined) return null;
   const d = parseInt(dayStr, 10);
   const y = parseInt(yearStr, 10);
   if (y < 2000 || y > 2100) return null;
 
-  const dateObj = new Date(Date.UTC(y, m, d));
-  // Strict calendar verification: month and day must match exactly (prevent rollover)
-  if (dateObj.getUTCFullYear() !== y || dateObj.getUTCMonth() !== m || dateObj.getUTCDate() !== d) {
+  const testDate = new Date(Date.UTC(y, mo, d));
+  if (testDate.getUTCFullYear() !== y || testDate.getUTCMonth() !== mo || testDate.getUTCDate() !== d) {
     return null;
   }
-  return dateObj.toISOString().slice(0, 10);
+  const dateStr = testDate.toISOString().slice(0, 10);
+
+  // Time parsing if present
+  const timeMatch = timePart.match(/(?:@|at)?\s*(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(am|pm)?(?:\s*([A-Za-z]{2,5}|[+-]\d{2}:?\d{2}))?/i);
+  if (timeMatch && (timeMatch[1] !== undefined && (timeMatch[2] !== undefined || timeMatch[4] !== undefined))) {
+    let hour = parseInt(timeMatch[1], 10);
+    const minute = timeMatch[2] ? parseInt(timeMatch[2], 10) : 0;
+    const second = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+    const ampm = timeMatch[4] ? timeMatch[4].toLowerCase() : null;
+    const tzStr = timeMatch[5] ? timeMatch[5].toLowerCase() : 'utc';
+
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+
+    let offsetMinutes = 0;
+    if (tzOffsets[tzStr] !== undefined) {
+      offsetMinutes = tzOffsets[tzStr];
+    } else {
+      const numMatch = tzStr.match(/^([+-])(\d{1,2}):?(\d{2})?$/);
+      if (numMatch) {
+        const sign = numMatch[1] === '+' ? 1 : -1;
+        const h = parseInt(numMatch[2], 10);
+        const m = numMatch[3] ? parseInt(numMatch[3], 10) : 0;
+        offsetMinutes = sign * (h * 60 + m);
+      }
+    }
+
+    const utcMs = Date.UTC(y, mo, d, hour, minute, second) - (offsetMinutes * 60 * 1000);
+    const dt = new Date(utcMs);
+    if (!returnDetails) return dateStr;
+    return {
+      date: dateStr,
+      time: dt.toISOString().slice(11, 19) + 'Z',
+      iso: dt.toISOString(),
+      display: str
+    };
+  }
+
+  if (!returnDetails) return dateStr;
+  return {
+    date: dateStr,
+    time: null,
+    iso: testDate.toISOString(),
+    display: str
+  };
+}
+
+export function parseDevpostDeadlineDetails(datesStr) {
+  return parseDevpostDeadline(datesStr, true);
+}
+
+export function extractDevpostPageElements(pageHtmlOrText = '') {
+  const isHtml = /<[a-z][\s\S]*>/i.test(pageHtmlOrText);
+  let deadlineStr = null;
+  let isoDate = null;
+  let datesText = null;
+  const eligibilityList = [];
+  let prizesStr = null;
+  let rulesStr = null;
+  let descriptionStr = null;
+
+  if (isHtml) {
+    const isoDateMatch = pageHtmlOrText.match(/data-iso-date=["']([^"']+)["']/i);
+    const timeMatch = pageHtmlOrText.match(/<time[^>]*datetime=["']([^"']+)["'][^>]*>/i);
+    const datesTextMatch = pageHtmlOrText.match(/data-dates-text(?:=["']([^"']+)["']|>([^<]+)<\/)/i);
+    const textDeadlineMatch = pageHtmlOrText.match(/(?:deadline|submission\s+deadline|submissions?\s+close)\s*[:\-–—]?\s*([^<\n\r]+)/i);
+
+    if (isoDateMatch) {
+      isoDate = isoDateMatch[1].trim();
+      deadlineStr = isoDate;
+    } else if (timeMatch) {
+      isoDate = timeMatch[1].trim();
+      deadlineStr = isoDate;
+    }
+
+    if (datesTextMatch) {
+      datesText = (datesTextMatch[1] || datesTextMatch[2]).trim();
+      if (!deadlineStr) deadlineStr = datesText;
+    } else if (textDeadlineMatch) {
+      deadlineStr = textDeadlineMatch[1].trim();
+    }
+
+    const eligListMatch = pageHtmlOrText.match(/<(?:ul|ol|div)[^>]*id=["']eligibility-list["'][^>]*>([\s\S]*?)<\/(?:ul|ol|div)>/i);
+    if (eligListMatch) {
+      const liMatches = eligListMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+      for (const m of liMatches) {
+        let text = m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (/countries\/territories excluded/i.test(text)) {
+          text = 'Specific countries/territories excluded';
+        }
+        if (text) eligibilityList.push(text);
+      }
+    }
+
+    if (eligibilityList.length === 0) {
+      const whoMatch = pageHtmlOrText.match(/<(?:h[1-6]|strong|b)[^>]*>\s*(?:Who can participate\??|Eligibility)\s*<\/(?:h[1-6]|strong|b)>([\s\S]*?)(?=<(?:h[1-6]|section\b|footer\b)|$)/i);
+      if (whoMatch) {
+        const liMatches = whoMatch[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+        for (const m of liMatches) {
+          const text = m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          if (text) eligibilityList.push(text);
+        }
+      }
+    }
+
+    if (pageHtmlOrText.includes('Specific countries/territories excluded') && !eligibilityList.some(e => e.includes('Specific countries/territories excluded'))) {
+      eligibilityList.push('Specific countries/territories excluded');
+    }
+
+    const prizesArticleMatch = pageHtmlOrText.match(/<article[^>]*id=["']prizes["'][^>]*>([\s\S]*?)<\/article>/i);
+    const prizesOverviewMatch = pageHtmlOrText.match(/<div[^>]*id=["']prizes-overview["'][^>]*>([\s\S]*?)<\/div>/i);
+    if (prizesOverviewMatch) {
+      prizesStr = htmlToCleanText(prizesOverviewMatch[1]);
+    } else if (prizesArticleMatch) {
+      prizesStr = htmlToCleanText(prizesArticleMatch[1]);
+    }
+
+    const rulesArticleMatch = pageHtmlOrText.match(/<article[^>]*id=["'](?:rules|challenge-rules)["'][^>]*>([\s\S]*?)<\/article>/i);
+    if (rulesArticleMatch) {
+      rulesStr = htmlToCleanText(rulesArticleMatch[1]);
+    }
+
+    const descArticleMatch = pageHtmlOrText.match(/<article[^>]*id=["'](?:challenge-description|challenge-overview|overview)["'][^>]*>([\s\S]*?)<\/article>/i);
+    if (descArticleMatch) {
+      descriptionStr = htmlToCleanText(descArticleMatch[1]);
+    }
+  } else {
+    const textDeadlineMatch = pageHtmlOrText.match(/(?:deadline|submission\s+deadline|submissions?\s+close)\s*[:\-–—]?\s*([^\n\r]+)/i);
+    if (textDeadlineMatch) deadlineStr = textDeadlineMatch[1].trim();
+
+    const whoMatch = pageHtmlOrText.match(/(?:Who can participate\??|Eligibility)\s*[:\-–—]?\s*\n([\s\S]*?)(?=\n\s*(?:Rules|Prizes|Schedule|Overview|###|$))/i);
+    if (whoMatch) {
+      const lines = whoMatch[1].split('\n').map(l => l.replace(/^[-*•]\s*/, '').trim()).filter(Boolean);
+      eligibilityList.push(...lines);
+    }
+  }
+
+  const cleanText = htmlToCleanText(pageHtmlOrText);
+  return {
+    deadlineStr,
+    isoDate,
+    datesText,
+    eligibilityList,
+    prizesStr,
+    rulesStr,
+    descriptionStr,
+    cleanText
+  };
 }
 
 export function normalizeDevpostItem(item) {
@@ -242,13 +553,133 @@ export function normalizeDevpostItem(item) {
 
   const title = String(item.title).trim();
   const url = item.url || `https://devpost.com/hackathons/${item.id}`;
-  const deadline = parseDevpostDeadline(item.submission_period_dates);
-  const prizes = item.prize_amount ? String(item.prize_amount).replace(/<[^>]*>/g, '').trim() : null;
+
+  // Extract from HTML or text if present
+  let pageData = null;
+  if (item.raw_html || item.page_text) {
+    pageData = extractDevpostPageElements(item.raw_html || item.page_text);
+  }
+
+  const datesSource = item.submission_period_dates || item.deadline || pageData?.datesText || pageData?.isoDate || pageData?.deadlineStr;
+  const deadlineDetails = parseDevpostDeadline(datesSource, true);
+  const deadline = deadlineDetails ? deadlineDetails.date : null;
+  const deadlineDisplay = pageData?.datesText || deadlineDetails?.display || datesSource;
+
+  const prizes = item.prize_amount
+    ? String(item.prize_amount).replace(/<[^>]*>/g, '').trim()
+    : (pageData?.prizesStr || null);
   const location = item.displayed_location?.location || null;
-  const rawText = `Hackathon: ${title}\nSubmission Period: ${item.submission_period_dates || 'Not stated'}\nPrizes: ${prizes || 'None listed'}\nURL: ${url}`;
+  const description = item.description || pageData?.descriptionStr || null;
+  const rules = item.rules || pageData?.rulesStr || null;
+
+  // Gather eligibility rules
+  const rawRules = [];
+  if (Array.isArray(item.eligibility)) {
+    rawRules.push(...item.eligibility);
+  } else if (typeof item.eligibility === 'string') {
+    rawRules.push(...item.eligibility.split(/\r?\n/).map(s => s.replace(/^[-*•]\s*/, '').trim()).filter(Boolean));
+  }
+  if (pageData?.eligibilityList?.length) {
+    for (const r of pageData.eligibilityList) {
+      if (!rawRules.includes(r)) rawRules.push(r);
+    }
+  }
+
+  // If item.raw_html or item.page_text had participation rules embedded:
+  if (rawRules.length === 0 && (item.raw_html || item.page_text)) {
+    const content = item.raw_html || item.page_text;
+    if (/Above legal age of majority in country of residence/i.test(content)) {
+      rawRules.push('Above legal age of majority in country of residence');
+    }
+    if (/Specific countries\/territories excluded/i.test(content) || /countries\/territories excluded/i.test(content)) {
+      rawRules.push('Specific countries/territories excluded');
+    }
+  }
+
+  const rawTextParts = [
+    `Hackathon: ${title}`,
+    datesSource ? `Submission Period: ${datesSource}` : '',
+    location ? `Location: ${location}` : '',
+    prizes ? `Prizes: ${prizes}` : '',
+    description ? `Description: ${description}` : '',
+    rules ? `Rules: ${rules}` : '',
+    rawRules.length > 0 ? `Who can participate:\n${rawRules.map(r => `- ${r}`).join('\n')}` : '',
+    `URL: ${url}`
+  ].filter(Boolean);
+
+  const rawText = rawTextParts.join('\n');
   const riskSignals = detectRiskSignals(rawText);
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'attributed';
-  const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(rawText);
+  const { skills: extractedSkills } = extractSkillsAndRequirements(rawText);
+
+  // Structured participation requirements for hackathons (no fake academic requirements)
+  const devpostReqs = [];
+  if (datesSource) {
+    const subQuote = `Submission Period: ${datesSource}`;
+    devpostReqs.push({
+      kind: 'submission_window',
+      value: `Submission window: ${datesSource}`,
+      mandatory: true,
+      requirement_class: 'mandatory_eligibility',
+      evidence: subQuote,
+      evidence_snippet: subQuote
+    });
+  }
+  if (deadline) {
+    const deadQuote = datesSource ? `Submission Period: ${datesSource}` : `Hackathon: ${title}`;
+    devpostReqs.push({
+      kind: 'deadline',
+      value: `Submission deadline: ${deadline}`,
+      mandatory: true,
+      requirement_class: 'mandatory_eligibility',
+      evidence: deadQuote,
+      evidence_snippet: deadQuote
+    });
+  }
+  if (location) {
+    const locQuote = `Location: ${location}`;
+    devpostReqs.push({
+      kind: 'location',
+      value: `Participation location: ${location}`,
+      mandatory: false,
+      requirement_class: 'other_requirement',
+      evidence: locQuote,
+      evidence_snippet: locQuote
+    });
+  }
+  if (prizes) {
+    const prizeQuote = `Prizes: ${prizes}`;
+    devpostReqs.push({
+      kind: 'prize',
+      value: `Prizes: ${prizes}`,
+      mandatory: false,
+      requirement_class: 'benefit',
+      evidence: prizeQuote,
+      evidence_snippet: prizeQuote
+    });
+  }
+
+  // Participation rules: Who can participate, age, location exclusions
+  for (const rule of rawRules) {
+    let kind = 'eligibility';
+    if (/\b(?:age|majority)\b/i.test(rule)) {
+      kind = 'eligibility';
+    } else if (/countr|territor|excluded|jurisdiction|where prohibited|location/i.test(rule)) {
+      kind = 'location';
+    }
+    const isMandatory = /mandatory|must|require|above legal age|excluded|only|eligible/i.test(rule) || true;
+    devpostReqs.push({
+      kind,
+      value: rule,
+      mandatory: isMandatory,
+      requirement_class: isMandatory ? 'mandatory_eligibility' : 'other_requirement',
+      evidence: rule,
+      evidence_snippet: rule
+    });
+  }
+
+  const structuredReqs = buildStructuredRequirements(devpostReqs, extractedSkills, rawText);
+  const requirementsStatus = structuredReqs.length > 0 ? 'REQUIREMENTS_PRESENT' : 'NO_REQUIREMENTS_STATED';
 
   const evidence = [
     { field: 'title', quote: title },
@@ -258,8 +689,14 @@ export function normalizeDevpostItem(item) {
   if (location) {
     evidence.push({ field: 'location', quote: location });
   }
-  if (item.submission_period_dates) {
-    evidence.push({ field: 'deadline', quote: item.submission_period_dates });
+  if (datesSource) {
+    evidence.push({ field: 'deadline', quote: datesSource });
+  }
+  for (const rule of rawRules) {
+    evidence.push({
+      field: /countr|territor|excluded/i.test(rule) ? 'location' : 'requirements',
+      quote: rule
+    });
   }
   if (extractedSkills.length > 0) {
     evidence.push({ field: 'skills', quote: extractedSkills.join(', ') });
@@ -284,30 +721,49 @@ export function normalizeDevpostItem(item) {
     type: 'hackathon',
     location,
     deadline,
+    deadline_time: deadlineDetails?.time || null,
+    deadline_display: deadlineDisplay,
     original_url: url,
     application_url: url,
     trust_tier: trustTier,
     source_badge: 'Devpost',
     risk_signals: riskSignals,
     skills: extractedSkills,
-    requirements: extractedReqs,
+    requirements: structuredReqs,
+    requirements_status: requirementsStatus,
     evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
       title,
       deadline,
+      deadline_time: deadlineDetails?.time || null,
+      deadline_display: deadlineDisplay,
       prizes,
-      submission_window: item.submission_period_dates,
+      submission_window: datesSource,
+      description,
+      rules,
+      eligibility: rawRules,
       skills: extractedSkills,
-      requirements: extractedReqs,
+      requirements: structuredReqs,
+      requirements_status: requirementsStatus,
       evidence
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/title', value: title },
-      { field: 'submission_period', kind: 'structured_field', json_pointer: '/submission_period_dates', value: item.submission_period_dates }
+      { field: 'submission_period', kind: 'structured_field', json_pointer: '/submission_period_dates', value: datesSource }
     ]
   };
+}
+
+export function enrichDevpostFromPage(item, pageHtmlOrText) {
+  if (!item) return item;
+  const isHtml = /<[a-z][\s\S]*>/i.test(pageHtmlOrText);
+  return normalizeDevpostItem({
+    ...item,
+    raw_html: isHtml ? pageHtmlOrText : item.raw_html,
+    page_text: !isHtml ? pageHtmlOrText : item.page_text
+  });
 }
 
 export function normalizeJSearchItem(item) {
@@ -325,6 +781,8 @@ export function normalizeJSearchItem(item) {
   const riskSignals = detectRiskSignals(rawText);
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'attributed';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(item.job_description || '');
+  const structuredReqs = buildStructuredRequirements(extractedReqs, extractedSkills, rawText);
+  const requirementsStatus = structuredReqs.length > 0 ? 'REQUIREMENTS_PRESENT' : 'NO_REQUIREMENTS_STATED';
 
   const evidence = [
     { field: 'title', quote: title },
@@ -361,7 +819,8 @@ export function normalizeJSearchItem(item) {
     source_badge: 'JSearch India',
     risk_signals: riskSignals,
     skills: extractedSkills,
-    requirements: extractedReqs,
+    requirements: structuredReqs,
+    requirements_status: requirementsStatus,
     evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
@@ -371,7 +830,8 @@ export function normalizeJSearchItem(item) {
       location,
       deadline: null,
       skills: extractedSkills,
-      requirements: extractedReqs,
+      requirements: structuredReqs,
+      requirements_status: requirementsStatus,
       evidence
     },
     field_provenance: [
@@ -410,6 +870,8 @@ export function normalizeGreenhouseItem(company, item) {
   }
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(cleanContent);
+  const structuredReqs = buildStructuredRequirements(extractedReqs, extractedSkills, rawText);
+  const requirementsStatus = structuredReqs.length > 0 ? 'REQUIREMENTS_PRESENT' : 'NO_REQUIREMENTS_STATED';
 
   const evidence = [
     { field: 'title', quote: title },
@@ -447,7 +909,8 @@ export function normalizeGreenhouseItem(company, item) {
     risk_signals: riskSignals,
     seniority_level: seniority,
     skills: extractedSkills,
-    requirements: extractedReqs,
+    requirements: structuredReqs,
+    requirements_status: requirementsStatus,
     evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
@@ -458,7 +921,8 @@ export function normalizeGreenhouseItem(company, item) {
       deadline: null,
       seniority_level: seniority,
       skills: extractedSkills,
-      requirements: extractedReqs,
+      requirements: structuredReqs,
+      requirements_status: requirementsStatus,
       evidence
     },
     field_provenance: [
@@ -498,6 +962,8 @@ export function normalizeAshbyItem(company, item) {
   }
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(cleanContent);
+  const structuredReqs = buildStructuredRequirements(extractedReqs, extractedSkills, rawText);
+  const requirementsStatus = structuredReqs.length > 0 ? 'REQUIREMENTS_PRESENT' : 'NO_REQUIREMENTS_STATED';
 
   const evidence = [
     { field: 'title', quote: title },
@@ -535,7 +1001,8 @@ export function normalizeAshbyItem(company, item) {
     risk_signals: riskSignals,
     seniority_level: seniority,
     skills: extractedSkills,
-    requirements: extractedReqs,
+    requirements: structuredReqs,
+    requirements_status: requirementsStatus,
     evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
@@ -546,7 +1013,8 @@ export function normalizeAshbyItem(company, item) {
       deadline: null,
       seniority_level: seniority,
       skills: extractedSkills,
-      requirements: extractedReqs,
+      requirements: structuredReqs,
+      requirements_status: requirementsStatus,
       evidence
     },
     field_provenance: [

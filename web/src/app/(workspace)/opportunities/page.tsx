@@ -18,6 +18,7 @@ export interface OpportunitiesPageProps {
     limit?: string;
     q?: string;
     type?: string;
+    sort?: string;
     employer?: string;
     trust?: string;
     deadline?: string;
@@ -31,6 +32,20 @@ export interface OpportunitiesPageProps {
   }>;
 }
 
+function buildFilterHref(currentParams: Record<string, string | undefined>, updates: Record<string, string | null>) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(currentParams)) {
+    if (v && v !== 'all') q.set(k, v);
+  }
+  for (const [k, v] of Object.entries(updates)) {
+    if (v === null || v === undefined || v === 'all') q.delete(k);
+    else q.set(k, v);
+  }
+  q.delete('page');
+  const s = q.toString();
+  return s ? `/opportunities?${s}` : '/opportunities';
+}
+
 export default async function OpportunitiesPage({ searchParams }: OpportunitiesPageProps = {}) {
   const { supabase, user } = await requireUser();
   const params = searchParams ? await searchParams : {};
@@ -41,18 +56,57 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
   const limit = Math.min(50, Math.max(1, requestedLimit));
   const from = (page - 1) * limit;
 
-  const [rawItemsRes, profileRes, counterRes, catalogRes] = await Promise.all([
+  const [rawItemsRes, profileRes, counterRes, catalogRes, appsRes] = await Promise.all([
     supabase.from('raw_items').select('id,source_type,raw_content,status,error_code,created_at,is_opportunity,duplicate_of,retry_count,metadata')
       .eq('user_id',user.id).neq('source_type','discovery').order('created_at',{ascending:false}).limit(10),
     supabase.from('profiles').select('display_name,autonomy_mode,branch,interest_types').eq('user_id',user.id).maybeSingle(),
     supabase.rpc('get_home_counter'),
-    supabase.rpc('get_opportunities_page',{p_filters:params,p_limit:limit,p_offset:from})
+    supabase.rpc('get_opportunities_page',{p_filters:params,p_limit:limit,p_offset:from}),
+    supabase.from('applications').select('opportunity_id, status').eq('user_id', user.id)
   ]);
   if (rawItemsRes.error || profileRes.error || catalogRes.error || counterRes.error) throw new Error('Opportunities data unavailable. Please retry.');
   const catalog = catalogRes.data as {items:FeedOpportunity[];total:number;employers:string[]};
-  const feedOpportunities = catalog.items;
+  let feedOpportunities = catalog.items || [];
   const totalCount = catalog.total;
   const distinctEmployers = catalog.employers;
+
+  // Build application status map for each opportunity
+  const applicationStatuses: Record<string, string> = {};
+  for (const app of (appsRes.data || [])) {
+    if (app.opportunity_id) {
+      applicationStatuses[app.opportunity_id] = app.status;
+    }
+  }
+
+  // Server-side sorting handling
+  if (params.sort === 'deadline') {
+    feedOpportunities = [...feedOpportunities].sort((a, b) => {
+      if (a.deadline && b.deadline) return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+      if (a.deadline && !b.deadline) return -1;
+      if (!a.deadline && b.deadline) return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  } else if (params.sort === 'newest') {
+    feedOpportunities = [...feedOpportunities].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  // Enforce diversity caps: max 3 items per employer on first page
+  if (page === 1 && (!params.employer || params.employer === 'all') && params.sort !== 'newest') {
+    const employerCounts: Record<string, number> = {};
+    const topTier: FeedOpportunity[] = [];
+    const deferred: FeedOpportunity[] = [];
+    for (const item of feedOpportunities) {
+      const emp = (item.organization || 'unknown').toLowerCase();
+      const count = employerCounts[emp] || 0;
+      if (count < 3 || topTier.length >= 12) {
+        topTier.push(item);
+        employerCounts[emp] = count + 1;
+      } else {
+        deferred.push(item);
+      }
+    }
+    feedOpportunities = [...topTier, ...deferred];
+  }
 
   const rawItems = rawItemsRes.data as RawItem[];
   const profile = profileRes.data;
@@ -105,6 +159,50 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
         </Card>
       )}
 
+      {/* 3 Top-Level Filter Tabs (X-01) */}
+      <div className="mb-6 flex flex-wrap items-center gap-2 border-b border-border pb-3">
+        <Link
+          href={buildFilterHref(params, { type: null })}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            !params.type || params.type === 'all'
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          All Possibilities
+        </Link>
+        <Link
+          href={buildFilterHref(params, { type: 'internship' })}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            params.type === 'internship'
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          🎓 Internships
+        </Link>
+        <Link
+          href={buildFilterHref(params, { type: 'job' })}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            params.type === 'job'
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          💼 Jobs
+        </Link>
+        <Link
+          href={buildFilterHref(params, { type: 'hackathon' })}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            params.type === 'hackathon'
+              ? 'bg-primary text-white shadow-sm'
+              : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          ⚡ Hackathons
+        </Link>
+      </div>
+
       {/* Intake Announcement Form */}
       <Card className="mb-8">
         <div className="mb-5">
@@ -133,6 +231,7 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
           allEmployers={distinctEmployers}
           currentParams={params}
           autonomyMode={profile?.autonomy_mode || 'balanced'}
+          applicationStatuses={applicationStatuses}
           profileBranch={profile?.branch || null}
         />
       </section>

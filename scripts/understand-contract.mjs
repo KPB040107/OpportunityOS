@@ -16,8 +16,38 @@ export function createUnderstandContract({hash, URL}) {
     const [y,m,d]=value.split('-').map(Number); const q=canon(quote);
     if(q.includes(value)) return true;
     const months=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
-    // Never infer a year or resolve ambiguous numeric dates.
-    return new RegExp(`\\b${d}(?:st|nd|rd|th)?[\\s,/-]+${months[m-1]}[a-z]*[\\s,/-]+${y}\\b`).test(q)||new RegExp(`\\b${months[m-1]}[a-z]*[\\s,/-]+${d}(?:st|nd|rd|th)?[\\s,/-]+${y}\\b`).test(q);
+    const month=months[m-1];
+    if(new RegExp(`\\b${y}[/-]0?${m}[/-]0?${d}(?:t|\\b)`).test(q)) return true;
+    const monthDayYear = new RegExp(`\\b${month}[a-z]*[\\s,/-]+(?:\\d{1,2}(?:st|nd|rd|th)?[\\s,/-]*(?:-|–|—|to)[\\s,/-]*(?:${month}[a-z]*[\\s,/-]+)?)?0?${d}(?:st|nd|rd|th)?[\\s,/-]+${y}\\b`);
+    if(monthDayYear.test(q)) return true;
+    const dayMonthYear = new RegExp(`\\b(?:\\d{1,2}(?:st|nd|rd|th)?[\\s,/-]*(?:-|–|—|to)[\\s,/-]*)?0?${d}(?:st|nd|rd|th)?[\\s,/-]+${month}[a-z]*[\\s,/-]+${y}\\b`);
+    if(dayMonthYear.test(q)) return true;
+    const yearMonthDay = new RegExp(`\\b${y}[\\s,/-]+${month}[a-z]*[\\s,/-]+(?:\\d{1,2}(?:st|nd|rd|th)?[\\s,/-]*(?:-|–|—|to)[\\s,/-]*)?0?${d}(?:st|nd|rd|th)?\\b`);
+    if(yearMonthDay.test(q)) return true;
+    return false;
+  }
+  function chunkSections(text, maxChunkSize = 20000) {
+    if(!text || typeof text !== 'string') return [];
+    if(text.length <= maxChunkSize) return [{heading:'Full', text}];
+    const headingRegex = /^(?:#{1,6}\s+|(?:\*{1,3}|_{1,3})|(?:\d+\.|\b[A-Z0-9_-]+\b\s*[:–-]))?\s*(?:about(?:\s+(?:us|the\s+company|the\s+role|the\s+team|the\s+hackathon))?|responsibilities|roles?\s+(?:&|and)\s+responsibilities|qualifications|basic\s+qualifications|minimum\s+qualifications|preferred\s+qualifications|requirements|job\s+requirements|skills?\s+(?:&|and)\s+requirements|required\s+skills?|eligibility(?:\s+(?:criteria|rules))?|who\s+can\s+participate|rules|hackathon\s+rules|participation\s+rules|prizes|what\s+to\s+build|problem\s+statements?|deadlines?|timeline|schedule)\b/i;
+    const lines = text.split(/\r?\n/);
+    const sections = [];
+    let currentHeading = 'Intro';
+    let currentLines = [];
+    for(const line of lines) {
+      const trimmed = line.trim();
+      const isH = /^#{1,6}\s+/.test(trimmed) || (trimmed.length > 0 && headingRegex.test(trimmed.replace(/^[#*_~<>\s\-\d\.]+|[#*_~<>:\s]+$/g, '').trim()));
+      if(isH) {
+        if(currentLines.length > 0) {
+          sections.push({heading: currentHeading, text: currentLines.join('\n')});
+          currentLines = [];
+        }
+        currentHeading = trimmed.replace(/^[#*_~<>\s\-\d\.]+|[#*_~<>:\s]+$/g, '').trim();
+      }
+      currentLines.push(line);
+    }
+    if(currentLines.length > 0) sections.push({heading: currentHeading, text: currentLines.join('\n')});
+    return sections;
   }
   function validate(output,source) {
     const fail=()=>{throw new Error('INVALID_EXTRACTION');};
@@ -28,9 +58,9 @@ export function createUnderstandContract({hash, URL}) {
     // never infer mandatory status across a blank line or another heading.
     function mandatoryEvidence(quote) {
       if(/\b(preferred|optional|nice[- ]to[- ]have|not (?:required|mandatory))\b/i.test(quote))return null;
-      const isHeading=line=>/^(?:mandatory (?:eligibility )?requirements|eligibility(?: (?:requirements|criteria))?|required (?:skills|qualifications)(?:[ \t]*\([^\n]*\))?|mandatory|requirements|basic qualifications|minimum qualifications|must[- ]haves?)[ \t]*:?$/i.test(line.trim());
+      const isHeading=line=>/^(?:#+[ \t]+)?(?:mandatory (?:eligibility )?requirements|eligibility(?: (?:requirements|criteria|rules?))?|required (?:skills|qualifications)(?:[ \t]*\([^\n]*\))?|mandatory|requirements|basic qualifications|minimum qualifications|must[- ]haves?|who can participate|rules|participation (?:rules|requirements))[ \t]*:?$/i.test(line.trim());
       const literal=original.includes(canon(quote));
-      if(literal&&/\b(minimum|min\.?|must|required|mandatory|only|eligible|at least|eligibility)\b/i.test(quote)) return quote;
+      if(literal&&/\b(minimum|min\.?|must|required|mandatory|only|eligible|at least|eligibility|legal\s+age|age\s+of\s+majority|excluded|prohibited)\b/i.test(quote)) return quote;
       let heading=null,bullet=quote;
       if(!literal) {
         // Repair only a real section heading joined to a real later bullet.
@@ -57,8 +87,9 @@ export function createUnderstandContract({hash, URL}) {
       return null;
     }
     for(const raw of output.items) {
-      const fields=['title','organization','deadline','location','type','application_url','description','requirements','skills','confidence','ambiguity_flags','evidence'];
-      if(!raw||typeof raw!=='object'||fields.some(k=>!(k in raw))||Object.keys(raw).some(k=>!fields.includes(k))) fail();
+      const requiredFields=['title','organization','deadline','location','type','application_url','description','requirements','skills','confidence','ambiguity_flags','evidence'];
+      const allowedFields=[...requiredFields,'requirements_status'];
+      if(!raw||typeof raw!=='object'||requiredFields.some(k=>!(k in raw))||Object.keys(raw).some(k=>!allowedFields.includes(k))) fail();
       if(!['internship','hackathon','scholarship','program','job','unknown'].includes(raw.type)||typeof raw.confidence!=='number'||!Number.isFinite(raw.confidence)||raw.confidence<0||raw.confidence>1) fail();
       for(const key of ['title','organization','deadline','location','application_url','description']) if(raw[key]!==null&&(typeof raw[key]!=='string'||!raw[key].trim()||raw[key].length>(key==='description'?2000:2048))) fail();
       if(!Array.isArray(raw.evidence)||raw.evidence.length>40||!Array.isArray(raw.requirements)||raw.requirements.length>30||!Array.isArray(raw.skills)||raw.skills.length>30||!Array.isArray(raw.ambiguity_flags)||raw.ambiguity_flags.length>20) fail();
@@ -91,13 +122,20 @@ export function createUnderstandContract({hash, URL}) {
         if(!(quotes.deadline||[]).some(q=>dateFromQuote(raw.deadline,q)))fail();
         // A real date alone cannot prove a deadline: publication/event dates
         // must not become application cutoffs. Require an explicit source label.
-        const deadlineDates=sourceFlat.matchAll(/\b(?:deadline|last\s+date(?:\s+(?:to\s+apply|for\s+(?:applications?|registration)))?|closing\s+date|applications?\s+closes?|(?:apply|register)\s+by|due\s+date)\s*[:–-]?\s*(?:(?:is|on|by)\s+)?(?:\d{4}-\d{2}-\d{2}|\d{1,2}(?:st|nd|rd|th)?[\s,/-]+[a-z]+[\s,/-]+\d{4}|[a-z]+[\s,/-]+\d{1,2}(?:st|nd|rd|th)?[\s,/-]+\d{4})\b/gi);
+        const deadlineDates=sourceFlat.matchAll(/\b(?:(?:submission|project|application|registration)?\s*deadlines?|last\s+date(?:\s+(?:to\s+apply|for\s+(?:applications?|registration|submissions?)))?|closing\s+date|(?:applications?|submissions?|registrations?)\s+(?:closes?|due)|(?:apply|register|submit)\s+by|due\s+date|(?:closes?|ends?)\s+(?:on|at)|dates?|hackathon\s+dates?)\s*[:–-]?\s*(?:(?:is|on|by|at|from)\s+)?(?:\d{4}-\d{2}-\d{2}(?:t[\d:.]+(?:[+-]\d{2}:?\d{2}|z)?)?|[a-z]+[\s,/-]+(?:\d{1,2}(?:st|nd|rd|th)?[\s,/-]*(?:-|–|—|to)[\s,/-]*)?\d{1,2}(?:st|nd|rd|th)?[\s,/-]+\d{4}|(?:\d{1,2}(?:st|nd|rd|th)?[\s,/-]*(?:-|–|—|to)[\s,/-]*)?\d{1,2}(?:st|nd|rd|th)?[\s,/-]+[a-z]+[\s,/-]+\d{4})(?:\s*(?:@|at|,)?\s*\d{1,2}(?::\d{2})?(?::\d{2})?\s*(?:am|pm)?(?:\s+[a-z]{2,5}|\s+[+-]\d{2}:?\d{2})?)?\b/gi);
         const proof=[...deadlineDates].find(m=>dateFromQuote(raw.deadline,m[0]));
         if(!proof)fail();derivedEvidence.push({field:'deadline',quote:proof[0]});
       }
       if(raw.application_url!==null) { try{publicLink(raw.application_url);}catch{fail();} }
       const requirements=raw.requirements.map(r=>{
-        if(!r||Object.keys(r).some(k=>!['kind','value','mandatory','evidence'].includes(k))||!['cgpa','academic_year','graduation_year','branch','degree','location','skill','other'].includes(r.kind)||typeof r.value!=='string'||!r.value.trim()||r.value.length>500||typeof r.mandatory!=='boolean'||typeof r.evidence!=='string'||!r.evidence.trim()||r.evidence.length>2000||!canon(r.evidence).includes(canon(r.value))) fail();
+        const allowedReqKeys=['kind','value','mandatory','evidence','requirement_class','quote'];
+        const requiredReqKeys=['kind','value','mandatory','evidence'];
+        if(!r||Object.keys(r).some(k=>!allowedReqKeys.includes(k))||requiredReqKeys.some(k=>!(k in r))||!['cgpa','academic_year','graduation_year','branch','degree','location','skill','other'].includes(r.kind)||typeof r.value!=='string'||!r.value.trim()||r.value.length>500||typeof r.mandatory!=='boolean'||typeof r.evidence!=='string'||!r.evidence.trim()||r.evidence.length>2000||!canon(r.evidence).includes(canon(r.value))) fail();
+        if(r.quote!==undefined&&(typeof r.quote!=='string'||!r.quote.trim()||r.quote.length>2000||!original.includes(canon(r.quote)))) fail();
+        if(r.requirement_class!==undefined) {
+          if(!['mandatory_eligibility','required_skill','preferred_skill','other_requirement','benefit'].includes(r.requirement_class)) fail();
+          if(r.requirement_class==='mandatory_eligibility'&&/\b(?:team player|eager to learn|communication|good to have|nice to have|preferred|optional)\b/i.test(r.evidence)) fail();
+        }
         const evidence=r.mandatory?mandatoryEvidence(r.evidence):r.evidence;
         if(!evidence||!original.includes(canon(evidence)))fail();
         let normalized_value=null;
@@ -105,11 +143,16 @@ export function createUnderstandContract({hash, URL}) {
         if(r.kind==='cgpa') {const n=Number(r.value);if(Number.isFinite(n)&&n>=0&&n<=10&&/cgpa|gpa/i.test(r.evidence)&&/minimum|min\.?|at least/i.test(r.evidence)&&!/out of\s*[45]|\/\s*[45]\b|[45][ -]point/i.test(r.evidence)) normalized_value={minimum:n,scale:10};}
         if(r.kind==='graduation_year'&&/^20\d{2}$/.test(r.value)) normalized_value={allowed:[Number(r.value)]};
         if(r.kind==='academic_year'&&/^[1-8]$/.test(r.value)) normalized_value={allowed:[Number(r.value)]};
-        return {...r,evidence,normalized_value};
+        let requirement_class=r.requirement_class;
+        if(!requirement_class){
+          if(r.kind==='skill') requirement_class=r.mandatory?'required_skill':'preferred_skill';
+          else if(['cgpa','academic_year','graduation_year','branch','degree','location'].includes(r.kind)) requirement_class=r.mandatory?'mandatory_eligibility':'other_requirement';
+          else requirement_class=r.mandatory?'mandatory_eligibility':'other_requirement';
+        }
+        const quote=r.quote||r.evidence;
+        return {...r,evidence,quote,requirement_class,normalized_value};
       });
-      // A validated skill requirement also supplies literal skill evidence.
-      // Do not require the model to duplicate that same quote in two arrays.
-      if(skillNames.some(s=>!(quotes.skills||[]).some(q=>canon(q).includes(canon(s)))&&!requirements.some(r=>r.kind==='skill'&&canon(r.value)===canon(s)))) fail();
+      if(skillNames.some(s=>!(quotes.skills||[]).some(q=>canon(q).includes(canon(s)))&&!requirements.some(r=>r.kind==='skill'&&(canon(r.value)===canon(s)||canon(r.normalized_value?.name)===canon(s)||canon(s).includes(canon(r.value)))))) fail();
       const flags=raw.ambiguity_flags.map(f=>canon(f).replace(/\s+/g,'_').replace(/^(title|organization|deadline|location)_missing$/,'missing_$1'));
       if(/ignore.{0,30}instructions|system prompt|mark.{0,12}\bact\b|reveal.{0,20}(secret|key|password)/i.test(source)) flags.push('source_contains_instructions');
       if(/\b(?:fully remote|telecommuting is ok)\b/i.test(source)&&/\bno telecommuting\b/i.test(source)) {
@@ -119,8 +162,33 @@ export function createUnderstandContract({hash, URL}) {
       for(const key of ['title','organization','deadline']) if(raw[key]===null) flags.push('missing_'+key);
       if(requirements.some(r=>r.mandatory&&r.normalized_value===null)) flags.push('requirements_need_interpretation');
       if(new Set(requirements.filter(r=>r.kind==='cgpa').map(r=>r.value)).size>1) flags.push('contradictory_cgpa');
+
+      let requirements_status='NO_REQUIREMENTS_STATED';
+      if(requirements.length>0){
+        requirements_status='REQUIREMENTS_PRESENT';
+      } else {
+        const statesReqs=/\b(?:qualifications?|requirements?|required skills?|technical skills?|what we are looking for|who you are|what you bring|basic qualifications|minimum qualifications|eligibility|who can participate|rules|participation rules|must[- ]haves?|minimum cgpa|b\.?tech|b\.?e\.?|graduation year|class of|batch of)\b/i.test(source)||/\b(?:python|javascript|typescript|react|node(?:\.js)?|java|c\+\+|c#|sql|html|css|docker|aws|git|mongodb|postgresql)\b/i.test(source);
+        if(statesReqs){
+          requirements_status='EXTRACTION_INCOMPLETE';
+        } else {
+          requirements_status='NO_REQUIREMENTS_STATED';
+        }
+      }
+
+      if(raw.requirements_status){
+        if(!['NO_REQUIREMENTS_STATED','EXTRACTION_INCOMPLETE','REQUIREMENTS_PRESENT'].includes(raw.requirements_status)) fail();
+        if(requirements.length===0&&requirements_status==='EXTRACTION_INCOMPLETE'&&raw.requirements_status!=='EXTRACTION_INCOMPLETE') {
+          fail();
+        }
+        requirements_status=raw.requirements_status;
+      }
+
+      if(requirements_status==='EXTRACTION_INCOMPLETE'){
+        flags.push('extraction_incomplete');
+      }
+
       const evidence=raw.evidence.filter(e=>e.field!=='deadline');for(const e of [...pairedEvidence,...derivedEvidence])if(!evidence.some(existing=>existing.field===e.field&&existing.quote===e.quote))evidence.push(e);
-      const item={...raw,evidence,normalized_location:raw.location?normalize(raw.location):null,skills:[...new Set(skillNames.map(normalize))],requirements,ambiguity_flags:[...new Set(flags)],extraction_version:version};
+      const item={...raw,evidence,normalized_location:raw.location?normalize(raw.location):null,skills:[...new Set(skillNames.map(normalize))],requirements,requirements_status,ambiguity_flags:[...new Set(flags)],extraction_version:version};
       // Incomplete identity cannot be merged across different content safely.
       const url=raw.application_url?new URL(raw.application_url):null;
       const identity=[canon(raw.title||''),canon(raw.organization||''),url?url.hostname.toLowerCase()+url.pathname.replace(/\/$/,''):'',raw.deadline||''];
@@ -129,5 +197,5 @@ export function createUnderstandContract({hash, URL}) {
     }
     return {is_opportunity:output.is_opportunity,items,extraction_version:version};
   }
-  return {version,clean,normalize,publicLink,validate,contentHash:source=>hash(clean(source).replace(/\s+/g,' '))};
+  return {version,clean,normalize,publicLink,validate,contentHash:source=>hash(clean(source).replace(/\s+/g,' ')),dateFromQuote,chunkSections};
 }

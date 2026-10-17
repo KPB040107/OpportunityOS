@@ -3,7 +3,7 @@
 > **The Autonomous Student Opportunity Intelligence & Action Operating System**  
 > AI extracts grounded evidence; deterministic policy evaluates eligibility, enforces standing rules, and executes verified actions.
 
-OpportunityOS is an autonomous agentic platform designed to help students discover, evaluate, track, and act on internships, hackathons, and research roles without missing deadlines or wasting hours on manual tracking. Built with **n8n workflow automation**, **Supabase PostgreSQL with strict Row-Level Security (RLS)**, **Next.js 15 App Router**, and a resilient **Dual-Engine AI architecture (Google Gemini + Groq LLM failover)**.
+OpportunityOS is an autonomous agentic platform engineered to help students discover, evaluate, track, and act on **Internships**, **Jobs**, and **Hackathons** without missing deadlines, falling for predatory listings, or wasting hours on manual application spreadsheets. Built with **Next.js 15 App Router**, **Supabase PostgreSQL with strict Row-Level Security (RLS)**, **n8n workflow automation**, and a resilient **Dual-Engine AI architecture (Google Gemini + Groq LLM failover)**.
 
 ---
 
@@ -11,87 +11,119 @@ OpportunityOS is an autonomous agentic platform designed to help students discov
 
 ```mermaid
 flowchart TD
-    subgraph Capture["1. Ingestion & Discovery Layer"]
+    subgraph Capture["1. Ingestion & Autonomous Discovery Layer"]
         EXT["Chrome Extension (Manifest V3)"] --> INTAKE["/api/capture & /api/intake"]
         BKM["JavaScript Bookmarklet"] --> INTAKE
-        EML["Inbound Email (IMAP/Plus-Addressing)"] --> W1["01-ingest Workflow"]
-        DISC["Discovery Feeds\n(Lever, Greenhouse, Ashby, JSearch, Devpost)"] --> W8["08-discovery Workflow"]
+        EML["Inbound Email (IMAP/Forwarding)"] --> W1["01-ingest Workflow"]
+        DISC["Autonomous Discovery Feeds\n(Lever, Greenhouse, Ashby, JSearch, Devpost)"] --> W8["08-discovery Workflow"]
+        READER["Safe Source Reader (SSRF-Fenced)\nPublic Page Fetch & Render"] --> W8
         INTAKE --> W1
     end
 
-    subgraph Extraction["2. Extraction & Fact Normalization"]
+    subgraph Extraction["2. Grounded Fact Extraction & Bounded Chunking"]
         W1 --> W2["02-understand Workflow"]
         W8 --> W2
-        W2 --> AI_EXT["Dual-Engine LLM Extraction\n(Gemini 2.5 Flash / Groq Llama-3.3)\n+ Canonical Skill & Requirement Extractor"]
-        AI_EXT --> CAT["Deduplicated Catalog &\nOpportunity Projections"]
+        W2 --> CHUNK["Bounded Multi-Section Chunker (>20k Chars)\nHeading Decomposition & Chunk Merging"]
+        CHUNK --> AI_EXT["Dual-Engine LLM Extraction\n(Gemini 2.5 Flash / Groq Fallback)\n+ Canonical Skill & Requirement Extractor"]
+        AI_EXT --> REQ_CLASS["4-Way Requirement Classifier:\n• mandatory_eligibility\n• required_skill\n• preferred_skill\n• other_requirement / benefit"]
+        REQ_CLASS --> PROOF["Strict Quote & Timezone Deadline Validator"]
+        PROOF --> CAT["Deduplicated Opportunity Catalog"]
     end
 
     subgraph Decision["3. Deterministic Decision & Policy Engine"]
         CAT --> W3["03-evaluate Workflow"]
-        W3 --> ELIG["Deterministic Eligibility Check\n(CGPA, Branch, Degree, Year, Deadlines)"]
-        W3 --> FIELD["Field & Domain Relevance Filter\n(CS/IT & Data Science Intersections)"]
-        W3 --> SCORE["Semantic Skill Fit & Match Scoring\n(Weighted Multi-Factor Formula)"]
-        W3 --> RULES["Standing Rules & Learning Loop Engine"]
-        RULES --> DECISION{"Policy Gate\nACT / ASK / IGNORE"}
+        W3 --> ELIG["Type-Specific Eligibility Evaluator:\n• Internships/Jobs: CGPA, Branch, Year, Stated Hard Skills\n• Hackathons: Age of Majority, Region, Deadline (No Academic Bias)"]
+        W3 --> SCORE["Component Match Scoring (0–100):\nSkill Fit, Career Alignment, Interest Fit, Urgency"]
+        W3 --> GAP["Skill-Gap Analysis (Matched vs. Missing Skills)"]
+        W3 --> POLICY{"Policy Gate by Autonomy Mode\n(Cautious: 80/0.85, Balanced: 70/0.75, Autopilot: 60/0.65)"}
+        POLICY --> DECISION{"ACT / ASK / IGNORE"}
     end
 
-    subgraph Action["4. Action & Autonomy Layer"]
+    subgraph Action["4. Action, Approval & Consent Layer"]
         DECISION -- "ACT" --> W4["04-act Workflow"]
         DECISION -- "ASK" --> W5["05-ask Workflow"]
         DECISION -- "IGNORE" --> ARCHIVE["Mute / Archive / Ignore"]
-        W4 --> CAL["Google Calendar Sync (Deadlines)"]
-        W4 --> NOTIF["Email Alerts & Digest"]
-        W4 --> TRK["Application Tracker & Kanban"]
-        W5 --> APPR["Student Clarification & Approval Queue"]
+        W4 --> CONSENT{"Per-User Consent Check"}
+        CONSENT -- "Email Opt-In" --> NOTIF["Email Notifications & Follow-ups"]
+        CONSENT -- "Calendar Opt-In" --> CAL["Google Calendar Sync / .ICS Export"]
+        W4 --> TRK["Application Tracker (Kanban Pipeline)"]
+        W5 --> APPR["Approval Center (Clarification Cards)"]
     end
 
-    subgraph Planning["5. Strategy & Profile Acceleration"]
+    subgraph Profile["5. Profile Intelligence & Resume Onboarding"]
         RES["PDF Resume Upload"] --> W10["10-resume Workflow"]
-        W10 --> PROF["Auto-Populated Profile & Skills"]
-        TRK --> W9["09-plan Workflow"]
-        W9 --> WEEK["Weekly Action Planner (Priority Sprints)"]
+        W10 --> P_EXT["Resume Extractor:\n• Education & CGPA\n• Projects & GitHub Repositories\n• Suggested Skill Levels with Evidence Quotes\n• Years of Professional Experience"]
+        P_EXT --> P_CONF["Interactive Profile Confirmation Modal"]
+        P_CONF --> PROF["Verified Student Profile"]
+        PROF --> W3
     end
 ```
 
 ---
 
-## Key Features
+## Core Pillars & Key Features
 
-### 1. Autonomous Multi-Source Discovery
-- **Native ATS & Job Board Connectors**: Continuous autonomous discovery via Lever, Greenhouse, Ashby, JSearch (RapidAPI for LinkedIn/Indeed/Glassdoor), and Devpost.
-- **Intelligent Field Relevance Filter**: Automatically filters non-technical roles (Sales, HR, Telecalling, Finance) for engineering students, while ensuring Data Science students receive both Data Science and core Computer Science opportunities.
-- **Deduplication & Tiered Trust**: SHA-256 fingerprinting prevents repeated listings across feeds; risk signals flag non-standard compensation, upfront fees, or unverified claims.
+### 1. Three Focused Opportunity Categories
+- **Internships**: Student-tailored work-experience opportunities with branch, degree, CGPA, and technical skill matching.
+- **Jobs**: Full-time graduate roles, associate software engineer positions, and technical openings.
+- **Hackathons**: Competitive team builds and coding events. Evaluated strictly on participation rules (legal age of majority, eligible countries/regions, verified submission deadlines) with **zero academic bias** (degree, branch, and CGPA are never used to disqualify hackathon participants).
+- *Retired Categories*: Scholarship and Program categories have been retired per PRD specifications to maintain high-signal focus.
 
-### 2. Grounded Fact Extraction & Canonical Skill Recognition
-- **Canonical Skill & Requirement Parser**: Recognizes over 80+ technology skills (HTML, CSS, JavaScript, React, Python, C/C++, Java, Android SDK, SQL, Docker, AWS, etc.) directly from job descriptions.
-- **Grounded Qualification Criteria**: Extracts structured, verifiable requirements (mandatory vs. preferred) paired with verbatim evidence quotes from the source listing.
-- **Zero Hallucination Policy**: Every extracted datum is bound to an exact snippet from the source text; unquoted or assumed qualifications are strictly blocked.
+### 2. Autonomous Multi-Source Discovery
+- **Zero-Auth Company Feeds**: Continuously scans Lever (CRED, Meesho), Greenhouse, and Ashby feeds.
+- **Hackathon Registries**: Continuously scans Devpost for live developer hackathons.
+- **Aggregated Feeds**: Integrated JSearch adapter for LinkedIn, Indeed, and Glassdoor searches.
+- **Tiered Trust System**:
+  - `corroborated`: Direct company career feeds.
+  - `attributed`: Public aggregators and hackathon portals.
+  - `unverified`: Flagged if upfront fees, suspicious compensation, or prompt-injection attempts are detected.
 
-### 3. Deterministic & Semantic Decision Engine
+### 3. Automatic Full-Listing Reading & Bounded Extraction Pipeline
+- **Automatic Page Fetching**: When structured API feeds lack full descriptions, OpportunityOS automatically fetches the specific public listing page using an SSRF-fenced reader.
+- **SSRF Protection & Safety**:
+  - Pinned DNS resolution with IPv4/IPv6 validation (internal, loopback, link-local, and private subnets are strictly blocked).
+  - Enforces robots.txt compliance and transparent `OpportunityOS/0.2` User-Agent identification.
+  - Redirect target validation (maximum 3 redirects, HTTPS-to-HTTP downgrade prevention).
+  - Clean HTML-to-Markdown conversion that completely strips navigation, footers, aside menus, and advert scripts.
+- **Bounded Multi-Section Chunking (>20,000 Chars)**:
+  - Decomposes long-form job descriptions and hackathon guidelines (>20k characters) into semantic sections by headings without silent truncation.
+  - Processes each section within bounded context windows and merges extracted skills and requirements with quote preservation.
+  - Flexible retry heuristics re-examine non-bulleted requirements sections before falling back to `EXTRACTION_INCOMPLETE`.
+- **Explicit Deadline & Timezone Recognition**:
+  - Detects submission deadlines with exact times and timezones (e.g., `Oct 27, 2026 @ 1:00pm UTC` / `6:30 PM IST`, `2026-10-27T09:00:00-04:00`, `Nov 15, 2026 11:59pm IST`).
+  - Distinguishes application submission deadlines from hackathon start dates, prize announcements, or page update timestamps.
+- **4-Way Requirement Classification**:
+  - `mandatory_eligibility`: Stated hard eligibility criteria (e.g., age of majority, country eligibility, explicit degree/batch years).
+  - `required_skill`: Technical skills declared as mandatory in the requirements section.
+  - `preferred_skill`: Skills marked optional or listed in "Nice to have" / "Good to have" sections.
+  - `other_requirement` / `benefit`: Informational statements, perks, stipend, or prize amounts.
+
+### 4. Deterministic Decision & Policy Engine
 - **Three-Tier Policy Routing**:
-  - `ACT`: High-confidence match meeting all mandatory requirements. Automatically schedules deadlines to Google Calendar, adds to tracker, and sends alerts.
-  - `ASK`: Ambiguous requirements, missing academic profile facts, or borderline scores. Surfaces interactive clarification cards to the student.
-  - `IGNORE`: Expired deadlines, failing mandatory requirements, or roles below the student's relevance threshold.
-- **Missing Deadline Handling (D1 Policy)**: If an internship posting does not state an explicit closing date, OpportunityOS authorizes action without cluttering the student's calendar.
+  - `ACT`: High-confidence match meeting all mandatory requirements. Automatically queues permitted actions (calendar, tracker, alerts).
+  - `ASK`: Ambiguous requirements, unstated facts requiring clarification, or borderline match scores. Surfaces interactive cards in the Approval Center.
+  - `IGNORE`: Expired deadlines, failing mandatory constraints, or roles below the student's relevance threshold.
+- **Non-Contradictory UI State**:
+  - When facts are insufficient or eligibility is `UNKNOWN`, the system suppresses numerical scores and explicitly names the unresolved facts (e.g., *"The hackathon submission deadline is not stated"*), eliminating confusing `"Insufficient information to score"` badges displayed alongside numerical scores.
+- **Configurable Autonomy Thresholds**:
+  - `cautious`: Score $\ge 80$, Confidence $\ge 0.85$.
+  - `balanced`: Score $\ge 70$, Confidence $\ge 0.75$.
+  - `autopilot`: Score $\ge 60$, Confidence $\ge 0.65$.
 
-### 4. Dual-Engine LLM with Automatic Failover
-- **Primary Model**: Google Gemini (`models/gemini-2.5-flash` / `models/gemini-2.5-flash-lite`).
-- **Resilient Fallback**: Groq Cloud (`openai/gpt-oss-120b` / `llama-3.3-70b-versatile`).
-- **Dynamic Quota & Rate Management**: If Gemini encounters rate limits (HTTP 429) or daily quota exhaustion, the evaluation and extraction pipelines immediately switch to Groq without interruption.
-- **Sub-Second Cooldown**: Worker cooldown reduced to 2 seconds with up to 10,000 daily evaluation allowances.
+### 5. Consent & Calendar Sync Architecture
+- **Strictly Separated Consents**: Independent, granular database columns for `email_notifications_enabled` and `calendar_sync_enabled`.
+- **Bidirectional Trigger Synchronization**: Database triggers synchronize consent preferences across UI actions, worker context, and notification dispatches.
+- **Calendar Dispatch**: Google Calendar API integration writes events for opted-in demo accounts while providing universal `.ics` download links for all students.
 
-### 5. Multi-Channel Capture Tools
-- **Chrome Extension (Manifest V3)**: One-click capture from active browser tabs with instant metadata extraction and secure authentication.
-- **JavaScript Bookmarklet**: Portable capture tool compatible with any modern browser (Chrome, Edge, Safari, Firefox).
-- **Inbound Email Ingestion**: Plus-address routing (`opportunities+userid@domain.com`) automatically converts forwarded job newsletters into structured opportunities.
+### 6. Resume-First Onboarding
+- **Comprehensive PDF Parsing**: Extracts degree, major, expected graduation year, CGPA, and years of professional experience.
+- **Projects & GitHub Links**: Detects portfolio projects, descriptions, tech stacks, and source code links.
+- **Evidence-Backed Skill Levels**: Proposes skill proficiencies (`Beginner`, `Intermediate`, `Advanced`) accompanied by verbatim resume quotes, allowing students to review and adjust before saving.
+- **Privacy D9 Protocol**: Physical resume PDFs are automatically purged from storage upon profile confirmation.
 
-### 6. Standing Rules & Progressive Autonomy
-- **Learning Loop**: When students repeatedly accept or reject opportunities with specific traits, OpportunityOS proposes deterministic standing rules.
-- **Autonomy Counter & Ledger**: Live transparency showing items read, acted upon, clarified, ignored, and protected against risk.
-
-### 7. Weekly Action Planner & Resume Onboarding
-- **Weekly Strategy Sprints**: Organizes active applications into manageable, prioritized weekly sprints with buffer time and conflict protection.
-- **One-Click Resume Onboarding**: Upload a PDF resume to instantly extract degrees, graduation year, CGPA, technical skills, and career goals into your student profile.
+### 7. Weekly Plan Retirement
+- Per PRD specifications, the standalone Weekly Plan feature has been retired to streamline the user journey.
+- `/plan` safely redirects to `/applications`, and `/api/plan/*` endpoints return HTTP 410 Gone (`FEATURE_RETIRED`), preserving historical task data without broken navigation.
 
 ---
 
@@ -100,11 +132,11 @@ flowchart TD
 | Layer | Technologies |
 | :--- | :--- |
 | **Frontend Web App** | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS, Lucide Icons |
-| **Workflow Engine** | n8n (Self-hosted via Docker), Node.js Code Nodes, Custom HTTP Webhooks |
+| **Workflow Automation** | n8n (Self-hosted via Docker), Node.js Code Nodes, Custom HTTP Webhooks |
 | **Database & Auth** | Supabase PostgreSQL, Row-Level Security (RLS), PL/pgSQL Triggers, Auth SSR |
-| **AI & NLP** | Google Gemini 2.5, Groq Cloud (Llama 3.3 / GPT-OSS 120B), Structured Output Parsers |
-| **Browser Extension** | Chrome Extensions Manifest V3, Webpack/Vanilla JS, Background Service Workers |
-| **Testing & CI** | Node.js Test Runner (`node --test`), Custom Contract Suites, RLS Security Tests |
+| **AI & NLP** | Google Gemini 2.5 (`gemini-2.5-flash`), Groq Cloud (`llama-3.3-70b-versatile` / `gpt-oss-120b`) |
+| **Browser Extension** | Chrome Extensions Manifest V3, Service Workers, Content Scripts |
+| **Testing & CI** | Node.js Test Runner (`node --test`), Custom Behavioral Contracts, Smoke Test Suites |
 
 ---
 
@@ -112,35 +144,35 @@ flowchart TD
 
 ```
 OpportunityOS/
-├── web/                             # Next.js 15 web application
-│   ├── src/app/                    # App Router pages (inbox, approvals, plan, rules, sources)
-│   ├── src/components/             # UI components, autonomy counter, decision toolbar
-│   └── src/lib/                    # Supabase SSR clients, validation, decision contracts
+├── web/                             # Next.js 15 App Router web application
+│   ├── src/app/                    # Pages: /inbox, /opportunities, /applications, /rules, /profile, /sources
+│   ├── src/components/             # UI components: decision panels, opportunity cards, resume onboarding
+│   └── src/lib/                    # Supabase SSR clients, validation schemas, decision contracts
 ├── workflows/                       # Sanitized, exportable n8n workflows
 │   ├── 01-ingest.json              # Intake, hashing, and user authentication
-│   ├── 02-understand.json          # Grounded extraction with dual Gemini/Groq LLM
+│   ├── 02-understand.json          # Bounded extraction with dual Gemini/Groq LLM
 │   ├── 03-evaluate.json            # Deterministic decision and semantic matching
 │   ├── 04-act.json                 # Calendar scheduling, tracking, and notifications
 │   ├── 05-ask-and-approve.json     # Interactive student approvals and clarifications
-│   ├── 08-discovery.json           # Scheduled discovery feeder (JSearch, Lever, etc.)
-│   ├── 09-plan.json                # Weekly action planner generator
+│   ├── 08-discovery.json           # Scheduled autonomous discovery feeder (Lever, Devpost, etc.)
 │   └── 10-resume.json              # PDF resume parsing and profile alignment
-├── scripts/                         # Core execution contracts, test suites, and worker tools
-│   ├── decision-contract.mjs       # Pure-function decision logic shared with n8n
-│   ├── discovery-adapters.mjs      # Normalizers for JSearch, Lever, Greenhouse, Ashby, Devpost
-│   ├── skill-extractor.mjs         # Canonical skill and requirement extraction engine
-│   ├── planner-contract.mjs        # Deterministic weekly planner engine
-│   ├── resume-contract.mjs         # Resume parser and profile extractor
-│   ├── smoke-tests.mjs             # End-to-end system smoke tests (Slice S8)
-│   └── run-database.ps1            # Secure database migration runner via n8n Postgres
+├── scripts/                         # Pure-function contracts, test suites, and maintenance tools
+│   ├── decision-contract.mjs       # Pure-function decision and eligibility logic
+│   ├── discovery-adapters.mjs      # Normalizers for Lever, Greenhouse, Ashby, Devpost, JSearch
+│   ├── safe-source.mjs             # SSRF-fenced public page fetcher with HTML-to-Markdown cleaning
+│   ├── skill-extractor.mjs         # Multi-section chunking & canonical skill/requirement parser
+│   ├── resume-contract.mjs         # PDF text sanitizer, project extractor, and skill level proposer
+│   ├── smoke-tests.mjs             # Deployment smoke test suite (Slice S8)
+│   ├── test-primary-acceptance-journey.mjs # End-to-end live primary acceptance journey
+│   ├── run-database.ps1            # Database migration runner via n8n Postgres credentials
+│   └── deploy-*-workflow.ps1       # Automated workflow import and activation scripts
 ├── supabase/
-│   ├── migrations/                 # Migrations 0001 through 0046 (RLS, schema, procedures)
-│   └── tests/                      # Reversible pgTAP / SQL isolation test suites
+│   └── migrations/                 # Migrations 0001 through 0066 (RLS, schema, procedures, triggers)
 ├── extension/                       # Chrome Extension (Manifest V3)
-│   ├── manifest.json               # Extension configuration and permissions
-│   ├── popup.html / popup.js       # Extension UI for one-click opportunity capture
-│   └── background.js               # Service worker for background API dispatch
-└── docs/                            # Architecture specs, decision policies, progress logs
+│   ├── manifest.json               # Extension configuration
+│   ├── popup.html / popup.js       # Extension UI for one-click capture
+│   └── background.js               # Service worker for API dispatch
+└── docs/                            # PRDs, architecture specifications, progress logs
 ```
 
 ---
@@ -149,9 +181,9 @@ OpportunityOS/
 
 ### 1. Prerequisites
 - **Node.js**: v20.9.0 or higher
-- **pnpm**: v9.0.0 or higher
+- **pnpm** or **npm**
 - **Docker & Docker Compose**: For local n8n workflow execution
-- **Supabase Account**: Free or self-hosted PostgreSQL database
+- **Supabase Account**: Cloud or self-hosted PostgreSQL database
 
 ### 2. Environment Configuration
 
@@ -165,32 +197,34 @@ cp .env.example .env
 cp web/.env.example web/.env.local
 ```
 
-Configure the following essential variables in `web/.env.local` and `.env`:
-- `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL.
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: Your Supabase anon/publishable key.
-- `RAPIDAPI_KEY`: (Optional) JSearch API key for real-time job discovery.
+Essential variables in `web/.env.local` and `.env`:
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL.
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: Supabase anon/publishable key.
+- `N8N_PROJECT_ID`: n8n workspace project identifier.
+- `RAPIDAPI_KEY`: (Optional) JSearch API key for aggregated job feeds.
 - `GROQ_API_KEY`: (Optional) Groq Cloud key for ultra-fast fallback evaluation.
 
-> [!IMPORTANT]
-> Never commit `.env` or `web/.env.local` files to version control. All secrets, keys, and tokens are strictly excluded via `.gitignore`.
+### 3. Database Migrations
 
-### 3. Database Initialization
-
-Run the migrations in sequential order using your Supabase SQL editor or the provided database runner:
+Apply database migrations sequentially from `0001` through `0066` using your Supabase SQL editor or the provided database runner:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run-database.ps1 -SqlFile supabase/migrations/0001_foundation.sql
-# ... sequentially through migration 0050
+# ... sequentially through migration 0066
 ```
 
-### 4. Start n8n Workflow Automation
+### 4. Workflow Deployment in n8n
+
+Launch the n8n container and deploy workflows:
 
 ```bash
-# Launch the n8n container
+# Start n8n container
 docker compose up -d
 
-# Open the n8n editor at http://localhost:5678
-# Import workflows from the workflows/ directory and activate them
+# Deploy active workflows
+powershell -File scripts/deploy-discovery-workflow.ps1
+powershell -File scripts/deploy-understand-workflow.ps1
+powershell -File scripts/deploy-evaluate-workflow.ps1
 ```
 
 ### 5. Launch the Web Application
@@ -199,92 +233,33 @@ docker compose up -d
 cd web
 npm install
 npm run build
-npx next start --hostname 127.0.0.1 --port 3000
+npm start
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### 6. Install the Chrome Extension
-
-1. Open Google Chrome and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** (top right toggle).
-3. Click **Load unpacked** and select the [`extension/`](extension/) directory from this repository.
-4. Pin the OpportunityOS extension to capture opportunities from any webpage with one click!
 
 ---
 
 ## Verification & Testing
 
-OpportunityOS includes rigorous regression and acceptance test suites spanning 279+ automated checks:
+OpportunityOS maintains a comprehensive test suite of 241+ unit and contract tests, 8 deployment smoke gates, and an end-to-end primary acceptance journey:
 
 ```bash
-# 1. Run all core contract and unit tests (214 tests)
+# 1. Run all core contract and unit tests (241 passing tests)
 node --test scripts/*.test.mjs
 
 # 2. Run the deployment smoke test suite (8 gates)
 node scripts/smoke-tests.mjs
 
-# 3. Run the live discovery & review journey audit (10 criteria)
-node scripts/audit-discovery-live-journey.mjs
+# 3. Run the live Primary Acceptance Journey
+node scripts/test-primary-acceptance-journey.mjs
 
-# 4. Run the live capture & bookmarklet security audit
-node scripts/audit-s4-live-journey.mjs
-
-# 5. Run the live deterministic planner flow test
-node scripts/test-plan-live-flow.mjs
-
-# 6. Run the live resume onboarding & privacy D9 test
-node scripts/test-resume-live-flow.mjs
+# 4. Compile the Next.js production build
+npm --prefix web run build
 ```
-
-### Test Suite Highlights:
-- **Zero Secret Leakage**: Guarantees zero sensitive tokens in workflow definitions and client bundles.
-- **Two-User Isolation**: Proves complete RLS isolation where User B cannot access or mutate User A's data.
-- **Quota Resilience**: Proves automated failover to Groq LLM when primary Gemini quotas are exhausted.
-- **Deterministic Decisions**: Verifies identical scoring and policy outputs across 30+ standardized scenarios.
-- **Privacy D9 Protocol**: Guarantees physical PDF resumes are purged from Supabase Storage upon profile confirmation.
-
----
-
-## System Audit & Engineering Remediation
-
-In October 2026, an exhaustive, multi-agent audit was conducted across the platform by 10 specialized auditing subagents. All identified defects (P0 through P4) have been fully remediated and verified:
-
-| Bug ID | Severity | Description | Resolution Status |
-|:---|:---|:---|:---|
-| **BUG-001** | P0 Blocker | PostgreSQL RPC error (`p.skills` column missing) crashing `/inbox` and `/opportunities` | **RESOLVED** via migration `0048_catalog_query.sql` |
-| **BUG-002** | P1 High | Login redirection dropping internal deep-link workspace routes | **RESOLVED** in `web/src/app/login/actions.ts` |
-| **BUG-003** | P1 High | Multi-unit planner task truncation and double-booking | **RESOLVED** in `scripts/planner-contract.mjs` & `web/src/lib/planner.ts` |
-| **BUG-004** | P1 High | Unvalidated availability arrays allowing DoS crash | **RESOLVED** with Zod array bounds checking in `/api/plan/availability` |
-| **BUG-005** | P1 High | Missing CORS preflight and response headers on `/api/capture/verify` | **RESOLVED** with OPTIONS handler and `corsHeaders` export |
-| **BUG-006** | P2 Medium | Malformed relation query on Home dashboard approvals feed | **RESOLVED** by querying through `matches` relation |
-| **BUG-007** | P2 Medium | Permission denied on `raw_items` metadata update | **RESOLVED** via `update_raw_item_metadata` RPC in migration `0050` |
-| **BUG-008** | P2 Medium | Requirement extractor dropping Markdown/HTML section headers | **RESOLVED** by normalizing headers in `scripts/skill-extractor.mjs` |
-| **BUG-009** | P2 Medium | Missing CORS headers on early error responses in `/api/intake` | **RESOLVED** with standard `corsHeaders` on all error branches |
-| **BUG-010** | P2 Medium | Unrestricted Chrome extension wildcard regex in production | **RESOLVED** by restricting wildcard to development mode |
-| **BUG-011** | P2 Medium | Missing database performance indexes on actions & requirements | **RESOLVED** via composite indexes in migration `0050` |
-| **BUG-012** | P2 Medium | Standing rule proposal feedback omitted from RPC return | **RESOLVED** by returning `proposal_created` from `track_student_application` |
-| **BUG-013** | P2 Medium | Custom source error throwing unhandled exception | **RESOLVED** with structured redirect and user feedback banner |
-| **BUG-014** | P3 Low | Unhandled client transition rejections on status toggles | **RESOLVED** with try/catch blocks on client actions |
-| **BUG-015** | P3 Low | Zod bundle leak in client profile form | **RESOLVED** by isolating client-safe helpers in `profile-utils.ts` |
-| **BUG-016** | P3 Low | Weekly Plan omitted from sidebar navigation | **RESOLVED** by adding `/plan` destination to `navigation.tsx` |
-| **BUG-017** | P3 Low | False positive skill match on "MS Excel" followed by prepositions | **RESOLVED** with negative lookahead in `skill-extractor.mjs` |
-| **BUG-018** | P3 Low | Resume graduation year window truncating up to 2032 | **RESOLVED** by extending year bounds in `resume-contract.mjs` |
-| **BUG-020** | P3 Low | Unvalidated UUID/Date parameters throwing 500s | **RESOLVED** with strict UUID/ISO date format validation |
-| **BUG-021** | P4 Trivial | `optionalNumber` preprocessor handling `undefined` | **RESOLVED** in `web/src/lib/validation.ts` |
-
----
-
-## Security & Privacy Architecture
-
-- **Strict Row-Level Security (RLS)**: Enforced across all database tables. Authenticated users can only read and mutate their own opportunities, sources, and rules.
-- **Prompt Injection Defense**: Injected instructions inside raw job postings cannot alter decisions or bypass safety gates; suspicious inputs are automatically flagged as risk signals.
-- **Verified TLS & Certificate Pinning**: Direct database connections validate custom Supabase certificates.
-- **Fenced Execution Boundaries**: Sensitive external mutations (calendar writes, email dispatches) require authenticated student authorization or explicit autopilot consent.
 
 ---
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-

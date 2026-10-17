@@ -27,6 +27,9 @@ To deliver an autonomous discovery experience on stage without violating robots 
 | **JSearch (OpenWeb Ninja / RapidAPI)** | Search Aggregator | REST API (API Key required) | Free tier 200 req/mo | **AWAITING CREDENTIALS**. No API key configured in current environment. Per Decision D5, autonomous discovery proceeds with Lever and Devpost. | **Awaiting Provider Key** |
 | **Internshala** | Job / Internship Board | Web Scraping / HTML | N/A | **DIRECT FETCH BLOCKED**. `robots.txt` disallows `/internship/details/`, `/job/details/`, and `/api/`. | **Alert Forwarding & Bookmarklet Only** (Slice S4) |
 | **LinkedIn & Unstop** | Portals / Aggregators | Web Scraping / HTML | N/A | **DIRECT FETCH BLOCKED**. Login-walled; automated scraping forbidden. | **Alert Forwarding & Bookmarklet Only** (Slice S4) |
+| **AICTE Internship Portal** | Government / Academic Portal | Web / Dynamic Portal | N/A | **DIRECT FETCH BLOCKED**. Dynamic session cookies, CAPTCHA on bulk requests, no public unauthenticated REST API. | **Alert Forwarding & Bookmarklet Only** |
+| **Commudle** | Community Events / Hackathons | Dynamic SPA (GraphQL) | N/A | **DIRECT FETCH BLOCKED**. Single-page app with authenticated session GraphQL endpoints; no public RSS or open catalog feed. | **Extension & Bookmarklet Capture Only** |
+| **MLH (Major League Hacking)** | Hackathon Season Schedule | HTML Page | $0 | **UNSTABLE / NO REST API**. DOM structure frequently alters between hackathon seasons; no official unauthenticated REST endpoint. Devpost provides structured zero-auth JSON API. | **Devpost Primary Adapter; MLH via Extension** |
 
 ---
 
@@ -95,6 +98,30 @@ To deliver an autonomous discovery experience on stage without violating robots 
   1. **Alert Forwarding**: Students set up job alert emails on these portals directed or forwarded to their personal OpportunityOS alias (`user_<token>@...`).
   2. **Bookmarklet**: When a student browses a detail page in their own browser, they click "Save to OpportunityOS" to capture visible text and link metadata.
 * **Verdict**: Handled cleanly in **Slice S4**.
+
+---
+
+### 3.4 AICTE Internship Portal (Alert Forwarding & Extension Only)
+* **Access Model**: Government portal (`internship.aicte-india.org`).
+* **Transport**: Dynamic server-rendered HTML with session cookies and intermittent CAPTCHA.
+* **API Availability**: No official unauthenticated public REST or RSS endpoint.
+* **Audit Verdict**: Direct autonomous scheduled pulling is blocked to prevent IP blacklisting or bot detection. AICTE opportunities are ingested through verified student email alert forwarding or the OpportunityOS 1-click browser extension.
+
+---
+
+### 3.5 Commudle (Extension & Bookmarklet Capture Only)
+* **Access Model**: Community event and developer meetup platform (`commudle.com`).
+* **Transport**: Client-rendered React SPA using internal GraphQL queries requiring user session state.
+* **API Availability**: No public open-access REST feed.
+* **Audit Verdict**: Direct backend fetching produces blank HTML Shells. Commudle hackathons and events are captured when viewed by students using the browser extension or bookmarklet.
+
+---
+
+### 3.6 MLH - Major League Hacking (Devpost Primary; MLH via Extension)
+* **Access Model**: Public website (`mlh.io/seasons`).
+* **Transport**: Static / SSR HTML.
+* **API Availability**: No stable versioned REST API. DOM structure updates each hackathon season.
+* **Audit Verdict**: Automated scraping without an official API is prone to breaking during live evaluations. Devpost serves as the rock-solid primary zero-auth hackathon adapter, while MLH hackathons can be captured via extension.
 
 ---
 

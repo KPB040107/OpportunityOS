@@ -19,7 +19,7 @@ export default async function HomePage() {
   const today = new Date().toISOString().slice(0, 10);
 
   // Fetch Home dashboard data concurrently
-  const [counterRes, approvalsRes, clarificationsRes, matchesRes, upcomingRes, planRes] = await Promise.all([
+  const [counterRes, approvalsRes, clarificationsRes, matchesRes, upcomingRes] = await Promise.all([
     supabase.rpc('get_home_counter'),
     supabase
       .from('approvals')
@@ -48,15 +48,7 @@ export default async function HomePage() {
       .not('deadline', 'is', null)
       .gte('deadline', today)
       .order('deadline', { ascending: true })
-      .limit(5),
-    supabase
-      .from('weekly_plans')
-      .select('id, status, plan_week_start, scheduled_items')
-      .eq('user_id', user.id)
-      .eq('status', 'draft')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .limit(5)
   ]);
 
   const counterData = (counterRes.data || {
@@ -138,8 +130,6 @@ export default async function HomePage() {
     trust_tier: string | null;
   }>;
 
-  const draftPlan = planRes.data;
-
   // Next-Action Suggestion: Computed deterministically in code
   interface ActionSuggestion {
     title: string;
@@ -171,15 +161,6 @@ export default async function HomePage() {
       description: `Answering this missing profile fact will automatically re-evaluate ${topClar.affected_opportunity_ids.length} matched opportunities.`,
       cta: 'Answer Question',
       href: '/approvals',
-    };
-  } else if (draftPlan) {
-    nextAction = {
-      badge: 'Planning Ready',
-      badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-200',
-      title: `Confirm Weekly Schedule (${draftPlan.plan_week_start})`,
-      description: 'Your deterministic weekly plan draft is ready with task blocks placed before deadlines.',
-      cta: 'Open Weekly Plan',
-      href: '/plan',
     };
   } else if (topMatches.length > 0 && topMatches[0].decision === 'ACT') {
     const topAct = topMatches[0];
@@ -329,8 +310,8 @@ export default async function HomePage() {
               <Clock className="size-5 text-primary" />
               <h2 className="text-lg font-bold text-foreground">Confirmed Deadlines</h2>
             </div>
-            <Link href="/plan" className="text-xs font-semibold text-primary hover:underline">
-              Open Weekly Plan
+            <Link href="/applications" className="text-xs font-semibold text-primary hover:underline">
+              View in Applications
             </Link>
           </div>
 

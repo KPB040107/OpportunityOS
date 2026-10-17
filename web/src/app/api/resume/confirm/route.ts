@@ -42,6 +42,8 @@ export async function POST(request: NextRequest) {
       p_selected_fields: body.selected_fields,
       p_skills_with_levels: body.skills_with_levels,
       p_expected_revision: body.expected_revision,
+      p_projects: body.projects ?? [],
+      p_consents: body.consents ?? {},
     });
 
     if (error) {

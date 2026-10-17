@@ -60,6 +60,7 @@ export function InboxFeed({
   allEmployers = [],
   currentParams = {},
   userSourcePreferences = {},
+  applicationStatuses = {},
   profileBranch
 }: {
   serverFiltered?: boolean;
@@ -71,6 +72,7 @@ export function InboxFeed({
   currentParams?: Record<string, string | undefined>;
   autonomyMode?: string;
   userSourcePreferences?: Record<string, string>;
+  applicationStatuses?: Record<string, string>;
   profileBranch?: string | null;
 }) {
   const router = useRouter();
@@ -80,6 +82,7 @@ export function InboxFeed({
   const [opportunities, setOpportunities] = useState<FeedOpportunity[]>(initialOpportunities);
   const [sourcePrefs, setSourcePrefs] = useState<Record<string, string>>(userSourcePreferences);
   const [view, setView] = useState<'best' | 'all'>(currentParams.view === 'all' ? 'all' : 'best');
+  const [currentSort, setCurrentSort] = useState<string>(currentParams.sort || 'best');
   const [search, setSearch] = useState(currentParams.q || '');
   const [selectedType, setSelectedType] = useState<string>(currentParams.type || 'all');
   const [selectedEmployer, setSelectedEmployer] = useState<string>(currentParams.employer || 'all');
@@ -255,8 +258,18 @@ export function InboxFeed({
     const topTier: FeedOpportunity[] = [];
     const remaining: FeedOpportunity[] = [];
 
-    // Prioritize eligible, high match, and internships/entry-level
+    // Prioritize eligible, high match, and internships/entry-level (or sort by selected currentSort)
     const sorted = [...filteredOpportunities].sort((a, b) => {
+      if (currentSort === 'newest') {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+      if (currentSort === 'deadline') {
+        if (a.deadline && b.deadline) return new Date(a.deadline).getTime() - new Date(b.deadline).getTime();
+        if (a.deadline && !b.deadline) return -1;
+        if (!a.deadline && b.deadline) return 1;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+
       const aDec = a.match?.decision === 'ACT' ? 1 : a.match?.decision === 'ASK' ? 2 : 3;
       const bDec = b.match?.decision === 'ACT' ? 1 : b.match?.decision === 'ASK' ? 2 : 3;
       if (aDec !== bDec) return aDec - bDec;
@@ -284,7 +297,7 @@ export function InboxFeed({
     }
 
     return [...topTier, ...remaining];
-  }, [filteredOpportunities, view, selectedEmployer]);
+  }, [filteredOpportunities, view, selectedEmployer, currentSort]);
 
   // Stable pagination: 20 per page, capped at max 50 items
   const serverTotalCount = totalCount ?? opportunities.length;
@@ -552,6 +565,23 @@ export function InboxFeed({
           <option value="onsite">On-site / In-person</option>
         </select>
 
+        {/* Server/Client Sorting Options */}
+        <select
+          aria-label="Sort by"
+          value={currentSort}
+          onChange={(e) => {
+            const val = e.target.value;
+            setCurrentSort(val);
+            setCurrentPage(1);
+            if (isServerPaginated) navigateWithParam({ sort: val === 'best' ? null : val, page: 1 });
+          }}
+          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs font-medium text-foreground"
+        >
+          <option value="best">Sort: Best match</option>
+          <option value="newest">Sort: Newest</option>
+          <option value="deadline">Sort: Deadline soonest</option>
+        </select>
+
         {(selectedType !== 'all' ||
           selectedEmployer !== 'all' ||
           selectedEligibility !== 'all' ||
@@ -559,6 +589,7 @@ export function InboxFeed({
           selectedTrust !== 'all' ||
           selectedDeadline !== 'all' ||
           selectedLocation !== 'all' ||
+          currentSort !== 'best' ||
           search) && (
           <Button
             size="sm"
@@ -571,6 +602,7 @@ export function InboxFeed({
               setSelectedTrust('all');
               setSelectedDeadline('all');
               setSelectedLocation('all');
+              setCurrentSort('best');
               setSearch('');
               setCurrentPage(1);
               if (isServerPaginated) router.push(pathname);
@@ -658,6 +690,7 @@ export function InboxFeed({
 
             const totalFromEmployer = employerCounts[opp.organization] || 0;
             const isMuted = sourcePrefs[opp.organization?.toLowerCase()] === 'muted';
+            const appStatus = applicationStatuses?.[opp.id];
 
             return (
               <Card
@@ -676,6 +709,26 @@ export function InboxFeed({
                       {opp.seniority_level && opp.seniority_level !== 'uncertain' && (
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium capitalize text-slate-700">
                           {opp.seniority_level}
+                        </span>
+                      )}
+                      {appStatus === 'applied' && (
+                        <span className="rounded-full bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold">
+                          Applied
+                        </span>
+                      )}
+                      {appStatus === 'to_apply' && (
+                        <span className="rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold">
+                          To Apply
+                        </span>
+                      )}
+                      {(appStatus === 'saved' || opp.is_saved) && appStatus !== 'applied' && appStatus !== 'to_apply' && (
+                        <span className="rounded-full bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold">
+                          Saved
+                        </span>
+                      )}
+                      {appStatus && !['applied', 'to_apply', 'saved'].includes(appStatus) && (
+                        <span className="rounded-full bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 text-[10px] font-semibold capitalize">
+                          {appStatus}
                         </span>
                       )}
                       {isMuted && (

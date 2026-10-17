@@ -8,7 +8,7 @@ export async function saveProfile(_state:FormState,form:FormData):Promise<FormSt
   const {supabase} = await requireUser();
   const mode=z.enum(['cautious','balanced','autopilot']).safeParse(form.get('autonomy_mode'));
   if(!mode.success)return {error:'Please choose a valid autonomy mode.'};
-  const profile = profileSchema.safeParse({display_name:form.get('display_name'),degree:form.get('degree'),branch:form.get('branch'),academic_year:form.get('academic_year'),graduation_year:form.get('graduation_year'),cgpa:form.get('cgpa'),career_goals:form.get('career_goals'),interest_types:form.getAll('interest_types'),preferred_locations:String(form.get('preferred_locations') || '').split(',').map(s=>s.trim()).filter(Boolean)});
+  const profile = profileSchema.safeParse({display_name:form.get('display_name'),degree:form.get('degree'),branch:form.get('branch'),academic_year:form.get('academic_year'),graduation_year:form.get('graduation_year'),cgpa:form.get('cgpa'),years_of_experience:form.get('years_of_experience'),career_goals:form.get('career_goals'),interest_types:form.getAll('interest_types'),preferred_locations:String(form.get('preferred_locations') || '').split(',').map(s=>s.trim()).filter(Boolean)});
   let rawSkills:unknown;
   try { rawSkills=JSON.parse(String(form.get('skills'))); } catch { return {error:'Please check your skill entries.'}; }
   const entered=z.array(skillSchema).max(30).safeParse(rawSkills);
@@ -21,6 +21,7 @@ export async function saveProfile(_state:FormState,form:FormData):Promise<FormSt
   if(modeResult.error)return {error:'Profile saved, but your autonomy mode could not be saved. Please try again.'};
   const preference=await supabase.rpc('set_notification_preference',{p_enabled:form.get('notifications_enabled')==='on'});
   if(preference.error)return {error:'Profile saved, but your email preference was not confirmed.'};
+  await supabase.rpc('update_calendar_consent',{p_enabled:form.get('calendar_sync_enabled')==='on'});
   const catchUp=await supabase.rpc('catch_up_discovery_catalog');
   revalidatePath('/profile'); revalidatePath('/inbox'); revalidatePath('/opportunities'); revalidatePath('/activity');
   if(catchUp.error)return {error:'Profile saved, but we could not load matching opportunities yet. Please retry saving your profile.'};

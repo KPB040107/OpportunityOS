@@ -910,10 +910,92 @@ Reference: OpportunityOS Hackathon Demo Build Guide v3.0 (pp. 15-16), Next Phase
   - Actual Active Executions: `SELECT count(*) FROM execution_entity WHERE status = 'running' AND deletedAt IS NULL` returns exactly **0**.
   - Legitimate Waiting Approvals: The 79 executions with status `'waiting'` are legitimate Slice 4 Ask webhooks (`Wait for authenticated confirmation`) awaiting user action or expiry.
 
+---
 
+## Product Recovery & Expansion PRD Implementation & Acceptance — October 17, 2026
 
+### 1. Scope & Core Architectural Changes
+- **Category Focus (P-01, X-01):** Opportunity catalog strictly scoped to **Internships**, **Jobs**, and **Hackathons**. Scholarship and Program categories permanently retired from database schema, filters, profile choices, navigation, and workflow extractors.
+- **Weekly Plan Retirement (A-05):** Removed from primary navigation (`web/src/components/navigation.tsx`). Route `/plan` redirects to `/applications`. `/api/plan/*` endpoints return HTTP 410 Gone with `FEATURE_RETIRED`. Unpublished workflow `09-plan` in n8n container. Preserved historical database records without breaking dependencies.
+- **Rule & Ledger Copy Refinements (X-04):** Replaced internal jargon with clear student-facing terms: "Your automation preferences" (rules) and "What the agent did" (autonomy ledger).
+- **Database Migrations Applied:**
+  - `0062_opportunity_requirements_and_understanding.sql`: Added `requirement_class` (`mandatory_eligibility`, `required_skill`, `preferred_skill`, `other_requirement`, `benefit`), `requirements_status` (`NO_REQUIREMENTS_STATED`, `EXTRACTION_INCOMPLETE`, `REQUIREMENTS_PRESENT`), quote storage, case-insensitive quote matching, and automatic skill-requirement backfilling.
+  - `0063_profile_projects_consents_and_ranking.sql`: Created `profile_projects` table with RLS, added `email_notifications_enabled`, `calendar_sync_enabled`, and `years_of_experience` to `profiles`, updated `confirm_profile_draft` to support projects & consents, updated `get_opportunities_page` for 3 category tabs, server-side sorting (`best`, `newest`, `deadline_soonest`), and diversity caps (max 3 items per employer per page).
+  - `0064_harmonize_notification_and_calendar_consents.sql`: Added bidirectional trigger `sync_profile_notification_consents` synchronizing `notifications_enabled` and `email_notifications_enabled`. Updated `worker_match_context` and `worker_action_allowed` to strictly enforce email consent and restrict `calendar_event` to consented demo users while providing `.ics` downloads (`calendar_link`) to all users. Created `update_calendar_consent` RPC with event logging.
+  - `0065_save_profile_years_of_experience.sql`: Extended `save_profile` RPC to store `years_of_experience` alongside academic and preference facts.
 
+### 2. Core Pipeline Root-Cause Repairs & Enhancements
+- **Root Cause (Extraction & Evaluation Integrity):** Skill bullets were previously failing eligibility due to greedy experience detection and missing normalized fallbacks. Resolved in `scripts/decision-contract.mjs` by normalizing criteria, narrowing multi-year experience regex, recognizing undergraduate degrees, adding CGPA normalization fallback, and preventing soft skills or benefits from blocking eligibility.
+- **Listing Intelligence & Resume Fit (X-02, X-06):** In `opportunities/[id]/page.tsx`, added concise grounded summary ("What you would do"), 4-way requirement breakdown with literal quotes, transparent skill-gap analysis, and optional preparation suggestions. Clarified that matches are calculated directly against verified listing requirements, not employer ATS screening scores or probabilities.
+- **Source Transparency (S-03, Feasibility Register):** Updated `docs/source-feasibility.md` and `sources/page.tsx` with honest feasibility audits of AICTE, Internshala, Commudle, and MLH, explicitly classifying them as alert-forwarding and browser-extension capture channels rather than direct unauthenticated scrapers.
 
+### 3. Empirical Verification & Evidence
+- **Primary Acceptance Journey (`scripts/test-primary-acceptance-journey.mjs`):** **100% PASS**
+  - [Step 1] Real candidate listing: Meesho full-stack intern announcement extracted with literal quotes and `required_skill` class.
+  - [Step 2] Understand contract validated `requirements_status = 'REQUIREMENTS_PRESENT'`.
+  - [Step 3] Profile evaluation (Python confirmed, React absent): Student evaluated as **`ELIGIBLE`**; Python passed, React tracked as skill gap without causing `UNKNOWN`. Decision: `ASK` (match score: 57.25, confidence: 0.90).
+  - [Step 4] Server-side category tabs: 10 pure internships, 9 pure hackathons, 10 pure jobs returned via `get_opportunities_page`.
+  - [Step 5] Weekly Plan retirement verified: Live HTTP request to `/api/plan` returned HTTP 410 Gone (`FEATURE_RETIRED`).
+  - [Step 6] Application tracking: Authenticated student tracked status as `"applied"` via `track_student_application` RPC with automated rollback in `finally` (0 human account mutation).
+  - [Step 7] Consent boundaries: `email_notifications_enabled`, `calendar_sync_enabled`, and `notifications_enabled` verified synchronized by trigger.
+- **Node Contract & Unit Test Suite:** **228 / 228 tests passing (0 failures)**.
+- **Audit Acceptance Suite (`scripts/audit-acceptance.test.mjs`):** **27 / 27 tests passing (0 failures)**.
+- **Slice S8 Smoke Test Suite (`scripts/smoke-tests.mjs`):** **8 / 8 smoke gates passing**.
+- **Next.js Production Build (`npm --prefix web run build`):** **18 / 18 routes compiled cleanly, 0 TypeScript errors, 0 ESLint warnings**.
+- **Active Services Health:**
+  - Next.js: `http://127.0.0.1:3000` (HTTP 200 / 307 redirect).
+  - n8n: `http://127.0.0.1:5678` (HTTP 200, Workflows 01–08 active, 09 unpublished).
+  - Cloud Supabase PostgreSQL: Migrations `0001` through `0066` applied cleanly.
 
+---
 
+## Automatic Full-Listing Reading and Extraction Repair — October 17, 2026
 
+### 1. Traced Failure & Root Cause Analysis
+- **Trigger Case:** “Life After Code” hackathon on Devpost (`https://gitlab-transcend.devpost.com/`). The public page visibly stated a deadline of **October 27, 2026 at 6:30 PM IST** (`data-iso-date="2026-10-27T09:00:00-04:00"`, `Deadline: Oct 27, 2026 @ 1:00pm UTC`) and participation rules (`Who can participate`: above legal age of majority, country exclusions). OpportunityOS previously marked `deadline = null` ("deadline not stated"), marked eligibility `UNKNOWN`, and rendered contradictory badges in UI ("Insufficient information to score" alongside "Match score 15/100").
+- **Identified Failure Points:**
+  1. *Devpost Date Range Parsing Flaw:* In `scripts/discovery-adapters.mjs`, `parseDevpostDeadline` only matched ranges with `[Month] [Day]` on both sides of the hyphen (e.g. `Aug 15 - Oct 25, 2026`). For ranges where the month is stated only once on the left (e.g. `Oct 05 - 27, 2026`), the parser failed to associate `Oct` with `27, 2026`, returning `null`.
+  2. *Shallow Discovery Metadata:* `normalizeDevpostItem` synthesized a shallow 4-line description from API metadata and never fetched the underlying public listing page to retrieve the closing time (`6:30 PM IST`) and "Who can participate" eligibility rules.
+  3. *Unbounded Page Cutoff:* In `scripts/safe-source.mjs` and workflow nodes, pages > 20,000 characters threw `SOURCE_TEXT_TOO_LARGE` or were cut off.
+  4. *Contradictory Decision State:* When eligibility was `UNKNOWN`, `decision-contract.mjs` still calculated component scores and rendered "Match score 15/100" in `explanation`, while the UI card and detail page rendered the amber badge "Insufficient information to score".
+
+### 2. Multi-Agent Implementation with Exclusive File Ownership
+The repair was divided among three parallel subagents with disjoint file ownership:
+- **Source Reader Specialist (`44084fcb`):**
+  - Files owned: `scripts/safe-source.mjs`, `scripts/discovery-adapters.mjs`, `scripts/source-feasibility.test.mjs`, `scripts/discovery-contract.test.mjs`.
+  - Repaired `parseDevpostDeadline` to support month-on-left ranges (`"Oct 05 - 27, 2026"` -> `"2026-10-27"`), ISO 8601 timestamps, and date-time/timezone strings (`"Oct 27, 2026 @ 1:00pm UTC"`, `"2026-10-27T09:00:00-04:00"`, `"Nov 15, 2026 11:59pm IST"`).
+  - Added `parseDevpostDeadlineDetails` and `extractDevpostPageElements` to extract deadlines, `#eligibility-list` items, prizes, and clean markdown from public Devpost pages.
+  - Implemented `enrichDevpostFromPage` to fetch and enrich public listings without navigation, footer, or advertisement clutter.
+  - Relaxed `scripts/safe-source.mjs` cutoff from 20,000 to 100,000 characters while preserving all SSRF protections (pinned IP, IPv4/IPv6 validation, redirect limits, robots.txt, and user-agent header).
+- **Extraction Specialist (`66a809c1`):**
+  - Files owned: `scripts/skill-extractor.mjs`, `scripts/understand-contract.mjs`, `scripts/understand-contract.test.mjs`, `scripts/generate-understand-workflow.mjs`, `workflows/02-understand.json`.
+  - Implemented multi-section chunking: `chunkListingByHeadings(text, 20000)` decomposes long listings (>20k chars) into bounded section chunks without truncation and merges extracted skills and requirements with quote preservation.
+  - Added flexible retry heuristics on qualification sections before falling back to `EXTRACTION_INCOMPLETE`.
+  - Added regex recognition for hackathon eligibility criteria (legal age of majority, excluded territories) as `mandatory_eligibility`.
+  - Extended `dateFromQuote` and deadline validation to match date-time quotes and ranges.
+  - Regenerated `workflows/02-understand.json`.
+- **Decision & UI Specialist (`37c2d8e2`):**
+  - Files owned: `web/src/components/decision-panel.tsx`, `web/src/components/opportunity-card.tsx`, `web/src/app/(workspace)/opportunities/[id]/page.tsx`, `scripts/decision-contract.mjs`, `scripts/decision-contract.test.mjs`, `scripts/generate-evaluate-workflow.mjs`, `workflows/03-evaluate.json`.
+  - Fixed contradictory UI: when eligibility is `UNKNOWN`, `match_score` is set to `null`, numerical match score badges are suppressed, and the explanation explicitly states missing requirements without contradictory score numbers.
+  - Hackathon evaluation: stated deadlines evaluate to `PASS`; academic requirements (degree, branch, cgpa, graduation year) are exempted for hackathons; participation rules (age of majority, eligible countries) evaluate to `PASS` for enrolled university students in India.
+  - Updated card and detail UI components to display deadline closing times and honest status badges.
+  - Regenerated `workflows/03-evaluate.json`.
+- **Main Agent Integration & Deployment:**
+  - Applied Database Migration `0066_backfill_life_after_code_extraction.sql` via `scripts/run-database.ps1`.
+  - Reevaluated and updated "Life After Code" (`9f8d85e1-09e2-4ab5-8222-3f1e23ac0667`): deadline updated to `2026-10-27`, deadline display `Oct 27, 2026 @ 1:00pm UTC (6:30 PM IST)`, requirements synced, decision reevaluated to `ACT` (`ELIGIBLE`, match score: 75/100, confidence: 85%).
+  - Deployed updated runtime workflows to active n8n container (`opportunityos-n8n-1`) and restarted the service.
+
+### 3. Empirical Verification Results
+- **Full Node Contract & Unit Test Suite (`scripts/*.test.mjs`):** **241 / 241 tests passing (0 failures)**.
+- **Slice S8 Smoke Test Suite (`scripts/smoke-tests.mjs`):** **8 / 8 smoke gates passing**.
+- **Primary Acceptance Journey (`scripts/test-primary-acceptance-journey.mjs`):** **100% PASS**.
+- **Next.js Production Build (`npm --prefix web run build`):** **18 / 18 routes compiled cleanly, 0 errors**.
+- **Live Opportunity Web Page Verification:**
+  - Authenticated request to `http://127.0.0.1:3000/opportunities/9f8d85e1-09e2-4ab5-8222-3f1e23ac0667` confirmed:
+    * `Title: Life After Code`
+    * `Deadline: Oct 27, 2026`
+    * `Status: ELIGIBLE`
+    * `Decision: ACT`
+    * `Match Score: 75/100`
+    * Contradictory "Insufficient information" badge completely eliminated.
+  - Authenticated request to `http://127.0.0.1:3000/opportunities?type=hackathon` confirmed pure hackathon card rendered with verified deadline and Devpost badge.

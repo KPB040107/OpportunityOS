@@ -87,6 +87,7 @@ export function validateProfileDraft(draft) {
     'graduation_year',
     'cgpa',
     'cgpa_scale',
+    'years_of_experience',
   ]);
 
   if (!Array.isArray(draft.fields)) {
@@ -112,16 +113,31 @@ export function validateProfileDraft(draft) {
     throw new Error('INVALID_SKILLS: Skills must be an array.');
   }
 
+  const validSkillLevels = new Set(['beginner', 'intermediate', 'advanced', null, undefined]);
   for (const skill of draft.skills) {
     if (!skill || typeof skill.name !== 'string' || !skill.name.trim()) {
       throw new Error('INVALID_SKILL_NAME: Skill entry must have a non-empty name.');
     }
-    // Proficiency level MUST be null in initial extracted draft (student must set it)
-    if (skill.level !== null && skill.level !== undefined) {
-      throw new Error(`UNCONFIRMED_SKILL_LEVEL: Skill '${skill.name}' level must be set by student, not inferred.`);
+    // Proficiency level can be null (unset) or a valid level
+    if (!validSkillLevels.has(skill.level)) {
+      throw new Error(`INVALID_SKILL_LEVEL: Skill '${skill.name}' level must be 'beginner', 'intermediate', 'advanced', or null.`);
     }
     if (!skill.evidence || typeof skill.evidence.quote !== 'string') {
       throw new Error(`MISSING_SKILL_EVIDENCE: Skill '${skill.name}' must provide an evidence quote.`);
+    }
+  }
+
+  if (draft.projects !== undefined && draft.projects !== null) {
+    if (!Array.isArray(draft.projects)) {
+      throw new Error('INVALID_PROJECTS: Projects must be an array.');
+    }
+    for (const project of draft.projects) {
+      if (!project || typeof project.title !== 'string' || !project.title.trim()) {
+        throw new Error('INVALID_PROJECT_TITLE: Project entry must have a non-empty title.');
+      }
+      if (!project.evidence || typeof project.evidence.quote !== 'string') {
+        throw new Error(`MISSING_PROJECT_EVIDENCE: Project '${project.title}' must provide an evidence quote.`);
+      }
     }
   }
 
@@ -137,7 +153,8 @@ export function validateProfileDraft(draft) {
  * 1. Proposed values that match existing
  * 2. Proposed values that conflict with existing
  * 3. Newly proposed fields that fill empty profile attributes
- * 4. Existing skills vs newly proposed skills
+ * 4. Existing skills vs newly proposed skills (with suggested levels and evidence)
+ * 5. Existing projects vs newly proposed projects
  */
 export function reconcileDraftWithProfile(profile, draft) {
   const currentProfile = profile || {};
@@ -169,8 +186,31 @@ export function reconcileDraftWithProfile(profile, draft) {
     return {
       name: skillItem.name.trim(),
       alreadyExists,
+      level: skillItem.level ?? null,
+      suggestedLevel: skillItem.suggested_level ?? skillItem.level ?? null,
+      confidence: skillItem.confidence ?? null,
       evidence: skillItem.evidence,
       state: alreadyExists ? 'already_in_profile' : 'needs_confirmation',
+    };
+  });
+
+  const rawProjects = Array.isArray(currentProfile.projects) ? currentProfile.projects : [];
+  const existingProjectTitles = new Set(
+    rawProjects.map((p) => (p.title || '').toLowerCase().trim())
+  );
+  const draftProjects = Array.isArray(draft.projects) ? draft.projects : [];
+  const projectComparisons = draftProjects.map((proj) => {
+    const lowerTitle = (proj.title || '').toLowerCase().trim();
+    const alreadyExists = existingProjectTitles.has(lowerTitle);
+    return {
+      title: proj.title.trim(),
+      description: proj.description || '',
+      technologies: Array.isArray(proj.technologies) ? proj.technologies : [],
+      github_url: proj.github_url || null,
+      dates: proj.dates || null,
+      alreadyExists,
+      evidence: proj.evidence,
+      state: alreadyExists ? 'already_in_profile' : 'proposed',
     };
   });
 
@@ -178,6 +218,7 @@ export function reconcileDraftWithProfile(profile, draft) {
     baseRevision: typeof currentProfile.revision === 'number' ? currentProfile.revision : 0,
     fields: fieldComparisons,
     skills: skillComparisons,
+    projects: projectComparisons,
     missingFields: draft.missing_fields || [],
   };
 }
@@ -213,6 +254,14 @@ export function validateConfirmationPayload(payload) {
     }
   }
 
+  // Check years of experience if provided
+  if (selectedFields.years_of_experience !== undefined && selectedFields.years_of_experience !== null && selectedFields.years_of_experience !== '') {
+    const expVal = Number(selectedFields.years_of_experience);
+    if (isNaN(expVal) || expVal < 0 || expVal > 50) {
+      throw new Error('INVALID_EXPERIENCE_YEARS: Years of experience must be a non-negative number.');
+    }
+  }
+
   if (!Array.isArray(payload.skills_with_levels)) {
     throw new Error('INVALID_SKILLS_CONFIRMATION: skills_with_levels must be an array.');
   }
@@ -222,8 +271,32 @@ export function validateConfirmationPayload(payload) {
     if (!s || typeof s.name !== 'string' || !s.name.trim()) {
       throw new Error('INVALID_CONFIRMED_SKILL: Skill must have a valid name.');
     }
-    if (typeof s.level !== 'string' || !validLevels.has(s.level)) {
+    if (typeof s.level !== 'string' || !validLevels.has(s.level.toLowerCase())) {
       throw new Error(`INVALID_SKILL_LEVEL: Skill '${s.name}' must have level 'beginner', 'intermediate', or 'advanced'.`);
+    }
+  }
+
+  // Validate proposed projects if present
+  if (payload.projects !== undefined && payload.projects !== null) {
+    if (!Array.isArray(payload.projects)) {
+      throw new Error('INVALID_PROJECTS_CONFIRMATION: projects must be an array.');
+    }
+    for (const p of payload.projects) {
+      if (!p || typeof p.title !== 'string' || !p.title.trim()) {
+        throw new Error('INVALID_PROJECT: Project must have a valid title.');
+      }
+      if (p.github_url && typeof p.github_url === 'string') {
+        if (!p.github_url.toLowerCase().includes('github.com')) {
+          throw new Error('INVALID_GITHUB_URL: GitHub URL must be a valid github.com link.');
+        }
+      }
+    }
+  }
+
+  // Validate consents if present
+  if (payload.consents !== undefined && payload.consents !== null) {
+    if (typeof payload.consents !== 'object' || Array.isArray(payload.consents)) {
+      throw new Error('INVALID_CONSENTS: consents must be an object.');
     }
   }
 
@@ -237,6 +310,7 @@ export function extractDraftFromText(text, pageNum = 1, baseRevision = 0) {
   const clean = sanitizeResumeText(text);
   const fields = [];
   const skills = [];
+  const projects = [];
   const missing = [];
 
   // 1. Degree & Branch detection
@@ -296,25 +370,211 @@ export function extractDraftFromText(text, pageNum = 1, baseRevision = 0) {
     missing.push('graduation_year');
   }
 
-  // 4. Skills dictionary search
+  // 4. Professional Experience (explicit years, NOT calculated by counting projects)
+  const expMatch = clean.match(/\b([0-9]+(?:\.[0-9]+)?)\+?\s*years?(?:\s+of)?\s+(?:professional|industry|work|full-time)\s+experience\b/i) ||
+                   clean.match(/\b(?:total\s+)?(?:work|professional|industry)\s+experience\s*[:\-\s]*([0-9]+(?:\.[0-9]+)?)\+?\s*years?\b/i) ||
+                   clean.match(/\bExperience\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)\+?\s*years?\b/i);
+  let expYears = null;
+  if (expMatch) {
+    const rawExp = parseFloat(expMatch[1]);
+    if (!isNaN(rawExp)) {
+      expYears = rawExp;
+      fields.push({
+        field: 'years_of_experience',
+        value: expYears,
+        state: 'proposed',
+        evidence: { page: pageNum, quote: expMatch[0].trim() },
+      });
+    }
+  }
+
+  // 5. Projects Extraction (detect project sections, titles, descriptions, tech stack, github links, evidence)
   const commonSkills = [
     'Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'Next.js',
     'PostgreSQL', 'SQL', 'Docker', 'Git', 'Java', 'C++', 'Go', 'Rust',
     'Kubernetes', 'AWS', 'Linux', 'Tailwind CSS', 'GraphQL', 'Machine Learning'
   ];
 
+  const projectHeaderMatch = clean.match(/(?:^|\n)\s*(?:[#*=-]+\s*)?(?:Key\s+|Academic\s+|Personal\s+|Featured\s+|Selected\s+|Recent\s+)?Projects?\s*[:\n]/i);
+
+  if (projectHeaderMatch) {
+    const afterHeader = clean.slice(projectHeaderMatch.index + projectHeaderMatch[0].length);
+    const nextHeaderMatch = afterHeader.match(/\n\s*(?:[#*=-]+\s*)?(?:Work\s+Experience|Experience|Professional\s+Experience|Employment|Education|Technical\s+Skills|Skills|Certifications|Achievements|Publications|Awards|Interests|Extracurricular)\s*[:\n]/i);
+    const secText = nextHeaderMatch ? afterHeader.slice(0, nextHeaderMatch.index).trim() : afterHeader.trim();
+
+    if (secText) {
+      // Split into candidate project chunks by double newline or bullet lines
+      const rawChunks = secText.split(/\n\s*\n/).map((c) => c.trim()).filter(Boolean);
+
+      for (const chunk of rawChunks) {
+        const lines = chunk.split('\n').map((l) => l.trim()).filter(Boolean);
+        if (lines.length === 0) continue;
+
+        // Extract GitHub URL if present
+        const ghMatch = chunk.match(/https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/i) ||
+                        chunk.match(/\bgithub\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/i);
+        const githubUrl = ghMatch ? (ghMatch[0].startsWith('http') ? ghMatch[0] : `https://${ghMatch[0]}`) : null;
+
+        // Extract Dates if present
+        const dateMatch = chunk.match(/\b(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{4})\s*[-–—to]+\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}|\d{4}|Present|Current)\b/i);
+        const dates = dateMatch ? dateMatch[0].trim() : null;
+
+        // Extract Tech Stack
+        const detectedTech = [];
+        const techLineMatch = chunk.match(/(?:Tech(?:nologies| stack)?|Built with|Tools?|Stack)\s*[:\-]\s*([^\n]+)/i);
+        if (techLineMatch) {
+          const parts = techLineMatch[1].split(/[,|/•]+/).map((t) => t.trim()).filter(Boolean);
+          detectedTech.push(...parts);
+        }
+        for (const s of commonSkills) {
+          const sRegex = new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+          if (sRegex.test(chunk) && !detectedTech.some((t) => t.toLowerCase() === s.toLowerCase())) {
+            detectedTech.push(s);
+          }
+        }
+
+        // Title: first line, clean out github urls, dates, leading bullets
+        let rawTitle = lines[0]
+          .replace(/^[#*•\-\d\.)\s]+/, '')
+          .replace(/https?:\/\/github\.com\/[^\s]+/gi, '')
+          .replace(/github\.com\/[^\s]+/gi, '')
+          .trim();
+
+        // If title has pipe separators e.g. "DevPulse | React, Node.js", take first part as title
+        if (rawTitle.includes('|')) {
+          const parts = rawTitle.split('|').map((p) => p.trim());
+          rawTitle = parts[0];
+        }
+        if (dateMatch && rawTitle.includes(dateMatch[0])) {
+          rawTitle = rawTitle.replace(dateMatch[0], '').replace(/[()\-–—]/g, '').trim();
+        }
+
+        if (rawTitle.length >= 3 && rawTitle.length <= 100) {
+          // Description: subsequent lines or entire chunk excluding tech line
+          const descLines = lines.slice(1).filter((l) => !l.match(/^(?:Tech|Built with|Tools|GitHub|Link)/i));
+          const description = descLines.join(' ').replace(/^[#*•\-\s]+/, '').trim() || lines[0];
+
+          projects.push({
+            title: rawTitle,
+            description: description.slice(0, 500),
+            technologies: Array.from(new Set(detectedTech)),
+            github_url: githubUrl,
+            dates,
+            evidence: {
+              page: pageNum,
+              quote: chunk.slice(0, 160).trim(),
+            },
+          });
+        }
+      }
+    }
+  } else {
+    // Fallback: check for standalone GitHub repository links in text
+    const ghMatches = clean.matchAll(/(?:https?:\/\/)?github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/gi);
+    for (const m of ghMatches) {
+      const repoName = m[2].replace(/[._-]/g, ' ');
+      const title = repoName.charAt(0).toUpperCase() + repoName.slice(1);
+      const url = m[0].startsWith('http') ? m[0] : `https://${m[0]}`;
+      if (!projects.some((p) => p.github_url === url)) {
+        projects.push({
+          title,
+          description: `Repository at ${url}`,
+          technologies: [],
+          github_url: url,
+          dates: null,
+          evidence: {
+            page: pageNum,
+            quote: m[0],
+          },
+        });
+      }
+    }
+  }
+
+  // 6. Skills dictionary search & Suggested Level inference
+  // AI/heuristic levels: Beginner/Intermediate/Advanced based on repeated use, project context, duration, self-description.
+  // Missing evidence leaves level unset (null).
   for (const s of commonSkills) {
     const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`\\b${escaped}\\b`, 'i');
     const match = clean.match(regex);
-    if (match) {
-      skills.push({
-        name: s,
-        level: null, // Strictly null per requirement
-        state: 'needs_confirmation',
-        evidence: { page: pageNum, quote: match[0] },
-      });
+    if (!match) continue;
+
+    let suggestedLevel = null;
+    let confidence = null;
+    let evidenceQuote = match[0];
+
+    // (a) Explicit self-description (do NOT cross commas or linebreaks)
+    const advancedSelfDesc = clean.match(new RegExp(`(?:advanced|expert|proficient\\s+in|mastery\\s+of)\\s+${escaped}\\b`, 'i')) ||
+                             clean.match(new RegExp(`\\b${escaped}\\s*\\((?:advanced|expert|proficient)\\)`, 'i'));
+    const interSelfDesc = clean.match(new RegExp(`(?:intermediate|working\\s+knowledge\\s+of|hands-on\\s+with|familiar\\s+with|competent\\s+in)\\s+${escaped}\\b`, 'i')) ||
+                          clean.match(new RegExp(`\\b${escaped}\\s*\\((?:intermediate)\\)`, 'i'));
+    const begSelfDesc = clean.match(new RegExp(`(?:beginner|basic|learning|introductory|elementary)\\s+${escaped}\\b`, 'i')) ||
+                        clean.match(new RegExp(`\\b${escaped}\\s*\\((?:beginner|basic)\\)`, 'i'));
+
+    if (advancedSelfDesc) {
+      suggestedLevel = 'advanced';
+      confidence = 0.90;
+      evidenceQuote = advancedSelfDesc[0].trim();
+    } else if (interSelfDesc) {
+      suggestedLevel = 'intermediate';
+      confidence = 0.85;
+      evidenceQuote = interSelfDesc[0].trim();
+    } else if (begSelfDesc) {
+      suggestedLevel = 'beginner';
+      confidence = 0.85;
+      evidenceQuote = begSelfDesc[0].trim();
     }
+
+    // (b) Duration check if no self-description
+    if (!suggestedLevel) {
+      const durationMatch = clean.match(new RegExp(`(?:([0-9]+(?:\\.[0-9]+)?)\\+?\\s*years?(?:\\s+of)?(?:\\s+experience\\s+(?:in|with))?\\s+${escaped}|${escaped}[^\\n.]{0,30}?([0-9]+(?:\\.[0-9]+)?)\\+?\\s*years?)`, 'i'));
+      if (durationMatch) {
+        const years = parseFloat(durationMatch[1] || durationMatch[2]);
+        if (!isNaN(years)) {
+          if (years >= 3) {
+            suggestedLevel = 'advanced';
+            confidence = 0.85;
+          } else if (years >= 1) {
+            suggestedLevel = 'intermediate';
+            confidence = 0.80;
+          } else {
+            suggestedLevel = 'beginner';
+            confidence = 0.75;
+          }
+          evidenceQuote = durationMatch[0].trim();
+        }
+      }
+    }
+
+    // (c) Project context and repeated usage
+    if (!suggestedLevel) {
+      const occurrences = (clean.match(new RegExp(`\\b${escaped}\\b`, 'gi')) || []).length;
+      const associatedProjects = projects.filter(
+        (p) => p.technologies.some((t) => t.toLowerCase() === s.toLowerCase()) ||
+               p.description.toLowerCase().includes(s.toLowerCase())
+      );
+
+      if (associatedProjects.length >= 2 || (associatedProjects.length >= 1 && occurrences >= 3)) {
+        suggestedLevel = 'intermediate';
+        confidence = 0.80;
+        evidenceQuote = `Demonstrated across ${associatedProjects.length} projects (${associatedProjects.map((p) => p.title).join(', ')})`;
+      } else if (associatedProjects.length === 1 && occurrences >= 2) {
+        suggestedLevel = 'intermediate';
+        confidence = 0.70;
+        evidenceQuote = `Applied in project ${associatedProjects[0].title}`;
+      }
+    }
+
+    // If no evidence found (e.g. only listed in skills list once), suggestedLevel remains null
+    skills.push({
+      name: s,
+      level: suggestedLevel,
+      suggested_level: suggestedLevel,
+      confidence: confidence,
+      state: 'needs_confirmation',
+      evidence: { page: pageNum, quote: evidenceQuote },
+    });
   }
 
   return {
@@ -322,6 +582,8 @@ export function extractDraftFromText(text, pageNum = 1, baseRevision = 0) {
     base_profile_revision: baseRevision,
     fields,
     skills,
+    projects,
+    years_of_experience: expYears,
     missing_fields: Array.from(new Set(missing)),
   };
 }

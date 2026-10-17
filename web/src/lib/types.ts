@@ -1,5 +1,33 @@
 export type Skill = { name: string; level: 'beginner' | 'intermediate' | 'advanced' };
-export type Profile = { display_name: string; degree: string; branch: string; academic_year: number | null; graduation_year: number | null; cgpa: number | null; career_goals: string; interest_types: string[]; preferred_locations: string[]; autonomy_mode: string; notifications_enabled?: boolean; revision?: number };
+
+export type ProfileProject = {
+  id?: string;
+  title: string;
+  description: string;
+  technologies: string[];
+  github_url?: string | null;
+  dates?: string | null;
+  source: 'resume' | 'manual' | 'github';
+};
+
+export type Profile = {
+  display_name: string;
+  degree: string;
+  branch: string;
+  academic_year: number | null;
+  graduation_year: number | null;
+  cgpa: number | null;
+  career_goals: string;
+  interest_types: string[];
+  preferred_locations: string[];
+  autonomy_mode: string;
+  notifications_enabled?: boolean;
+  email_notifications_enabled?: boolean;
+  calendar_sync_enabled?: boolean;
+  years_of_experience?: number | null;
+  projects?: ProfileProject[];
+  revision?: number;
+};
 export type RawItem = { id: string; source_type: 'text' | 'url' | 'email' | 'discovery' | 'capture'; raw_content: string; status: string; error_code: string | null; created_at: string; is_opportunity: boolean | null; duplicate_of: string | null; retry_count: number; metadata?: Record<string, unknown> };
 
 export type ProfileDraftField = {
@@ -16,6 +44,15 @@ export type ProfileDraftSkill = {
   evidence: { page: number; quote: string };
 };
 
+export type ProfileDraftProject = {
+  title: string;
+  description: string;
+  technologies: string[];
+  github_url?: string | null;
+  dates?: string | null;
+  evidence: { page: number; quote: string };
+};
+
 export type ProfileDraft = {
   id: string;
   user_id: string;
@@ -24,6 +61,8 @@ export type ProfileDraft = {
   contract_version: string;
   proposed_fields: ProfileDraftField[];
   proposed_skills: ProfileDraftSkill[];
+  proposed_projects?: ProfileDraftProject[];
+  proposed_experience_years?: number | null;
   missing_fields: string[];
   status: 'draft_ready' | 'confirmed' | 'discarded' | 'expired';
   created_at: string;

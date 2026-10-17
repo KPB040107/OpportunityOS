@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {prepareDiscoveryBatch, summarizeDiscoveryBatch} from './discovery-batch.mjs';
 import {workflowBuilder} from './workflow-builder.mjs';
-import {normalizeLeverItem, normalizeDevpostItem, normalizeGreenhouseItem, normalizeAshbyItem, normalizeJSearchItem, detectRiskSignals, parseDevpostDeadline, classifySeniority, htmlToCleanText, isIndiaOrRemoteLocation} from './discovery-adapters.mjs';
+import {normalizeLeverItem, normalizeDevpostItem, normalizeGreenhouseItem, normalizeAshbyItem, normalizeJSearchItem, detectRiskSignals, parseDevpostDeadline, classifySeniority, htmlToCleanText, isIndiaOrRemoteLocation, buildStructuredRequirements} from './discovery-adapters.mjs';
 
 const b = workflowBuilder('opportunityosSlice2Discovery', 'OpportunityOS 08 Discovery');
 const {runtime, config, add, pg, code, branch, link, child, save} = b;
@@ -91,6 +91,7 @@ code('normalize-lever', 'Normalize Lever postings', 1380, -180, `
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
+  const buildStructuredRequirements = ${buildStructuredRequirements.toString()};
   const helper = ${normalizeLeverItem.toString()};
   const prepare = ${prepareDiscoveryBatch.toString()};
   const source = $('Check claimed source').first().json;
@@ -112,6 +113,7 @@ code('normalize-devpost', 'Normalize Devpost hackathons', 1380, -60, `
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
+  const buildStructuredRequirements = ${buildStructuredRequirements.toString()};
   const helper = ${normalizeDevpostItem.toString()};
   const prepare = ${prepareDiscoveryBatch.toString()};
   const source = $('Check claimed source').first().json;
@@ -133,6 +135,7 @@ code('normalize-greenhouse', 'Normalize Greenhouse postings', 1380, 60, `
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
+  const buildStructuredRequirements = ${buildStructuredRequirements.toString()};
   const helper = ${normalizeGreenhouseItem.toString()};
   const prepare = ${prepareDiscoveryBatch.toString()};
   const source = $('Check claimed source').first().json;
@@ -154,6 +157,7 @@ code('normalize-ashby', 'Normalize Ashby postings', 1380, 180, `
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
+  const buildStructuredRequirements = ${buildStructuredRequirements.toString()};
   const helper = ${normalizeAshbyItem.toString()};
   const prepare = ${prepareDiscoveryBatch.toString()};
   const source = $('Check claimed source').first().json;
@@ -181,6 +185,7 @@ code('normalize-jsearch', 'Normalize JSearch internships', 1380, 300, `
   const detectRiskSignals = ${detectRiskSignals.toString()};
   const classifySeniority = ${classifySeniority.toString()};
   const parseDevpostDeadline = ${parseDevpostDeadline.toString()};
+  const buildStructuredRequirements = ${buildStructuredRequirements.toString()};
   const helper = ${normalizeJSearchItem.toString()};
   const prepare = ${prepareDiscoveryBatch.toString()};
   const source = $('Check claimed source').first().json;

@@ -192,3 +192,219 @@ test('validateConfirmationPayload: requires valid revision, explicit skill level
     ],
   }));
 });
+
+test('extractDraftFromText: extracts projects with title, description, technologies, github link, and evidence', () => {
+  const resumeWithProjects = `
+    Priya Nair
+    Education: B.Tech in Information Technology
+    Graduation: 2025
+    Technical Skills: React, Node.js, PostgreSQL, Docker, Python
+
+    Projects:
+    DevPulse - Developer Activity Tracker | https://github.com/priya/devpulse
+    Built a comprehensive real-time dashboard tracking GitHub PRs and developer throughput.
+    Tech: React, Node.js, PostgreSQL
+
+    CampusMart (Jan 2024 - Apr 2024)
+    Developed a peer-to-peer campus marketplace app for textbook sharing.
+    https://github.com/priya/campus-mart
+    Built with: Python, Docker
+  `;
+
+  const draft = extractDraftFromText(resumeWithProjects, 1, 1);
+  assert.ok(draft.projects);
+  assert.equal(draft.projects.length, 2);
+
+  const devPulse = draft.projects.find((p) => p.title.includes('DevPulse'));
+  assert.ok(devPulse, 'DevPulse project should be extracted');
+  assert.equal(devPulse.github_url, 'https://github.com/priya/devpulse');
+  assert.ok(devPulse.technologies.includes('React'));
+  assert.ok(devPulse.technologies.includes('Node.js'));
+  assert.ok(devPulse.technologies.includes('PostgreSQL'));
+  assert.ok(devPulse.description.includes('real-time dashboard'));
+  assert.equal(devPulse.evidence.page, 1);
+  assert.ok(devPulse.evidence.quote.includes('DevPulse'));
+
+  const campusMart = draft.projects.find((p) => p.title.includes('CampusMart'));
+  assert.ok(campusMart, 'CampusMart project should be extracted');
+  assert.equal(campusMart.github_url, 'https://github.com/priya/campus-mart');
+  assert.ok(campusMart.dates.includes('2024'));
+  assert.ok(campusMart.technologies.includes('Python'));
+  assert.ok(campusMart.technologies.includes('Docker'));
+
+  assert.doesNotThrow(() => validateProfileDraft(draft));
+});
+
+test('extractDraftFromText: suggests skill levels with evidence and confidence from repeated use, project context, duration, and self-description', () => {
+  const richResume = `
+    Kavya Patel
+    Education: B.E. in Computer Engineering, Class of 2024
+    Total work experience: 2.5 years professional experience
+
+    Skills:
+    Python (advanced), 3+ years experience with React, basic Rust, Docker
+
+    Projects:
+    CodeReviewAI | https://github.com/kavya/code-review-ai
+    Full-stack developer tool built using Python and Docker for automated code reviews.
+
+    TelemetryHub | https://github.com/kavya/telemetry-hub
+    High throughput metrics service built with Docker and Python microservices.
+  `;
+
+  const draft = extractDraftFromText(richResume, 2, 0);
+
+  // Python: self-described advanced and used in 2 projects
+  const pythonSkill = draft.skills.find((s) => s.name === 'Python');
+  assert.ok(pythonSkill);
+  assert.equal(pythonSkill.level, 'advanced');
+  assert.ok(pythonSkill.confidence >= 0.85);
+  assert.ok(pythonSkill.evidence.quote.toLowerCase().includes('python'));
+
+  // React: 3+ years duration -> advanced
+  const reactSkill = draft.skills.find((s) => s.name === 'React');
+  assert.ok(reactSkill);
+  assert.equal(reactSkill.level, 'advanced');
+  assert.ok(reactSkill.confidence >= 0.80);
+  assert.ok(reactSkill.evidence.quote.includes('3+ years'));
+
+  // Rust: self-described basic -> beginner
+  const rustSkill = draft.skills.find((s) => s.name === 'Rust');
+  assert.ok(rustSkill);
+  assert.equal(rustSkill.level, 'beginner');
+  assert.ok(rustSkill.confidence >= 0.80);
+
+  // Docker: used across 2 projects -> intermediate suggested
+  const dockerSkill = draft.skills.find((s) => s.name === 'Docker');
+  assert.ok(dockerSkill);
+  assert.equal(dockerSkill.level, 'intermediate');
+  assert.ok(dockerSkill.confidence >= 0.70);
+
+  // Years of professional experience extracted separately (not by counting projects)
+  assert.equal(draft.years_of_experience, 2.5);
+  const expField = draft.fields.find((f) => f.field === 'years_of_experience');
+  assert.ok(expField);
+  assert.equal(expField.value, 2.5);
+  assert.ok(expField.evidence.quote.includes('2.5 years'));
+});
+
+test('extractDraftFromText: does not calculate experience by counting projects', () => {
+  const threeProjectsNoExp = `
+    Student Developer
+    Degree: B.Tech
+    Graduation: 2026
+    Skills: JavaScript, HTML, CSS
+
+    Projects:
+    Project One | https://github.com/student/one
+    A simple web game built with JavaScript.
+
+    Project Two | https://github.com/student/two
+    A weather tracker application.
+
+    Project Three | https://github.com/student/three
+    A personal portfolio blog.
+  `;
+
+  const draft = extractDraftFromText(threeProjectsNoExp, 1, 0);
+  assert.equal(draft.projects.length, 3);
+  // Must NOT infer 3 years from 3 projects
+  assert.equal(draft.years_of_experience, null);
+  const expField = draft.fields.find((f) => f.field === 'years_of_experience');
+  assert.equal(expField, undefined);
+});
+
+test('reconcileDraftWithProfile: reconciles projects and suggested skill levels with existing profile', () => {
+  const existingProfile = {
+    revision: 2,
+    projects: [
+      { title: 'DevPulse', source: 'manual' },
+    ],
+    skills: [
+      { name: 'Python', level: 'intermediate' },
+    ],
+  };
+
+  const draft = {
+    contract_version: RESUME_CONTRACT_VERSION,
+    base_profile_revision: 2,
+    fields: [
+      { field: 'years_of_experience', value: 2, state: 'proposed', evidence: { page: 1, quote: '2 years' } },
+    ],
+    skills: [
+      { name: 'Python', level: 'advanced', suggested_level: 'advanced', confidence: 0.9, evidence: { page: 1, quote: 'Python (advanced)' }, state: 'needs_confirmation' },
+      { name: 'Docker', level: 'intermediate', suggested_level: 'intermediate', confidence: 0.8, evidence: { page: 1, quote: 'Docker' }, state: 'needs_confirmation' },
+    ],
+    projects: [
+      { title: 'DevPulse', description: 'Activity tracker', technologies: ['React'], github_url: 'https://github.com/p/devpulse', dates: null, evidence: { page: 1, quote: 'DevPulse' } },
+      { title: 'NewService', description: 'Backend service', technologies: ['Go'], github_url: null, dates: null, evidence: { page: 1, quote: 'NewService' } },
+    ],
+    missing_fields: [],
+  };
+
+  const reconciled = reconcileDraftWithProfile(existingProfile, draft);
+
+  // Projects reconciliation
+  assert.equal(reconciled.projects.length, 2);
+  const existingProj = reconciled.projects.find((p) => p.title === 'DevPulse');
+  assert.equal(existingProj.alreadyExists, true);
+  assert.equal(existingProj.state, 'already_in_profile');
+
+  const newProj = reconciled.projects.find((p) => p.title === 'NewService');
+  assert.equal(newProj.alreadyExists, false);
+  assert.equal(newProj.state, 'proposed');
+
+  // Skills reconciliation with suggested levels
+  const pySkill = reconciled.skills.find((s) => s.name === 'Python');
+  assert.equal(pySkill.alreadyExists, true);
+  assert.equal(pySkill.suggestedLevel, 'advanced');
+  assert.equal(pySkill.confidence, 0.9);
+
+  const dockerSkill = reconciled.skills.find((s) => s.name === 'Docker');
+  assert.equal(dockerSkill.alreadyExists, false);
+  assert.equal(dockerSkill.suggestedLevel, 'intermediate');
+});
+
+test('validateConfirmationPayload: supports proposed projects, consents, and years of experience', () => {
+  const validPayload = {
+    draft_id: 'draft-456',
+    expected_revision: 2,
+    selected_fields: {
+      degree: 'B.Tech',
+      years_of_experience: 2,
+    },
+    skills_with_levels: [
+      { name: 'Python', level: 'advanced' },
+      { name: 'Docker', level: 'intermediate' },
+    ],
+    projects: [
+      {
+        title: 'DevPulse',
+        description: 'Developer dashboard',
+        technologies: ['React', 'Node.js'],
+        github_url: 'https://github.com/priya/devpulse',
+        dates: '2024',
+        source: 'resume',
+      },
+    ],
+    consents: {
+      email_notifications_enabled: true,
+      calendar_sync_enabled: false,
+    },
+  };
+
+  assert.ok(validateConfirmationPayload(validPayload));
+
+  // Invalid github URL
+  assert.throws(() => validateConfirmationPayload({
+    ...validPayload,
+    projects: [{ title: 'Bad Project', github_url: 'https://gitlab.com/bad/project' }],
+  }), /INVALID_GITHUB_URL/);
+
+  // Invalid experience years
+  assert.throws(() => validateConfirmationPayload({
+    ...validPayload,
+    selected_fields: { years_of_experience: -5 },
+  }), /INVALID_EXPERIENCE_YEARS/);
+});
+

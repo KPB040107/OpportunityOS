@@ -13,6 +13,7 @@ export const skillSchema = z.object({ name: z.string().trim().min(1).max(80), le
 export const profileSchema = z.object({
   display_name: z.string().trim().max(100), degree: z.string().trim().max(100), branch: z.string().trim().max(100),
   academic_year: optionalNumber(1,8,true), graduation_year: optionalNumber(2000,2100,true), cgpa: optionalNumber(0,10),
+  years_of_experience: optionalNumber(0, 50),
   career_goals: z.string().trim().max(2000), interest_types: z.array(z.enum(interestTypes)).max(10),
   preferred_locations: z.array(z.string().trim().min(1).max(80)).max(20),
 }).strict();

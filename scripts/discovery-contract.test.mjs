@@ -6,6 +6,8 @@ import {
   normalizeJSearchItem,
   detectRiskSignals,
   parseDevpostDeadline,
+  parseDevpostDeadlineDetails,
+  enrichDevpostFromPage,
   hashString
 } from './discovery-adapters.mjs';
 import { createActionsContract } from './actions-contract.mjs';
@@ -213,4 +215,140 @@ test('Gate S2B: Tiered Trust Policy blocks automatic actions on unverified and a
     approved: true
   };
   assert.doesNotThrow(() => actions.authorize(approvedUnverifiedContext));
+});
+
+test('parseDevpostDeadline parses date ranges with month on left only and timestamps with timezones', () => {
+  // Date ranges where month is only on left
+  assert.equal(parseDevpostDeadline('Oct 05 - 27, 2026'), '2026-10-27');
+  assert.equal(parseDevpostDeadline('October 05 - 27, 2026'), '2026-10-27');
+  assert.equal(parseDevpostDeadline('Aug 15 - Oct 25, 2026'), '2026-10-25');
+
+  // Dates with times and timezones
+  assert.equal(parseDevpostDeadline('Oct 27, 2026 @ 1:00pm UTC'), '2026-10-27');
+  assert.equal(parseDevpostDeadline('October 27, 2026 at 9:00am EDT'), '2026-10-27');
+  assert.equal(parseDevpostDeadline('2026-10-27T09:00:00-04:00'), '2026-10-27');
+  assert.equal(parseDevpostDeadline('Nov 15, 2026 11:59pm IST'), '2026-11-15');
+  assert.equal(parseDevpostDeadline('Oct 15, 2026 11:59pm IST'), '2026-10-15');
+
+  // Invalid calendar dates rejected
+  assert.equal(parseDevpostDeadline('Feb 31, 2026'), null);
+  assert.equal(parseDevpostDeadline('Aug 15 - Feb 31, 2026'), null);
+
+  // Extended details helper
+  const details = parseDevpostDeadlineDetails('Oct 27, 2026 @ 1:00pm UTC');
+  assert.deepEqual(details, {
+    date: '2026-10-27',
+    time: '13:00:00Z',
+    iso: '2026-10-27T13:00:00.000Z',
+    display: 'Oct 27, 2026 @ 1:00pm UTC'
+  });
+});
+
+test('normalizeDevpostItem parses month-on-left ranges and extracts participation rules with quote evidence', () => {
+  const item = {
+    id: 'ai-agents-2026',
+    title: 'Autonomous Agents Hackathon',
+    url: 'https://devpost.com/hackathons/ai-agents-2026',
+    submission_period_dates: 'Oct 05 - 27, 2026',
+    eligibility: [
+      'Above legal age of majority in country of residence',
+      'Specific countries/territories excluded'
+    ]
+  };
+
+  const normalized = normalizeDevpostItem(item);
+  assert.equal(normalized.deadline, '2026-10-27', 'Deadline must not be null for month-on-left ranges');
+  assert.equal(normalized.fields.deadline, '2026-10-27');
+  assert.equal(normalized.fields.deadline_display, 'Oct 05 - 27, 2026');
+
+  // Verify participation rules in structured requirements
+  const ageReq = normalized.requirements.find(r => r.value.includes('Above legal age'));
+  assert.ok(ageReq, 'Must have age requirement');
+  assert.equal(ageReq.requirement_class, 'mandatory_eligibility');
+  assert.equal(ageReq.kind, 'eligibility');
+  assert.equal(ageReq.evidence, 'Above legal age of majority in country of residence');
+
+  const locReq = normalized.requirements.find(r => r.value.includes('countries/territories excluded'));
+  assert.ok(locReq, 'Must have excluded countries requirement');
+  assert.equal(locReq.requirement_class, 'mandatory_eligibility');
+  assert.equal(locReq.kind, 'location');
+  assert.equal(locReq.evidence, 'Specific countries/territories excluded');
+
+  // Literal evidence verification: all evidence quotes must be substrings of raw_text
+  for (const req of normalized.requirements) {
+    assert.ok(normalized.raw_text.includes(req.evidence), `Evidence "${req.evidence}" must be present in raw_text`);
+  }
+});
+
+test('enrichDevpostFromPage extracts deadline, eligibility rules, prizes, and description from HTML without nav/footer/ads', () => {
+  const sampleHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head><title>Global Devpost Hackathon</title></head>
+      <body>
+        <nav><a href="/home">Home</a><a href="/explore">Explore</a></nav>
+        <aside class="advertisement">Sponsored by Megacorp</aside>
+        <header><h1>Header Navigation</h1></header>
+        <main>
+          <div class="deadline" data-iso-date="2026-10-27T09:00:00-04:00">
+            <span data-dates-text>Deadline: Oct 27, 2026 @ 1:00pm UTC</span>
+          </div>
+          <article id="challenge-description">
+            <p>Build next-generation developer tooling using language models.</p>
+          </article>
+          <div class="requirements">
+            <h6>Who can participate</h6>
+            <ul id="eligibility-list">
+              <li>Above legal age of majority in country of residence</li>
+              <li>Specific countries/territories excluded</li>
+            </ul>
+          </div>
+          <article id="prizes">
+            <div id="prizes-overview">$75,000 in prizes</div>
+          </article>
+          <article id="rules">
+            <p>Teams must submit original code created during the contest.</p>
+          </article>
+        </main>
+        <footer><p>&copy; 2026 Devpost Inc. All rights reserved.</p></footer>
+      </body>
+    </html>
+  `;
+
+  const baseItem = {
+    id: 'global-hack-99',
+    title: 'Global Devpost Hackathon'
+  };
+
+  const enriched = enrichDevpostFromPage(baseItem, sampleHtml);
+  assert.equal(enriched.contract_version, 'source-item-v2');
+  assert.equal(enriched.adapter, 'devpost-v1');
+  assert.equal(enriched.deadline, '2026-10-27');
+  assert.equal(enriched.deadline_time, '13:00:00Z');
+  assert.equal(enriched.fields.deadline, '2026-10-27');
+  assert.equal(enriched.fields.deadline_time, '13:00:00Z');
+  assert.ok(enriched.fields.deadline_display.includes('Oct 27, 2026'));
+
+  // Eligibility rules extracted
+  const ageReq = enriched.requirements.find(r => r.value.includes('Above legal age'));
+  assert.ok(ageReq, 'Must extract age requirement from #eligibility-list');
+  assert.equal(ageReq.requirement_class, 'mandatory_eligibility');
+  assert.equal(ageReq.kind, 'eligibility');
+
+  const locReq = enriched.requirements.find(r => r.value.includes('countries/territories excluded'));
+  assert.ok(locReq, 'Must extract location exclusion requirement from #eligibility-list');
+  assert.equal(locReq.requirement_class, 'mandatory_eligibility');
+  assert.equal(locReq.kind, 'location');
+
+  // Prizes extracted
+  assert.ok(enriched.fields.prizes.includes('75,000'), 'Prizes must be extracted');
+
+  // Description extracted
+  assert.ok(enriched.raw_text.includes('Build next-generation developer tooling'), 'Description must be extracted');
+
+  // Nav, footer, ads stripped
+  assert.ok(!enriched.raw_text.includes('Header Navigation'), 'Header must be stripped');
+  assert.ok(!enriched.raw_text.includes('Home'), 'Nav links must be stripped');
+  assert.ok(!enriched.raw_text.includes('Sponsored by Megacorp'), 'Ads must be stripped');
+  assert.ok(!enriched.raw_text.includes('&copy; 2026 Devpost Inc'), 'Footer must be stripped');
 });

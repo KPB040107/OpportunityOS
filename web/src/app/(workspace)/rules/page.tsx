@@ -76,10 +76,10 @@ export default async function RulesPage() {
       <LiveUpdates userId={user.id} />
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary">Earned Autonomy</p>
-          <h1 className="mt-2 text-3xl font-semibold">Standing Rules & Autonomy Ledger</h1>
+          <p className="text-sm font-semibold uppercase tracking-widest text-primary">Automation & Control</p>
+          <h1 className="mt-2 text-3xl font-semibold">Your automation preferences</h1>
           <p className="mt-3 text-muted-foreground">
-            The agent earns trust through consistent approvals and handles routine listings without asking.
+            After you repeatedly approve similar safe actions, OpportunityOS can suggest doing those actions automatically next time. You remain in control and can revoke preferences at any time.
           </p>
         </div>
       </div>
@@ -91,7 +91,7 @@ export default async function RulesPage() {
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="size-5 text-amber-600" />
-            <h2 className="text-xl font-bold tracking-tight text-foreground">Pending Rule Proposals</h2>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">Suggested automation preferences</h2>
           </div>
           <span className="text-xs text-muted-foreground">
             Proposed by code after 3 consecutive consistent choices
@@ -102,7 +102,7 @@ export default async function RulesPage() {
           <Card className="p-6 text-center text-muted-foreground border-dashed">
             <p className="text-sm">No pending proposals right now.</p>
             <p className="mt-1 text-xs">
-              When you make 3 consistent decisions for a source (e.g. approving 3 Lever internships), the code will propose a rule here for your approval.
+              When you make 3 consistent decisions for a source (e.g. approving 3 Lever internships), the code will propose an automation preference here for your review.
             </p>
           </Card>
         ) : (
@@ -114,12 +114,12 @@ export default async function RulesPage() {
         )}
       </section>
 
-      {/* Section 2: Active Standing Rules */}
+      {/* Section 2: Active Automation Preferences */}
       <section className="mb-10">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="size-5 text-emerald-600" />
-            <h2 className="text-xl font-bold tracking-tight text-foreground">Active Standing Rules</h2>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">Active automation preferences</h2>
           </div>
           <span className="text-xs text-muted-foreground">
             Active permissions can be disabled or revoked at any time
@@ -128,9 +128,9 @@ export default async function RulesPage() {
 
         {activeRules.length === 0 ? (
           <Card className="p-6 text-center text-muted-foreground border-dashed">
-            <p className="text-sm">No active standing rules yet.</p>
+            <p className="text-sm">No active automation preferences yet.</p>
             <p className="mt-1 text-xs">
-              Approved rules will govern future incoming opportunities that match your verified criteria.
+              Approved preferences will handle future incoming opportunities that match your verified criteria without asking each time.
             </p>
           </Card>
         ) : (
@@ -144,7 +144,7 @@ export default async function RulesPage() {
         {inactiveRules.length > 0 && (
           <details className="mt-4">
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-              View {inactiveRules.length} disabled or rejected rules
+              View {inactiveRules.length} disabled or rejected preferences
             </summary>
             <div className="mt-3 space-y-3">
               {inactiveRules.map((rule) => (
@@ -155,15 +155,15 @@ export default async function RulesPage() {
         )}
       </section>
 
-      {/* Section 3: Autonomy Ledger Audit Log */}
+      {/* Section 3: What the agent did Audit Log */}
       <section className="mb-10">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <History className="size-5 text-slate-600" />
-            <h2 className="text-xl font-bold tracking-tight text-foreground">Autonomy Ledger</h2>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">What the agent did</h2>
           </div>
           <span className="text-xs text-muted-foreground">
-            Immutable audit record of questions avoided and policy applications
+            Plain-language activity log of automated actions and decisions
           </span>
         </div>
 

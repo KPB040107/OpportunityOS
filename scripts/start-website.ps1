@@ -4,9 +4,15 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $webRoot=Join-Path $projectRoot 'web'
 $runtimeRoot=Join-Path $projectRoot '.local'
 New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
-if (-not (Test-Path -LiteralPath (Join-Path $webRoot '.next/BUILD_ID'))) { throw 'Build the website first: run pnpm build inside web.' }
+$buildMarker = if (Test-Path -LiteralPath (Join-Path $webRoot '.next/build-manifest.json')) {
+  Join-Path $webRoot '.next/build-manifest.json'
+} elseif (Test-Path -LiteralPath (Join-Path $webRoot '.next/BUILD_ID')) {
+  Join-Path $webRoot '.next/BUILD_ID'
+} else {
+  throw 'Build the website first: run pnpm build inside web.'
+}
 $nodePath=& (Join-Path $PSScriptRoot 'resolve-node-runtime.ps1')
-$healthUrl="http://localhost:$Port/login"
+$healthUrl="http://127.0.0.1:$Port/login"
 function Test-WebsiteHealth {
   try {
     $existing = Invoke-WebRequest -Uri $healthUrl -TimeoutSec 3 -UseBasicParsing
@@ -16,7 +22,7 @@ function Test-WebsiteHealth {
 
 if (Test-WebsiteHealth) {
   $savedPidPath=Join-Path $runtimeRoot 'website.pid'
-  $buildFile=Get-Item -LiteralPath (Join-Path $webRoot '.next/BUILD_ID')
+  $buildFile=Get-Item -LiteralPath $buildMarker
   $savedProcess=if(Test-Path -LiteralPath $savedPidPath){ Get-Process -Id ([int](Get-Content -LiteralPath $savedPidPath)) -ErrorAction SilentlyContinue }
   if($savedProcess -and $savedProcess.StartTime -lt $buildFile.LastWriteTime){
     $listener=Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop
