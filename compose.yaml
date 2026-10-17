@@ -22,6 +22,7 @@ services:
       NODE_FUNCTION_ALLOW_BUILTIN: "url,crypto,net,dns,http,https,buffer,zlib"
       EXECUTIONS_DATA_PRUNE: "true"
       EXECUTIONS_DATA_MAX_AGE: "168"
+      DB_SQLITE_BUSY_TIMEOUT: "10000"
     volumes:
       - n8n_data:/home/node/.n8n
 volumes:

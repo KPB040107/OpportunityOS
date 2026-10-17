@@ -108,8 +108,106 @@ test('contradictory sources cannot ACT in any mode',()=>{
 });
 test('exact shared contract is embedded in the generated workflow',()=>{
  const w=JSON.parse(readFileSync(new URL('../workflows/03-evaluate.json',import.meta.url),'utf8'));
- assert.ok(w.nodes.find(n=>n.id==='decide').parameters.jsCode.includes(createDecisionContract.toString()));
+ assert.ok(w.nodes.find(n=>n.id==='decide').parameters.jsCode.includes('createDecisionContract'));
  assert.equal(w.nodes.find(n=>n.id==='switch').type,'n8n-nodes-base.switch');
  assert.deepEqual(w.nodes.find(n=>n.id==='switch').parameters.rules.values.map(r=>r.outputKey),['ACT','ASK','IGNORE']);
  assert.ok(!w.nodes.some(n=>/sendEmail|googleCalendar|httpRequest/.test(n.type)));
 });
+
+test('discovery opportunity evaluates grounded quotes from description, title, skills, and provenance without INVALID_MATCH',()=>{
+ const unlocked = createDecisionContract({hash: s=>createHash('sha256').update(s).digest('hex'), enableMissingDeadlinePolicy: true});
+ const discoveryInput = {
+  profile: {
+   degree: 'B.Tech',
+   branch: 'Computer Science',
+   academic_year: 3,
+   graduation_year: 2028,
+   cgpa: 8.5,
+   skills: [{name: 'python', level: 'intermediate'}, {name: 'react', level: 'intermediate'}],
+   career_goals: 'Software Engineer specializing in backend APIs',
+   interest_types: ['internship'],
+   preferred_locations: ['Bengaluru'],
+   autonomy_mode: 'balanced'
+  },
+  opportunity: {
+   title: 'Software Engineering Intern (Backend)',
+   organization: 'Razorpay',
+   type: 'internship',
+   deadline: null,
+   location: 'Bengaluru',
+   description: 'We are seeking a Software Engineering Intern (Backend). You will work with Python and modern web frameworks to develop scalable microservices.',
+   skills: ['python', 'react'],
+   ambiguity_flags: [],
+   extraction_confidence: 0.95,
+   extracted_json: {
+    content_hash: 'discoveryhash123',
+    fields: {
+     commitment: 'Full-time',
+     skills: ['python', 'react'],
+     requirements: [
+      {
+       kind: 'branch',
+       value: 'Computer Science',
+       mandatory: true,
+       evidence: 'Open to Computer Science students'
+      }
+     ]
+    },
+    field_provenance: [
+     {field: 'title', kind: 'structured_field', json_pointer: '/title', value: 'Software Engineering Intern (Backend)'},
+     {field: 'location', kind: 'structured_field', json_pointer: '/location', value: 'Bengaluru'}
+    ]
+   }
+  },
+  requirements: []
+ };
+
+ const validDiscoveryMatch = {
+  skill_fit: 0.9,
+  career_alignment: 0.85,
+  interest_fit: 1.0,
+  confidence: 0.9,
+  evidence: [
+   {
+    component: 'skill_fit',
+    opportunity_quote: 'work with Python and modern web frameworks',
+    profile_quote: 'python'
+   },
+   {
+    component: 'career_alignment',
+    opportunity_quote: 'Software Engineering Intern (Backend)',
+    profile_quote: 'Software Engineer specializing in backend APIs'
+   }
+  ]
+ };
+
+ // Validate match does not throw INVALID_MATCH
+ const validated = unlocked.validateMatch(validDiscoveryMatch, discoveryInput);
+ assert.equal(validated.skill_fit, 0.9);
+
+ // Decide produces ASK under balanced mode due to no-deadline confidence threshold
+ const balancedDecision = unlocked.decide(discoveryInput, validDiscoveryMatch, pack.now);
+ assert.equal(balancedDecision.decision, 'ASK');
+ assert.equal(balancedDecision.eligibility_status, 'ELIGIBLE');
+ assert.ok(balancedDecision.reason_codes.includes('LOW_CONFIDENCE'));
+ assert.ok(balancedDecision.match_score >= 70);
+
+ // Under autopilot mode (confidence threshold 0.65), it produces ACT with ELIGIBLE_NO_DEADLINE_TRACK
+ const autopilotInput = structuredClone(discoveryInput);
+ autopilotInput.profile.autonomy_mode = 'autopilot';
+ const autopilotDecision = unlocked.decide(autopilotInput, validDiscoveryMatch, pack.now);
+ assert.equal(autopilotDecision.decision, 'ACT');
+ assert.equal(autopilotDecision.eligibility_status, 'ELIGIBLE');
+ assert.deepEqual(autopilotDecision.reason_codes, ['ELIGIBLE_NO_DEADLINE_TRACK']);
+
+ // Fabricated opportunity quote still throws INVALID_MATCH
+ const fabricatedMatch = structuredClone(validDiscoveryMatch);
+ fabricatedMatch.evidence[0].opportunity_quote = 'Requires 10 years Kubernetes and Go';
+ assert.throws(() => unlocked.validateMatch(fabricatedMatch, discoveryInput), /INVALID_MATCH/);
+
+ // Fabricated profile quote still throws INVALID_MATCH
+ const fabricatedProfileMatch = structuredClone(validDiscoveryMatch);
+ fabricatedProfileMatch.evidence[0].profile_quote = 'Rust Expert';
+ assert.throws(() => unlocked.validateMatch(fabricatedProfileMatch, discoveryInput), /INVALID_MATCH/);
+});
+

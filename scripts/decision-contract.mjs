@@ -11,7 +11,7 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
   const days=(deadline,today)=>deadline?Math.round((Date.parse(deadline+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000):null;
   const securityFlags=new Set(['source_contains_instructions']);
   function eligibility(input,now=new Date().toISOString()) {
-    const p=input.profile||{},o=input.opportunity,requirements=input.requirements||o.requirements||[],checks=[];
+    const p=input.profile||{},o=input.opportunity,requirements=input.requirements?.length?input.requirements:(o.requirements?.length?o.requirements:(o.extracted_json?.fields?.requirements||o.extracted_json?.requirements||[])),checks=[];
     const add=(kind,status,reason,evidence=null)=>checks.push({kind,status,reason,evidence});
     const d=days(o.deadline,date(now));
     if(d===null){
@@ -142,7 +142,9 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
   function semanticInput(input) {
     const p=input.profile||{},o=input.opportunity;
     const profile={degree:p.degree||null,branch:p.branch||null,academic_year:p.academic_year??null,graduation_year:p.graduation_year??null,cgpa:p.cgpa??null,skills:(p.skills||[]).map(s=>({name:norm(s.name),level:s.level})).sort((a,b)=>a.name.localeCompare(b.name)),career_goals:p.career_goals||null,interest_types:[...(p.interest_types||[])].sort(),preferred_locations:(p.preferred_locations||[]).map(norm).sort()};
-    const opportunity={title:o.title,organization:o.organization,type:o.type,description:o.description,skills:[...(o.skills||[])].map(norm).sort(),location:o.location,requirements:(input.requirements||[]).map(r=>({kind:r.kind,value:r.value,mandatory:r.mandatory,quote:r.evidence_snippet||r.evidence})).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),evidence:o.extracted_json?.evidence||o.evidence||[]};
+    const reqs=input.requirements?.length?input.requirements:(o.requirements?.length?o.requirements:(o.extracted_json?.fields?.requirements||o.extracted_json?.requirements||[]));
+    const rawEv=o.extracted_json?.evidence||o.evidence||o.extracted_json?.field_provenance||o.field_provenance||[];
+    const opportunity={title:o.title||'',organization:o.organization||'',type:o.type||'unknown',description:o.description||o.raw_text||o.extracted_json?.raw_text||o.extracted_json?.fields?.raw_text||'',skills:[...(o.skills||o.extracted_json?.fields?.skills||o.extracted_json?.skills||[])].map(norm).sort(),location:o.location||null,requirements:reqs.map(r=>({kind:r.kind,value:r.value,mandatory:Boolean(r.mandatory),quote:r.evidence_snippet||r.evidence||r.quote||r.value})).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))),evidence:rawEv.map(e=>typeof e==='string'?{quote:e}:{field:e.field,quote:e.quote||e.value})};
     return {profile,opportunity};
   }
   function matchKey(input){return hash(JSON.stringify({version:matchVersion,model:'models/gemini-3.5-flash-lite',input:semanticInput(input)}));}
@@ -150,7 +152,8 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
     const fail=()=>{throw new Error('INVALID_MATCH');};
     const fields=['skill_fit','career_alignment','interest_fit','confidence','evidence'];
     if(!raw||typeof raw!=='object'||Array.isArray(raw)||Object.keys(raw).some(k=>!fields.includes(k))||fields.some(k=>!(k in raw))||fields.slice(0,4).some(k=>typeof raw[k]!=='number'||!Number.isFinite(raw[k])||raw[k]<0||raw[k]>1)||!Array.isArray(raw.evidence)||raw.evidence.length>12)fail();
-    const data=semanticInput(input),quotes=[...(data.opportunity.evidence||[]).map(e=>e.quote),...data.opportunity.requirements.map(r=>r.quote)].filter(Boolean);
+    const data=semanticInput(input);
+    const quotes=[...(data.opportunity.evidence||[]).map(e=>e.quote||e.value),...data.opportunity.requirements.map(r=>r.quote||r.value),...(data.opportunity.skills||[]),data.opportunity.title,data.opportunity.description].filter(Boolean);
     for(const e of raw.evidence){
       if(!e||Object.keys(e).some(k=>!['component','opportunity_quote','profile_quote'].includes(k))||!['skill_fit','career_alignment','interest_fit'].includes(e.component)||typeof e.opportunity_quote!=='string'||!e.opportunity_quote.trim()||e.opportunity_quote.length>2000||typeof e.profile_quote!=='string'||!e.profile_quote.trim()||e.profile_quote.length>2000)fail();
       if(!quotes.some(q=>canon(q).includes(canon(e.opportunity_quote))))fail();
@@ -186,15 +189,17 @@ export function createDecisionContract({hash, enableMissingDeadlinePolicy = fals
     const location=o.location?norm(o.location):null,preferences=(p.preferred_locations||[]).map(norm);
     // Only a literal normalized location/remote indication earns a soft preference match.
     const loc=location&&preferences.length?(preferences.some(l=>l===location||location.split(/[,();]/).map(norm).includes(l)||(l==='remote'&&/\bremote\b/.test(location)))?1:0):null;
-    const yearBranch=(input.requirements||[]).filter(r=>['academic_year','graduation_year','branch','degree'].includes(r.kind));
+    const allReqs=input.requirements?.length?input.requirements:(o.requirements?.length?o.requirements:(o.extracted_json?.fields?.requirements||o.extracted_json?.requirements||[]));
+    const yearBranch=allReqs.filter(r=>['academic_year','graduation_year','branch','degree'].includes(r.kind));
     const profChecks=eligibility({...input,requirements:yearBranch.map(r=>({...r,mandatory:true}))},now).checks.filter(c=>['academic_year','graduation_year','branch','degree'].includes(c.kind));
     const academicFit=profChecks.some(c=>c.status!=='UNKNOWN')?profChecks.filter(c=>c.status==='PASS').length/yearBranch.length:null;
     const values={skill_fit:(p.skills||[]).length&&(o.skills||[]).length?match.skill_fit:null,career_alignment:p.career_goals?match.career_alignment:null,interest_fit:(p.interest_types||[]).length&&o.type!=='unknown'?(p.interest_types.includes(o.type)?1:0):null,location_fit:loc,profile_fit:academicFit,urgency:elig.days_to_deadline===null?null:elig.days_to_deadline<=7?1:elig.days_to_deadline<=14?.75:elig.days_to_deadline<=30?.5:.25};
     const component_scores=Object.fromEntries(Object.entries(weights).map(([k,w])=>[k,{value:values[k],weight:w,points:round((values[k]??0)*w)}]));
     const match_score=round(Object.values(component_scores).reduce((s,v)=>s+v.points,0));
-    const completeness=[!!o.title,!!o.organization,!!o.deadline,(input.requirements||[]).length>0].filter(Boolean).length/4;
+    const completeness=[!!o.title,!!o.organization,!!o.deadline,allReqs.length>0].filter(Boolean).length/4;
     const expected=['title','organization','deadline','location','type','skills'].filter(k=>k==='skills'?o.skills?.length:o[k]&&o[k]!=='unknown');
-    const evidence=o.extracted_json?.evidence||o.evidence||[];
+    const rawEv=o.extracted_json?.evidence||o.evidence||o.extracted_json?.field_provenance||o.field_provenance||[];
+    const evidence=rawEv.map(e=>typeof e==='string'?{field:e,quote:e}:{field:e.field,quote:e.quote||e.value});
     const verified=expected.length?expected.filter(k=>evidence.some(e=>e.field===k&&e.quote)).length/expected.length:0;
     const flags=(o.ambiguity_flags||[]).filter(f=>!securityFlags.has(f));
     const clarity=Math.max(0,1-flags.length*.2),model=Math.min(Number(o.extraction_confidence??o.confidence??0),match.confidence);

@@ -27,12 +27,16 @@ test('exported n8n converters execute without missing helper dependencies',()=>{
   greenhouse:{jobs:[{id:1,title:'Software Internship',content:'Python',absolute_url:'https://example.com/job',location:{name:'Remote'}}]},
   ashby:{jobs:[{id:'1',title:'Software Internship',descriptionPlain:'Python',jobUrl:'https://example.com/job',applyUrl:'https://example.com/apply',location:'Remote'}]},
   devpost:{hackathons:[{id:1,title:'Test Hackathon',url:'https://devpost.com/test',submission_period_dates:'Oct 16 - 30, 2026'}]},
-  jsearch:{data:[{job_id:'1',job_title:'Software Internship',employer_name:'Test',job_description:'Python',job_apply_link:'https://example.com/job'}]}
+  jsearch_nested:{data:{jobs:[{job_id:'1',job_title:'Software Internship',employer_name:'Test',job_description:'Python',job_apply_link:'https://example.com/job'}]}},
+  jsearch_flat:{data:[{job_id:'2',job_title:'Frontend Internship',employer_name:'Test Flat',job_description:'React',job_apply_link:'https://example.com/job2'}]}
  };
- for(const [adapter,body] of Object.entries(samples)) {
+ for(const [name,body] of Object.entries(samples)) {
+  const adapter = name.startsWith('jsearch') ? 'jsearch' : name;
   const node=w.nodes.find(n=>n.id===`normalize-${adapter}`);
   const run=new Function('$input','$','require',node.parameters.jsCode);
   const result=run({first:()=>({json:{statusCode:200,body}})},()=>({first:()=>({json:source})}),createRequire(import.meta.url));
   assert.ok(result[0].json.item,`${adapter}: ${JSON.stringify(result)}`);
+  assert.ok(Array.isArray(result[0].json.item.evidence),`${adapter} must have evidence array`);
+  assert.ok(result[0].json.item.evidence.length > 0,`${adapter} evidence must not be empty`);
  }
 });

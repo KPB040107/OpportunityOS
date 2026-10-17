@@ -19,7 +19,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Workflow copy failed.' }
 docker compose exec -T n8n n8n import:workflow --input=/tmp/08-discovery.json --projectId=$($taskConfig['N8N_PROJECT_ID'])
 if ($LASTEXITCODE -ne 0) { throw 'Workflow import failed.' }
 
-docker compose exec -T n8n n8n update:workflow --id=opportunityosSlice2Discovery --active=true
+docker compose exec -T n8n n8n publish:workflow --id=opportunityosSlice2Discovery
 if ($LASTEXITCODE -ne 0) { throw 'Workflow activation failed.' }
 
 Write-Host '08-discovery workflow imported and activated successfully.'

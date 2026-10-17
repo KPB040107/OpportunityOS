@@ -145,6 +145,24 @@ export function normalizeLeverItem(company, item) {
   const seniority = classifySeniority(title, commitment);
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(descParts);
 
+  const evidence = [
+    { field: 'title', quote: title },
+    { field: 'organization', quote: company.toUpperCase() },
+    { field: 'type', quote: isIntern ? (title.match(/\b(intern|internship|trainee|apprentice)\b/i)?.[0] || 'internship') : 'job' }
+  ];
+  if (location) {
+    evidence.push({ field: 'location', quote: location });
+  }
+  if (extractedSkills.length > 0) {
+    evidence.push({ field: 'skills', quote: extractedSkills.join(', ') });
+    for (const sk of extractedSkills) {
+      evidence.push({ field: 'skills', quote: sk });
+    }
+  }
+  if (descParts) {
+    evidence.push({ field: 'description', quote: descParts.slice(0, 500) });
+  }
+
   return {
     contract_version: 'source-item-v2',
     visibility: 'public',
@@ -164,6 +182,7 @@ export function normalizeLeverItem(company, item) {
     seniority_level: seniority,
     skills: extractedSkills,
     requirements: extractedReqs,
+    evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
@@ -174,7 +193,8 @@ export function normalizeLeverItem(company, item) {
       deadline: null,
       seniority_level: seniority,
       skills: extractedSkills,
-      requirements: extractedReqs
+      requirements: extractedReqs,
+      evidence
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/text', value: title },
@@ -230,6 +250,29 @@ export function normalizeDevpostItem(item) {
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'attributed';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(rawText);
 
+  const evidence = [
+    { field: 'title', quote: title },
+    { field: 'organization', quote: 'Devpost Community' },
+    { field: 'type', quote: `Hackathon: ${title}` }
+  ];
+  if (location) {
+    evidence.push({ field: 'location', quote: location });
+  }
+  if (item.submission_period_dates) {
+    evidence.push({ field: 'deadline', quote: item.submission_period_dates });
+  }
+  if (extractedSkills.length > 0) {
+    evidence.push({ field: 'skills', quote: extractedSkills.join(', ') });
+    for (const sk of extractedSkills) {
+      evidence.push({ field: 'skills', quote: sk });
+    }
+  }
+  if (prizes) {
+    evidence.push({ field: 'description', quote: `Prizes: ${prizes}` });
+  } else {
+    evidence.push({ field: 'description', quote: `Hackathon: ${title}` });
+  }
+
   return {
     contract_version: 'source-item-v2',
     visibility: 'public',
@@ -248,6 +291,7 @@ export function normalizeDevpostItem(item) {
     risk_signals: riskSignals,
     skills: extractedSkills,
     requirements: extractedReqs,
+    evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
@@ -256,7 +300,8 @@ export function normalizeDevpostItem(item) {
       prizes,
       submission_window: item.submission_period_dates,
       skills: extractedSkills,
-      requirements: extractedReqs
+      requirements: extractedReqs,
+      evidence
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/title', value: title },
@@ -281,6 +326,24 @@ export function normalizeJSearchItem(item) {
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'attributed';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(item.job_description || '');
 
+  const evidence = [
+    { field: 'title', quote: title },
+    { field: 'organization', quote: org },
+    { field: 'type', quote: isIntern ? (title.match(/\b(intern|internship|trainee)\b/i)?.[0] || 'internship') : 'job' }
+  ];
+  if (location) {
+    evidence.push({ field: 'location', quote: location });
+  }
+  if (extractedSkills.length > 0) {
+    evidence.push({ field: 'skills', quote: extractedSkills.join(', ') });
+    for (const sk of extractedSkills) {
+      evidence.push({ field: 'skills', quote: sk });
+    }
+  }
+  if (item.job_description) {
+    evidence.push({ field: 'description', quote: item.job_description.slice(0, 500) });
+  }
+
   return {
     contract_version: 'source-item-v2',
     visibility: 'public',
@@ -299,6 +362,7 @@ export function normalizeJSearchItem(item) {
     risk_signals: riskSignals,
     skills: extractedSkills,
     requirements: extractedReqs,
+    evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
@@ -307,7 +371,8 @@ export function normalizeJSearchItem(item) {
       location,
       deadline: null,
       skills: extractedSkills,
-      requirements: extractedReqs
+      requirements: extractedReqs,
+      evidence
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/job_title', value: title },
@@ -346,6 +411,24 @@ export function normalizeGreenhouseItem(company, item) {
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(cleanContent);
 
+  const evidence = [
+    { field: 'title', quote: title },
+    { field: 'organization', quote: company.toUpperCase() },
+    { field: 'type', quote: isIntern ? (title.match(/\b(intern|internship|trainee|apprentice)\b/i)?.[0] || 'internship') : 'job' }
+  ];
+  if (location) {
+    evidence.push({ field: 'location', quote: location });
+  }
+  if (extractedSkills.length > 0) {
+    evidence.push({ field: 'skills', quote: extractedSkills.join(', ') });
+    for (const sk of extractedSkills) {
+      evidence.push({ field: 'skills', quote: sk });
+    }
+  }
+  if (cleanContent) {
+    evidence.push({ field: 'description', quote: cleanContent.slice(0, 500) });
+  }
+
   return {
     contract_version: 'source-item-v2',
     visibility: 'public',
@@ -365,6 +448,7 @@ export function normalizeGreenhouseItem(company, item) {
     seniority_level: seniority,
     skills: extractedSkills,
     requirements: extractedReqs,
+    evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
@@ -374,7 +458,8 @@ export function normalizeGreenhouseItem(company, item) {
       deadline: null,
       seniority_level: seniority,
       skills: extractedSkills,
-      requirements: extractedReqs
+      requirements: extractedReqs,
+      evidence
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/title', value: title },
@@ -414,6 +499,24 @@ export function normalizeAshbyItem(company, item) {
   const trustTier = riskSignals.length > 0 ? 'unverified' : 'corroborated';
   const { skills: extractedSkills, requirements: extractedReqs } = extractSkillsAndRequirements(cleanContent);
 
+  const evidence = [
+    { field: 'title', quote: title },
+    { field: 'organization', quote: company.toUpperCase() },
+    { field: 'type', quote: isIntern ? (title.match(/\b(intern|internship|trainee|apprentice)\b/i)?.[0] || 'internship') : 'job' }
+  ];
+  if (location) {
+    evidence.push({ field: 'location', quote: location });
+  }
+  if (extractedSkills.length > 0) {
+    evidence.push({ field: 'skills', quote: extractedSkills.join(', ') });
+    for (const sk of extractedSkills) {
+      evidence.push({ field: 'skills', quote: sk });
+    }
+  }
+  if (cleanContent) {
+    evidence.push({ field: 'description', quote: cleanContent.slice(0, 500) });
+  }
+
   return {
     contract_version: 'source-item-v2',
     visibility: 'public',
@@ -433,6 +536,7 @@ export function normalizeAshbyItem(company, item) {
     seniority_level: seniority,
     skills: extractedSkills,
     requirements: extractedReqs,
+    evidence,
     content_hash: hashString(rawText),
     raw_text: rawText,
     fields: {
@@ -442,7 +546,8 @@ export function normalizeAshbyItem(company, item) {
       deadline: null,
       seniority_level: seniority,
       skills: extractedSkills,
-      requirements: extractedReqs
+      requirements: extractedReqs,
+      evidence
     },
     field_provenance: [
       { field: 'title', kind: 'structured_field', json_pointer: '/title', value: title },

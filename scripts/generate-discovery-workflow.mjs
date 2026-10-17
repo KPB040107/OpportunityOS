@@ -184,7 +184,7 @@ code('normalize-jsearch', 'Normalize JSearch internships', 1380, 300, `
   const helper = ${normalizeJSearchItem.toString()};
   const prepare = ${prepareDiscoveryBatch.toString()};
   const source = $('Check claimed source').first().json;
-  return prepare(source, $input.first().json, helper, 'data');
+  return prepare(source, $input.first().json, helper, 'jsearch');
 `);
 // Keep an explicit terminal path for empty feeds and failed fetches.
 code('batch', 'Prepared discovery batch', 1520, 0, 'return $input.all();');

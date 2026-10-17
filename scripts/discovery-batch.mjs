@@ -3,7 +3,9 @@ export function prepareDiscoveryBatch(source, response, normalize, collection) {
   const base = {run_id: source.run_id, lease_token: source.lease_token};
   const body = response?.body ?? response;
   const failed = response?.error || Number(response?.statusCode || 200) >= 400;
-  const list = collection === 'array' ? body : body?.[collection];
+  const list = collection === 'array' ? body : collection === 'jsearch'
+    ? (Array.isArray(body?.data) ? body.data : (Array.isArray(body?.data?.jobs) ? body.data.jobs : (Array.isArray(body?.jobs) ? body.jobs : [])))
+    : body?.[collection];
   if (failed || !Array.isArray(list)) {
     return [{json: {...base, scan_error: 'SOURCE_FETCH_OR_FORMAT_FAILED', next_cursor: source.cursor_state || {offset: 0}}}];
   }

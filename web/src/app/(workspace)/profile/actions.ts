@@ -21,6 +21,8 @@ export async function saveProfile(_state:FormState,form:FormData):Promise<FormSt
   if(modeResult.error)return {error:'Profile saved, but your autonomy mode could not be saved. Please try again.'};
   const preference=await supabase.rpc('set_notification_preference',{p_enabled:form.get('notifications_enabled')==='on'});
   if(preference.error)return {error:'Profile saved, but your email preference was not confirmed.'};
-  revalidatePath('/profile'); revalidatePath('/inbox'); revalidatePath('/activity');
+  const catchUp=await supabase.rpc('catch_up_discovery_catalog');
+  revalidatePath('/profile'); revalidatePath('/inbox'); revalidatePath('/opportunities'); revalidatePath('/activity');
+  if(catchUp.error)return {error:'Profile saved, but we could not load matching opportunities yet. Please retry saving your profile.'};
   return {success:'Your profile is saved.'};
 }
