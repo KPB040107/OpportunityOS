@@ -46,7 +46,7 @@ export function AlertsView({
             ✓ PROFILE
           </li>
           <li aria-hidden="true" className="w-6 h-[1.5px] bg-border" />
-          <li className="flex items-center gap-2 px-2.5 py-1.5 border-[1.5px] border-border rounded-[8px] bg-foreground text-background font-semibold">
+          <li className="flex items-center gap-2 px-2.5 py-1.5 border-[1.5px] border-border rounded-[8px] bg-white text-foreground font-bold shadow-hard-sm">
             2 ALERTS
           </li>
         </ol>

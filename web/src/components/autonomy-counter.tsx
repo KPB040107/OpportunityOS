@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { Card } from '@/components/ui/card';
-import { Sparkles, Eye, CheckCircle2, HelpCircle, EyeOff, SlidersHorizontal, ArrowRight } from 'lucide-react';
+import { ArrowRight, Sparkles } from 'lucide-react';
 
 export interface HomeCounterData {
   items_read: number;
@@ -23,130 +22,91 @@ export interface HomeCounterData {
 }
 
 export function AutonomyCounter({ data }: { data: HomeCounterData }) {
+  const stats = [
+    {
+      label: 'READ',
+      value: data.items_read,
+      note: 'listings checked against your profile',
+      bg: 'bg-white',
+      labelColor: 'text-muted-foreground'
+    },
+    {
+      label: 'ACTED',
+      value: data.items_acted,
+      note: 'tracked and put on your calendar',
+      bg: 'bg-act',
+      labelColor: 'text-accent-text font-semibold'
+    },
+    {
+      label: 'ASKED YOU',
+      value: data.items_asked,
+      note: 'need your answer to decide',
+      bg: 'bg-ask',
+      labelColor: 'text-ask-foreground font-semibold'
+    },
+    {
+      label: 'SKIPPED',
+      value: data.items_ignored,
+      note: 'expired, ineligible or suspicious',
+      bg: 'bg-skip',
+      labelColor: 'text-muted-foreground'
+    }
+  ];
+
   return (
-    <Card className="mb-8 overflow-hidden border-emerald-200/80 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/30 p-6 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-emerald-100/80 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
-              <Sparkles className="size-4" />
-            </span>
-            <h2 className="text-lg font-bold tracking-tight text-foreground">
-              Autonomy Engine & Ledger
-            </h2>
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-              PS22 Earned Autonomy
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Deterministic governance · AI proposes, code decides · Immutable student consent
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {data.pending_proposals > 0 && (
-            <Link
-              href="/rules"
-              className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
-            >
-              <Sparkles className="size-3.5 text-amber-600" />
-              <span>{data.pending_proposals} Rule Proposal Pending</span>
-              <ArrowRight className="size-3" />
-            </Link>
-          )}
-
-          <Link
-            href="/rules"
-            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-medium text-emerald-800 transition hover:bg-emerald-50"
+    <div className="mb-8 flex flex-col gap-4 font-sans">
+      {/* 4 The Sorting Board Stat Bento Tiles */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {stats.map((s) => (
+          <div
+            key={s.label}
+            className={`p-4 border-[1.5px] border-border rounded-[12px] ${s.bg} shadow-hard flex flex-col gap-1 transition-all`}
           >
-            <SlidersHorizontal className="size-3.5 text-emerald-600" />
-            <span>{data.active_rules} Active Standing Rules</span>
-          </Link>
-        </div>
+            <span className={`font-mono text-[11px] tracking-[0.1em] ${s.labelColor}`}>
+              {s.label}
+            </span>
+            <span className="font-display font-extrabold text-3xl sm:text-4xl leading-none tracking-tight text-foreground">
+              {s.value}
+            </span>
+            <span className="text-xs text-ink-2 line-clamp-2 mt-1">
+              {s.note}
+            </span>
+          </div>
+        ))}
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-border/60 bg-white/80 p-3.5 shadow-xs">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Eye className="size-3.5 text-slate-500" />
-            <span>Opportunities Read</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
-            {data.items_read}
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {data.breakdown.real.items_read} real · {data.breakdown.seeded.items_read} seeded
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-3.5 shadow-xs">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-800">
-            <CheckCircle2 className="size-3.5 text-emerald-600" />
-            <span>Acted Automatically</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-emerald-950">
-            {data.items_acted}
-          </p>
-          <p className="mt-1 text-[11px] text-emerald-700">
-            Tracked & notified
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-amber-100 bg-amber-50/50 p-3.5 shadow-xs">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-amber-900">
-            <HelpCircle className="size-3.5 text-amber-600" />
-            <span>Questions Asked</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-amber-950">
-            {data.items_asked}
-          </p>
-          <p className="mt-1 text-[11px] text-amber-700">
-            Awaiting human input
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 shadow-xs">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
-            <EyeOff className="size-3.5 text-slate-500" />
-            <span>Items Ignored</span>
-          </div>
-          <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-            {data.items_ignored}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-600">
-            Ineligible or expired
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200/90 bg-emerald-600 p-3.5 text-white shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="flex size-7 items-center justify-center rounded-lg bg-white/20 text-white">
+      {/* Earned Autonomy Dividend Strip */}
+      <div className="p-4 border-[1.5px] border-border rounded-[14px] bg-white shadow-hard flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="size-8 rounded-[8px] border-[1.5px] border-border bg-act shadow-[2px_2px_0_#111111] flex items-center justify-center font-bold text-accent-text"
+          >
             <Sparkles className="size-4" />
           </span>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">
+          <div className="flex flex-col">
+            <span className="font-mono text-[11px] font-semibold tracking-wider text-accent-text uppercase">
               Earned Autonomy Dividend
-            </p>
-            <p className="text-sm font-bold">
+            </span>
+            <span className="font-display font-bold text-base text-foreground">
               {data.questions_avoided} Questions Avoided by Standing Rules
-            </p>
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="rounded-md bg-white/15 px-2.5 py-1 text-[11px] font-medium text-emerald-50">
-            Real avoids: {data.breakdown.real.questions_avoided} · Seeded avoids: {data.breakdown.seeded.questions_avoided}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-mono text-xs text-muted-foreground">
+            {data.active_rules} active rules · {data.breakdown.real.questions_avoided} real avoids
           </span>
           <Link
             href="/rules"
-            className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-50"
+            className="inline-flex items-center gap-1.5 h-9 px-4 border-[1.5px] border-border rounded-[10px] bg-white text-foreground text-xs font-mono font-bold shadow-[2px_2px_0_#111111] hover:bg-muted/40 transition-all no-underline"
           >
             <span>View Ledger</span>
-            <ArrowRight className="size-3" />
+            <ArrowRight className="size-3.5" />
           </Link>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

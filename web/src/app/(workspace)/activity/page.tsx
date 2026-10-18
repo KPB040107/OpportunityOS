@@ -50,35 +50,35 @@ export default async function ActivityPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div
-              className={`flex size-10 items-center justify-center rounded-xl ${
-                isHealthy ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+              className={`flex size-10 items-center justify-center rounded-xl border-[1.5px] border-border ${
+                isHealthy ? 'bg-act text-accent-text' : 'bg-danger text-danger-foreground'
               }`}
             >
               <Cpu className="size-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-muted-foreground">
                   Agent Heartbeat
                 </span>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  className={`inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-border px-2.5 py-0.5 font-mono text-[11px] font-semibold ${
                     isHealthy
-                      ? 'bg-emerald-50 text-emerald-800'
-                      : 'bg-red-50 text-red-800'
+                      ? 'bg-act text-accent-text'
+                      : 'bg-danger text-danger-foreground'
                   }`}
                 >
-                  <span className="size-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                  <span className="size-1.5 rounded-full bg-accent-text animate-pulse" />
                   {heartbeatResult.error ? 'Status unavailable' : !heartbeat ? 'Not yet verified' : isHealthy ? 'Last scan healthy' : 'Stale or degraded'}
                 </span>
               </div>
-              <p className="text-sm font-semibold">
-                Workflow: {heartbeat?.workflow || 'OpportunityOS 06 Autopilot'}
+              <p className="text-sm font-semibold font-display mt-0.5 text-foreground">
+                Workflow: {heartbeat?.workflow || 'Trajectory Autopilot'}
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <Clock className="size-3.5 text-muted-foreground" />
               <span>
@@ -86,7 +86,7 @@ export default async function ActivityPage() {
               </span>
             </div>
             <div className="flex items-center gap-1.5">
-              <ShieldCheck className="size-3.5 text-primary" />
+              <ShieldCheck className="size-3.5 text-accent-text" />
               <span>
                 Next Run: {heartbeat?.next_run_at ? formatDate(heartbeat.next_run_at) : 'Scheduled daily (09:00 IST)'}
               </span>
@@ -96,24 +96,24 @@ export default async function ActivityPage() {
       </Card>
 
       {/* Events Timeline */}
-      <Card>
+      <Card className="border-[1.5px] border-border rounded-[14px] bg-white shadow-hard">
         {!rows.length ? (
           <div className="py-10 text-center">
-            <ActivityIcon className="mx-auto mb-4 size-8 text-primary/60" />
-            <h2 className="font-semibold">Your story starts here</h2>
+            <ActivityIcon className="mx-auto mb-4 size-8 text-muted-foreground" />
+            <h2 className="font-display font-bold text-base text-foreground">Your story starts here</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               Profile saves, confirmed opportunity submissions, and background autopilot runs will appear here.
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-line">
             {rows.map((event) => (
               <li key={event.id} className="flex gap-4 p-5 first:pt-5 last:pb-5">
                 <div
-                  className={`mt-1 flex size-8 shrink-0 items-center justify-center rounded-full ${
+                  className={`mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border-[1.5px] border-border ${
                     event.level === 'error'
-                      ? 'bg-red-50 text-red-700'
-                      : 'bg-emerald-50 text-emerald-700'
+                      ? 'bg-danger text-danger-foreground'
+                      : 'bg-act text-accent-text'
                   }`}
                 >
                   {event.level === 'error' ? (

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sorting board</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div role="img" aria-label="{{label}}" style="position: relative; width: 100%; aspect-ratio: 1200 / 680; container-type: inline-size; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111">
+
+<div style="position: absolute; inset: 0; border-radius: 16px; background-image: radial-gradient(#CFCAC0 1px, transparent 1.2px); background-size: 22px 22px; opacity: 0.7"></div>
+
+<sc-for list="{{lanes}}" as="l" hint-placeholder-count="3">
+<div style="position: absolute; left: {{l.left}}%; top: 4.5%; width: 18.4%; opacity: {{l.op}}; display: flex; flex-direction: column; gap: 0.3cqw">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.6cqw; line-height: 1; color: {{l.color}}">{{l.name}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 0.9cqw; letter-spacing: 0.06em; color: #5F5B54">{{l.sub}}</span>
+</div>
+</sc-for>
+
+<div style="position: absolute; left: 3%; right: 3%; top: {{scanTop}}%; height: 2px; background: #FF5A1F; box-shadow: 0 0 18px 4px rgba(255, 90, 31, 0.45); opacity: {{scanOp}}"></div>
+
+<sc-for list="{{chips}}" as="c" hint-placeholder-count="18">
+<div style="position: absolute; left: {{c.left}}%; top: {{c.top}}%; width: 18.4%; box-sizing: border-box; padding: 0.8cqw 1cqw; border: 1.5px solid #111111; border-radius: 0.8cqw; background: {{c.bg}}; box-shadow: 0.3cqw 0.3cqw 0 #111111; transform: {{c.tf}}; opacity: {{c.op}}; z-index: {{c.z}}; display: flex; flex-direction: column; gap: 0.35cqw">
+<div style="display: flex; justify-content: space-between; gap: 0.6cqw; font-family: 'JetBrains Mono', monospace; font-size: 0.85cqw; letter-spacing: 0.06em">
+<span style="color: #5F5B54; white-space: nowrap">{{c.kind}}</span>
+<span style="font-weight: 500; color: {{c.tagColor}}; opacity: {{c.tagOp}}">{{c.tag}}</span>
+</div>
+<div style="position: relative; height: 1.5cqw; font-size: 1.15cqw; font-weight: 600; line-height: 1.3">
+<span style="position: absolute; inset: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: {{c.t1}}">{{c.title}}</span>
+<span style="position: absolute; inset: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: {{c.t2}}; color: {{c.noteColor}}">{{c.note}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"p":{"editor":"range","default":0,"min":0,"max":1,"step":0.01},"$preview":{"width":1200,"height":680}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    var data = [
+      ['INTERNSHIP', 'SDE Intern · Bengaluru', 'act', 'Tracking · apply by Fri'],
+      ['ROLE', 'Product Intern · Remote', 'ask', 'Graduating in 2027?'],
+      ['LISTING', 'Pay ₹999 to apply', 'skip', 'Upfront fee — likely scam'],
+      ['HACKATHON', '48h Fintech Build', 'act', 'On your calendar · Oct 27'],
+      ['INTERNSHIP', 'ML Intern · Hyderabad', 'ask', 'Is your CGPA 7.5+?'],
+      ['JOB', 'Senior SDE · 5 yrs exp', 'skip', 'Needs 5 years experience'],
+      ['INTERNSHIP', 'Data Analyst Intern', 'act', 'Strong match · 91'],
+      ['LISTING', 'Campus Ambassador', 'skip', 'Outside your interests'],
+      ['HACKATHON', 'Global AI Challenge', 'ask', 'Are you 18 or older?'],
+      ['JOB', 'Associate Engineer · Pune', 'act', 'Eligible · reminder set'],
+      ['INTERNSHIP', 'Design Intern · Delhi', 'skip', 'Deadline passed Sep 30'],
+      ['INTERNSHIP', 'Backend Intern · Remote', 'ask', 'Comfortable with Go?'],
+      ['LISTING', 'SDE Intern · Bengaluru', 'skip', 'Duplicate listing'],
+      ['INTERNSHIP', 'Frontend Intern · Remote', 'act', 'Strong match · 88'],
+      ['ROLE', 'Research Intern · IISc', 'ask', 'Can you relocate?'],
+      ['LISTING', 'Unpaid · ₹2,000 kit fee', 'skip', 'Asks you to pay'],
+      ['HACKATHON', 'Smart Cities Hack', 'act', 'Team slot saved'],
+      ['JOB', 'Sales Exec · Field', 'skip', 'Not your field']
+    ];
+    var rand = function (seed) { var x = Math.sin(seed * 12.9898) * 43758.5453; return x - Math.floor(x); };
+    var laneX = { act: 60, ask: 490, skip: 920 };
+    var laneCount = { act: 0, ask: 0, skip: 0 };
+    this.items = data.map(function (d, i) {
+      var col = i % 6, row = Math.floor(i / 6);
+      var ax = 10 + col * 185 + (rand(i + 1) - 0.5) * 80;
+      var ay = 40 + row * 205 + (rand(i + 7) - 0.5) * 120;
+      var ar = (rand(i + 13) - 0.5) * 28;
+      var gc = i % 4, gr = Math.floor(i / 4);
+      var bx = 70 + gc * 270, by = 110 + gr * 100;
+      var li = laneCount[d[2]]++;
+      var cx = laneX[d[2]], cy = 130 + li * 74;
+      return { kind: d[0], title: d[1], lane: d[2], note: d[3], ax: ax, ay: ay, ar: ar, bx: bx, by: by, cx: cx, cy: cy, hero: i === 0 };
+    });
+  }
+  renderVals() {
+    var P = Math.max(0, Math.min(1, Number(this.props.p != null ? this.props.p : 0) || 0));
+    var seg = function (a, b) { return Math.max(0, Math.min(1, (P - a) / (b - a))); };
+    var ease = function (t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
+    var lerp = function (a, b, t) { return a + (b - a) * t; };
+    var mixHex = function (a, b, t) {
+      var f = function (h, k) { return parseInt(h.substr(k, 2), 16); };
+      return 'rgb(' + [1, 3, 5].map(function (k) { return Math.round(f(a, k) + (f(b, k) - f(a, k)) * t); }).join(',') + ')';
+    };
+    var e1 = ease(seg(0.18, 0.34));
+    var e2 = ease(seg(0.42, 0.58));
+    var e4 = ease(seg(0.66, 0.74));
+    var e3 = ease(seg(0.86, 0.96));
+    var tint = { act: '#FFE3D6', ask: '#E1E8FF', skip: '#ECEAE5' };
+    var tagColor = { act: '#C23E0C', ask: '#2445C8', skip: '#5F5B54' };
+    var tagText = { act: 'ACT', ask: 'ASK', skip: 'SKIP' };
+    var noteColor = { act: '#111111', ask: '#2445C8', skip: '#5F5B54' };
+    var chips = this.items.map(function (it) {
+      var x = lerp(lerp(it.ax, it.bx, e1), it.cx, e2);
+      var y = lerp(lerp(it.ay, it.by, e1), it.cy, e2);
+      var r = it.ar * (1 - e1);
+      var s = 1;
+      var op = 1;
+      if (it.hero) {
+        x = lerp(x, 490, e3); y = lerp(y, 290, e3); s = lerp(1, 1.7, e3);
+      } else {
+        op = 1 - 0.88 * e3;
+        if (it.lane === 'skip') op *= 1 - 0.45 * e4;
+      }
+      return {
+        kind: it.kind, title: it.title, note: it.note, tag: tagText[it.lane],
+        left: (x / 12).toFixed(3), top: (y / 6.8).toFixed(3),
+        tf: 'rotate(' + r.toFixed(2) + 'deg) scale(' + s.toFixed(3) + ')',
+        op: op.toFixed(3), z: it.hero ? 30 : 1,
+        bg: mixHex('#FFFFFF', tint[it.lane], e2),
+        tagColor: tagColor[it.lane], tagOp: e2,
+        t1: 1 - e4, t2: e4, noteColor: noteColor[it.lane]
+      };
+    });
+    var laneOp = e2 * (1 - e3);
+    return {
+      chips: chips,
+      lanes: [
+        { name: 'Act', sub: 'WE HANDLE IT', color: '#C23E0C', left: 5, op: laneOp },
+        { name: 'Ask', sub: 'NEEDS YOUR ANSWER', color: '#2445C8', left: 40.83, op: laneOp },
+        { name: 'Skip', sub: 'NOT WORTH YOUR TIME', color: '#5F5B54', left: 76.67, op: laneOp }
+      ],
+      scanTop: (12 + 76 * seg(0.24, 0.4)).toFixed(2),
+      scanOp: Math.min(seg(0.22, 0.26), 1 - seg(0.38, 0.42)),
+      label: 'A pile of internship, job and hackathon listings being read and sorted into Act, Ask and Skip lanes.'
+    };
+  }
+}
+</script>
+</body>
+</html>

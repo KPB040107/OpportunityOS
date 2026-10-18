@@ -1,5 +1,5 @@
 'use client';
-import { useState, useTransition, useMemo } from 'react';
+import { useState, useTransition, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
@@ -11,6 +11,9 @@ import {
   ExternalLink,
   Search,
   Filter,
+  SlidersHorizontal,
+  X,
+  ChevronDown,
   CheckCircle2,
   AlertTriangle,
   HelpCircle,
@@ -136,6 +139,83 @@ export function InboxFeed({
     });
     return Array.from(set).sort();
   }, [opportunities, allEmployers]);
+
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const filterTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const filterContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const handleFilterMouseEnter = () => {
+    if (filterTimeoutRef.current) {
+      clearTimeout(filterTimeoutRef.current);
+      filterTimeoutRef.current = null;
+    }
+    setIsFilterOpen(true);
+  };
+
+  const handleFilterMouseLeave = () => {
+    filterTimeoutRef.current = setTimeout(() => {
+      setIsFilterOpen(false);
+    }, 220);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterContainerRef.current && !filterContainerRef.current.contains(e.target as Node)) {
+        setIsFilterOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFilterOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+    };
+  }, []);
+
+  const isFieldActive = Boolean(profileBranch && fieldFilter !== 'matching_field');
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (selectedType !== 'all') count++;
+    if (selectedEmployer !== 'all') count++;
+    if (selectedEligibility !== 'all') count++;
+    if (selectedDecision !== 'all') count++;
+    if (selectedTrust !== 'all') count++;
+    if (selectedDeadline !== 'all') count++;
+    if (selectedLocation !== 'all') count++;
+    if (currentSort !== 'best') count++;
+    if (isFieldActive) count++;
+    return count;
+  }, [
+    selectedType,
+    selectedEmployer,
+    selectedEligibility,
+    selectedDecision,
+    selectedTrust,
+    selectedDeadline,
+    selectedLocation,
+    currentSort,
+    isFieldActive,
+  ]);
+
+  const clearAllFilters = () => {
+    setSelectedType('all');
+    setSelectedEmployer('all');
+    setSelectedEligibility('all');
+    setSelectedDecision('all');
+    setSelectedTrust('all');
+    setSelectedDeadline('all');
+    setSelectedLocation('all');
+    setCurrentSort('best');
+    if (profileBranch) setFieldFilter('matching_field');
+    setSearch('');
+    setSavedOnly(false);
+    setCurrentPage(1);
+    if (isServerPaginated) router.push(pathname);
+  };
 
   const [actionError,setActionError] = useState('');
   const handleToggleSave = (id:string) => {
@@ -423,200 +503,502 @@ export function InboxFeed({
             <EyeOff className="size-3.5" />
             {showHidden ? 'Hiding Hidden' : 'Show Hidden'}
           </Button>
+
+          {/* Filter & Sort Hoverable Dropdown */}
+          <div
+            className="relative"
+            ref={filterContainerRef}
+            onMouseEnter={handleFilterMouseEnter}
+            onMouseLeave={handleFilterMouseLeave}
+          >
+            <button
+              type="button"
+              onClick={() => setIsFilterOpen((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer select-none ${
+                activeFilterCount > 0
+                  ? 'border-border bg-act text-act-foreground shadow-hard-sm'
+                  : 'border-border bg-white text-foreground hover:bg-muted'
+              }`}
+              aria-expanded={isFilterOpen}
+              aria-label="Filter and Sort"
+              title="Filter & Sort"
+            >
+              <SlidersHorizontal className="size-3.5 text-foreground" />
+              <span>Filter & Sort</span>
+              {activeFilterCount > 0 ? (
+                <span className="size-5 rounded-full bg-primary text-primary-foreground font-mono text-[10px] font-bold flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              ) : (
+                <ChevronDown className={`size-3 text-muted-foreground transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+              )}
+            </button>
+
+            {/* Hover / Click Flyout Popover */}
+            {isFilterOpen && (
+              <div
+                className="absolute right-0 top-full mt-2 w-[340px] sm:w-[420px] max-h-[82vh] overflow-y-auto bg-white border-[1.5px] border-border rounded-[14px] shadow-hard-lg z-50 p-4 text-xs space-y-4 animate-in fade-in zoom-in-95 duration-150"
+                role="dialog"
+                aria-label="Filter and Sort Options"
+              >
+                {/* Popover Header */}
+                <div className="flex items-center justify-between border-b border-line pb-2.5">
+                  <div className="flex items-center gap-1.5 font-bold text-sm text-foreground">
+                    <SlidersHorizontal className="size-4 text-primary" />
+                    <span>Filter & Sort</span>
+                  </div>
+                  {activeFilterCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={clearAllFilters}
+                      className="text-xs font-semibold text-accent-text hover:underline"
+                    >
+                      Reset all ({activeFilterCount})
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground font-mono">All default</span>
+                  )}
+                </div>
+
+                {/* Section 1: Sort by */}
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                    Sort By
+                  </span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { id: 'best', label: 'Best Match' },
+                      { id: 'newest', label: 'Newest' },
+                      { id: 'deadline', label: 'Deadline' },
+                    ].map((s) => {
+                      const isSelected = currentSort === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setCurrentSort(s.id);
+                            setCurrentPage(1);
+                            if (isServerPaginated) navigateWithParam({ sort: s.id === 'best' ? null : s.id, page: 1 });
+                          }}
+                          className={`px-2 py-1.5 rounded-lg border text-xs font-semibold transition-colors text-center ${
+                            isSelected
+                              ? 'border-border bg-white text-foreground font-bold shadow-hard-sm'
+                              : 'border-line bg-card text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Section 2: Field of Study (if profileBranch exists) */}
+                {profileBranch && (
+                  <div>
+                    <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                      Field Relevance
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { id: 'matching_field', label: `Field: ${profileBranch}` },
+                        { id: 'all', label: 'All Disciplines' },
+                      ].map((f) => {
+                        const isSelected = fieldFilter === f.id;
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => {
+                              setFieldFilter(f.id);
+                              setCurrentPage(1);
+                              if (isServerPaginated) navigateWithParam({ field: f.id === 'matching_field' ? null : f.id, page: 1 });
+                            }}
+                            className={`px-2 py-1.5 rounded-lg border text-xs font-semibold transition-colors text-center truncate ${
+                              isSelected
+                                ? 'border-border bg-primary text-primary-foreground shadow-hard-sm'
+                                : 'border-line bg-card text-foreground hover:bg-muted'
+                            }`}
+                            title={f.label}
+                          >
+                            {f.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 3: Opportunity Type */}
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                    Opportunity Type
+                  </span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'internship', label: 'Internships' },
+                      { id: 'job', label: 'Jobs' },
+                      { id: 'hackathon', label: 'Hackathons' },
+                    ].map((t) => {
+                      const isSelected = selectedType === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedType(t.id);
+                            setCurrentPage(1);
+                            if (isServerPaginated) navigateWithParam({ type: t.id, page: 1 });
+                          }}
+                          className={`px-1.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors text-center ${
+                            isSelected
+                              ? 'border-border bg-white text-foreground font-bold shadow-hard-sm'
+                              : 'border-line bg-card text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Section 4: Decision */}
+                <div>
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                    Decision Lane
+                  </span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'all', label: 'All', cls: 'bg-card text-foreground' },
+                      { id: 'ACT', label: 'ACT', cls: 'bg-act text-act-foreground' },
+                      { id: 'ASK', label: 'ASK', cls: 'bg-ask text-ask-foreground' },
+                      { id: 'IGNORE', label: 'SKIP', cls: 'bg-skip text-skip-foreground' },
+                    ].map((d) => {
+                      const isSelected = selectedDecision === d.id;
+                      return (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedDecision(d.id);
+                            setCurrentPage(1);
+                            if (isServerPaginated) navigateWithParam({ decision: d.id, page: 1 });
+                          }}
+                          className={`px-1.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors text-center ${
+                            isSelected
+                              ? `${d.cls} border-border shadow-hard-sm`
+                              : 'border-line bg-card text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {d.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Section 5: Eligibility & Trust Tier */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Eligibility
+                    </label>
+                    <select
+                      value={selectedEligibility}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedEligibility(val);
+                        setCurrentPage(1);
+                        if (isServerPaginated) navigateWithParam({ eligibility: val, page: 1 });
+                      }}
+                      className="h-8 text-xs border border-border rounded-lg bg-background px-2 w-full font-medium"
+                    >
+                      <option value="all">All Eligibility</option>
+                      <option value="ELIGIBLE">Eligible</option>
+                      <option value="UNKNOWN">Needs Info</option>
+                      <option value="INELIGIBLE">Ineligible</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Trust Tier
+                    </label>
+                    <select
+                      value={selectedTrust}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedTrust(val);
+                        setCurrentPage(1);
+                        if (isServerPaginated) navigateWithParam({ trust: val, page: 1 });
+                      }}
+                      className="h-8 text-xs border border-border rounded-lg bg-background px-2 w-full font-medium"
+                    >
+                      <option value="all">All Trust Tiers</option>
+                      <option value="corroborated">Corroborated</option>
+                      <option value="attributed">Attributed</option>
+                      <option value="unverified">Unverified</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Section 6: Deadline & Location */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Deadline
+                    </label>
+                    <select
+                      value={selectedDeadline}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedDeadline(val);
+                        setCurrentPage(1);
+                        if (isServerPaginated) navigateWithParam({ deadline: val, page: 1 });
+                      }}
+                      className="h-8 text-xs border border-border rounded-lg bg-background px-2 w-full font-medium"
+                    >
+                      <option value="all">All Deadlines</option>
+                      <option value="upcoming">Upcoming Only</option>
+                      <option value="unknown">Not Stated</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                      Location
+                    </label>
+                    <select
+                      value={selectedLocation}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedLocation(val);
+                        setCurrentPage(1);
+                        if (isServerPaginated) navigateWithParam({ location: val, page: 1 });
+                      }}
+                      className="h-8 text-xs border border-border rounded-lg bg-background px-2 w-full font-medium"
+                    >
+                      <option value="all">All Locations</option>
+                      <option value="remote">Remote Only</option>
+                      <option value="onsite">On-site</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Section 7: Employer */}
+                <div>
+                  <label className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                    Employer ({employers.length})
+                  </label>
+                  <select
+                    value={selectedEmployer}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedEmployer(val);
+                      setCurrentPage(1);
+                      if (isServerPaginated) navigateWithParam({ employer: val, page: 1 });
+                    }}
+                    className="h-8 text-xs border border-border rounded-lg bg-background px-2 w-full font-medium"
+                  >
+                    <option value="all">All Employers ({employers.length})</option>
+                    {employers.map((emp) => (
+                      <option key={emp} value={emp}>
+                        {emp} ({employerCounts[emp] || 0})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Popover Footer */}
+                <div className="pt-2.5 border-t border-line flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground font-mono">
+                    Showing {totalCappedCount} results
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsFilterOpen(false)}
+                    className="px-3 py-1 rounded-lg border border-border bg-white text-foreground text-xs font-semibold shadow-hard-sm hover:bg-muted transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="flex items-center gap-1 font-medium text-muted-foreground mr-1">
-          <Filter className="size-3.5" /> Filters:
-        </span>
-
-        {/* Field of Study Relevancy Filter */}
-        {profileBranch && (
-          <select
-            value={fieldFilter}
-            onChange={(e) => {
-              const val = e.target.value;
-              setFieldFilter(val);
-              setCurrentPage(1);
-              if (isServerPaginated) navigateWithParam({ field: val === 'matching_field' ? null : val, page: 1 });
-            }}
-            className="rounded-lg border border-primary/40 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary cursor-pointer"
-            title={`Filter opportunities matching your academic field: ${profileBranch}`}
+      {/* Active Filter Tags */}
+      {activeFilterCount > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+          <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-muted-foreground mr-1">
+            Active Filters:
+          </span>
+          {currentSort !== 'best' && (
+            <span className="inline-flex items-center gap-1 bg-white border border-border px-2.5 py-0.5 rounded-full text-[11px] font-medium shadow-2xs">
+              Sort: {currentSort === 'newest' ? 'Newest' : 'Deadline'}
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentSort('best');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ sort: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Reset sort"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {selectedType !== 'all' && (
+            <span className="inline-flex items-center gap-1 bg-act text-act-foreground border border-border px-2.5 py-0.5 rounded-full text-[11px] font-semibold shadow-2xs">
+              Type: {selectedType}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedType('all');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ type: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Remove type filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {selectedEmployer !== 'all' && (
+            <span className="inline-flex items-center gap-1 bg-white border border-border px-2.5 py-0.5 rounded-full text-[11px] font-medium shadow-2xs">
+              Employer: {selectedEmployer}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedEmployer('all');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ employer: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Remove employer filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {selectedEligibility !== 'all' && (
+            <span className="inline-flex items-center gap-1 bg-ask text-ask-foreground border border-border px-2.5 py-0.5 rounded-full text-[11px] font-semibold shadow-2xs">
+              Eligibility: {selectedEligibility}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedEligibility('all');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ eligibility: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Remove eligibility filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {selectedDecision !== 'all' && (
+            <span className="inline-flex items-center gap-1 bg-act text-act-foreground border border-border px-2.5 py-0.5 rounded-full text-[11px] font-semibold shadow-2xs">
+              Decision: {selectedDecision}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDecision('all');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ decision: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Remove decision filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {selectedTrust !== 'all' && (
+            <span className="inline-flex items-center gap-1 bg-white border border-border px-2.5 py-0.5 rounded-full text-[11px] font-medium shadow-2xs">
+              Trust: {selectedTrust}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTrust('all');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ trust: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Remove trust filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {selectedDeadline !== 'all' && (
+            <span className="inline-flex items-center gap-1 bg-white border border-border px-2.5 py-0.5 rounded-full text-[11px] font-medium shadow-2xs">
+              Deadline: {selectedDeadline}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDeadline('all');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ deadline: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Remove deadline filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {selectedLocation !== 'all' && (
+            <span className="inline-flex items-center gap-1 bg-white border border-border px-2.5 py-0.5 rounded-full text-[11px] font-medium shadow-2xs">
+              Location: {selectedLocation}
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedLocation('all');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ location: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Remove location filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          {isFieldActive && (
+            <span className="inline-flex items-center gap-1 bg-white border border-border px-2.5 py-0.5 rounded-full text-[11px] font-medium shadow-2xs">
+              Field: All Disciplines
+              <button
+                type="button"
+                onClick={() => {
+                  setFieldFilter('matching_field');
+                  setCurrentPage(1);
+                  if (isServerPaginated) navigateWithParam({ field: null, page: 1 });
+                }}
+                className="hover:text-red-600 transition-colors"
+                title="Reset field filter"
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={clearAllFilters}
+            className="text-xs font-semibold text-accent-text hover:underline ml-1"
           >
-            <option value="matching_field">Field: {profileBranch}</option>
-            <option value="all">Field: All Disciplines</option>
-          </select>
-        )}
-
-        {/* Opportunity Type */}
-        <select
-          value={selectedType}
-          onChange={(e) => {
-            const val = e.target.value;
-            setSelectedType(val);
-            setCurrentPage(1);
-            if (isServerPaginated) navigateWithParam({ type: val, page: 1 });
-          }}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs"
-        >
-          <option value="all">All Types</option>
-          <option value="internship">Internships</option>
-          <option value="job">Jobs</option>
-          <option value="hackathon">Hackathons</option>
-        </select>
-
-        {/* Employer Filter */}
-        <select
-          value={selectedEmployer}
-          onChange={(e) => {
-            const val = e.target.value;
-            setSelectedEmployer(val);
-            setCurrentPage(1);
-            if (isServerPaginated) navigateWithParam({ employer: val, page: 1 });
-          }}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs"
-        >
-          <option value="all">All Employers ({employers.length})</option>
-          {employers.map((emp) => (
-            <option key={emp} value={emp}>
-              {emp} ({employerCounts[emp] || 0})
-            </option>
-          ))}
-        </select>
-
-        {/* Eligibility Filter */}
-        <select
-          value={selectedEligibility}
-          onChange={(e) => {
-            const val = e.target.value;
-            setSelectedEligibility(val);
-            setCurrentPage(1);
-            if (isServerPaginated) navigateWithParam({ eligibility: val, page: 1 });
-          }}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs"
-        >
-          <option value="all">All Eligibility</option>
-          <option value="ELIGIBLE">Eligible</option>
-          <option value="UNKNOWN">Needs Info (Unknown)</option>
-          <option value="INELIGIBLE">Ineligible</option>
-        </select>
-
-        {/* Decision Filter */}
-        <select
-          value={selectedDecision}
-          onChange={(e) => {
-            const val = e.target.value;
-            setSelectedDecision(val);
-            setCurrentPage(1);
-            if (isServerPaginated) navigateWithParam({ decision: val, page: 1 });
-          }}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs"
-        >
-          <option value="all">All Decisions</option>
-          <option value="ACT">ACT (Autonomous / Tracked)</option>
-          <option value="ASK">ASK (Needs Review)</option>
-          <option value="IGNORE">IGNORE (Filtered)</option>
-        </select>
-
-        {/* Trust Tier Filter */}
-        <select
-          value={selectedTrust}
-          onChange={(e) => {
-            const val = e.target.value;
-            setSelectedTrust(val);
-            setCurrentPage(1);
-            if (isServerPaginated) navigateWithParam({ trust: val, page: 1 });
-          }}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs"
-        >
-          <option value="all">All Trust Tiers</option>
-          <option value="corroborated">Corroborated</option>
-          <option value="attributed">Attributed</option>
-          <option value="unverified">Unverified</option>
-        </select>
-
-        {/* Deadline Filter with explicit unknown-deadline */}
-        <select
-          value={selectedDeadline}
-          onChange={(e) => {
-            const val = e.target.value;
-            setSelectedDeadline(val);
-            setCurrentPage(1);
-            if (isServerPaginated) navigateWithParam({ deadline: val, page: 1 });
-          }}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs"
-        >
-          <option value="all">All Deadlines</option>
-          <option value="upcoming">Upcoming Only</option>
-          <option value="unknown">Unknown Deadline (Not Stated)</option>
-        </select>
-
-        {/* Location Filter */}
-        <select
-          value={selectedLocation}
-          onChange={(e) => {
-            const val = e.target.value;
-            setSelectedLocation(val);
-            setCurrentPage(1);
-            if (isServerPaginated) navigateWithParam({ location: val, page: 1 });
-          }}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs"
-        >
-          <option value="all">All Locations</option>
-          <option value="remote">Remote Only</option>
-          <option value="onsite">On-site / In-person</option>
-        </select>
-
-        {/* Server/Client Sorting Options */}
-        <select
-          aria-label="Sort by"
-          value={currentSort}
-          onChange={(e) => {
-            const val = e.target.value;
-            setCurrentSort(val);
-            setCurrentPage(1);
-            if (isServerPaginated) navigateWithParam({ sort: val === 'best' ? null : val, page: 1 });
-          }}
-          className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs font-medium text-foreground"
-        >
-          <option value="best">Sort: Best match</option>
-          <option value="newest">Sort: Newest</option>
-          <option value="deadline">Sort: Deadline soonest</option>
-        </select>
-
-        {(selectedType !== 'all' ||
-          selectedEmployer !== 'all' ||
-          selectedEligibility !== 'all' ||
-          selectedDecision !== 'all' ||
-          selectedTrust !== 'all' ||
-          selectedDeadline !== 'all' ||
-          selectedLocation !== 'all' ||
-          currentSort !== 'best' ||
-          search) && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setSelectedType('all');
-              setSelectedEmployer('all');
-              setSelectedEligibility('all');
-              setSelectedDecision('all');
-              setSelectedTrust('all');
-              setSelectedDeadline('all');
-              setSelectedLocation('all');
-              setCurrentSort('best');
-              setSearch('');
-              setCurrentPage(1);
-              if (isServerPaginated) router.push(pathname);
-            }}
-            className="text-xs h-7 px-2 text-primary hover:underline"
-          >
-            Clear filters
-          </Button>
-        )}
-      </div>
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* Active Source Filter Banner */}
       {selectedEmployer !== 'all' && (
@@ -635,7 +1017,7 @@ export function InboxFeed({
             >
               {sourcePrefs[selectedEmployer.toLowerCase()] === 'muted' ? (
                 <>
-                  <Volume2 className="size-3 text-emerald-600" /> Unmute source
+                  <Volume2 className="size-3 text-primary" /> Unmute source
                 </>
               ) : (
                 <>
@@ -661,7 +1043,7 @@ export function InboxFeed({
           Showing {totalCappedCount === 0 ? 0 : startIndex + 1}–{endIndex} of {totalCappedCount}{' '}
           {view === 'best' ? 'curated recommendations' : 'discoveries'}
           {diverseOpportunities.length > MAX_CAPPED && (
-            <span className="ml-1 text-[11px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+            <span className="ml-1 text-[11px] text-ask-foreground bg-ask border border-border px-1.5 py-0.5 rounded font-medium">
               (capped at top {MAX_CAPPED} of {diverseOpportunities.length})
             </span>
           )}
@@ -722,12 +1104,12 @@ export function InboxFeed({
                         </span>
                       )}
                       {appStatus === 'to_apply' && (
-                        <span className="rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold">
+                        <span className="rounded-full bg-act text-act-foreground border border-border px-2 py-0.5 text-[10px] font-semibold">
                           To Apply
                         </span>
                       )}
                       {(appStatus === 'saved' || opp.is_saved) && appStatus !== 'applied' && appStatus !== 'to_apply' && (
-                        <span className="rounded-full bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold">
+                        <span className="rounded-full bg-ask text-ask-foreground border border-border px-2 py-0.5 text-[10px] font-semibold">
                           Saved
                         </span>
                       )}
@@ -790,8 +1172,8 @@ export function InboxFeed({
                           <span
                             className={`rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase ${
                               comp.paidStatus === 'Paid'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-amber-100 text-amber-800'
+                                ? 'bg-act text-act-foreground border border-border'
+                                : 'bg-ask text-ask-foreground border border-border'
                             }`}
                           >
                             {comp.paidStatus}
@@ -824,10 +1206,10 @@ export function InboxFeed({
                         <span
                           className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                             match.decision === 'ACT'
-                              ? 'bg-emerald-100 text-emerald-900'
+                              ? 'bg-act text-act-foreground border border-border'
                               : match.decision === 'ASK'
-                              ? 'bg-amber-100 text-amber-900'
-                              : 'bg-slate-100 text-slate-700'
+                              ? 'bg-ask text-ask-foreground border border-border'
+                              : 'bg-skip text-skip-foreground border border-border'
                           }`}
                         >
                           {match.decision}
@@ -840,7 +1222,7 @@ export function InboxFeed({
 
                       {/* Honest Score Rendering */}
                       {isInsufficient ? (
-                        <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                        <span className="rounded-full bg-ask border border-border px-2 py-0.5 text-[11px] font-semibold text-ask-foreground">
                           Insufficient information to score
                         </span>
                       ) : match?.match_score !== null && match?.match_score !== undefined ? (
@@ -870,9 +1252,9 @@ export function InboxFeed({
                     {match?.decision === 'ASK' && match.eligibility_status === 'ELIGIBLE' ? (
                       <Link
                         href="/approvals"
-                        className="inline-flex items-center gap-1 font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 hover:bg-amber-100 transition-colors"
+                        className="inline-flex items-center gap-1 font-semibold text-ask-foreground bg-ask px-2.5 py-1 rounded-md border border-border hover:opacity-90 transition-colors"
                       >
-                        <AlertTriangle className="size-3.5 text-amber-600" />
+                        <AlertTriangle className="size-3.5 text-ask-foreground" />
                         Approve in Center
                       </Link>
                     ) : match?.eligibility_status === 'UNKNOWN' ? (
@@ -884,8 +1266,8 @@ export function InboxFeed({
                         Needs Review
                       </Link>
                     ) : match?.decision === 'ACT' ? (
-                      <span className="inline-flex items-center gap-1 text-emerald-700 text-[11px] font-medium">
-                        <CheckCircle2 className="size-3.5 text-emerald-600" />
+                      <span className="inline-flex items-center gap-1 text-act-foreground text-[11px] font-semibold bg-act px-2 py-0.5 rounded-md border border-border">
+                        <CheckCircle2 className="size-3.5 text-act-foreground" />
                         Tracked autonomously
                       </span>
                     ) : (

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpportunityOS — Activity log</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+a{color:#C23E0C}a:hover{color:#8F2C07}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F3F1EC; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111">
+<div style="flex: 1 1 240px; max-width: 100%"><dc-import name="Nav" active="activity" hint-size="100%,900px"></dc-import></div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px 40px 64px; display: flex; flex-direction: column; gap: 24px; max-width: 980px">
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">EVERYTHING IT DID, AND WHY</span>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4vw, 52px); line-height: 1; letter-spacing: -0.03em">Activity</h1>
+</div>
+
+<div role="group" aria-label="Filter" style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{f.on}}" onClick="{{f.pick}}" style="height: 40px; padding: 0 14px; border: 1.5px solid #111111; border-radius: 999px; background: {{f.bg}}; color: {{f.c}}; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.06em">{{f.label}}</button>
+</sc-for>
+</div>
+
+<sc-for list="{{days}}" as="d" hint-placeholder-count="2">
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.12em; color: #5F5B54">{{d.label}}</h2>
+<div style="border: 1.5px solid #111111; border-radius: 14px; background: #FFFFFF; overflow: hidden">
+<sc-for list="{{d.items}}" as="e" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 16px; padding: 14px 18px; border-bottom: 1px solid #ECEAE5">
+<span style="flex: 0 0 52px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #5F5B54; padding-top: 3px">{{e.time}}</span>
+<span style="flex: 0 0 auto; padding: 3px 8px; border: 1.5px solid #111111; border-radius: 6px; background: {{e.bg}}; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500">{{e.tag}}</span>
+<div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 15px; font-weight: 600">{{e.text}}</span>
+<span style="font-size: 13px; color: #3D3A35">{{e.why}}</span>
+</div>
+<sc-if value="{{e.undo}}" hint-placeholder-val="{{false}}">
+<button type="button" style="flex: 0 0 auto; height: 34px; padding: 0 12px; border: 1.5px solid #111111; border-radius: 8px; background: #FFFFFF; font-family: 'Instrument Sans', sans-serif; font-size: 13px; font-weight: 600; color: #111111">Undo</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</section>
+</sc-for>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1150}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { filter: 'ALL' };
+  }
+  renderVals() {
+    var self = this;
+    var bg = { ACT: '#FFE3D6', ASK: '#E1E8FF', SKIP: '#ECEAE5', READ: '#FFFFFF' };
+    var raw = [
+      { day: 'TODAY · SUN 18 OCT', items: [
+        { time: '9:42', tag: 'ACT', text: 'Put Orbitpay 48h Fintech Build on your calendar', why: 'Score 88. Open to all students, no fee. Submission Mon 27 Oct, 6:30 PM IST.', undo: true },
+        { time: '9:41', tag: 'SKIP', text: 'Skipped Marketing Intern at QuickHire Careers', why: 'Asks for a ₹2,000 kit fee. Your rule: always skip listings that ask you to pay.', undo: true },
+        { time: '9:40', tag: 'ASK', text: 'Asked you whether you’re 18 or older', why: 'Global AI Challenge requires it and your profile doesn’t say.' },
+        { time: '9:30', tag: 'READ', text: 'Scanned 6 sources, found 23 new listings', why: '19 skipped automatically, 3 acted on, 1 question for you.' }
+      ] },
+      { day: 'YESTERDAY · SAT 17 OCT', items: [
+        { time: '21:43', tag: 'ACT', text: 'Tracked SDE Intern at Paperkite and set a reminder', why: 'Score 92. All 4 hard requirements met. Reminder Thu 23 Oct, 7:00 PM.', undo: true },
+        { time: '21:43', tag: 'SKIP', text: 'Skipped Senior Software Engineer at Fernway', why: 'Needs 5+ years of experience. Your rule: skip roles needing 2+ years.', undo: true },
+        { time: '18:05', tag: 'ASK', text: 'Asked you to approve Product Intern at Tessellate', why: 'Score 74 but the listing doesn’t say whether 2027 graduates can apply.' }
+      ] }
+    ];
+    var f = this.state.filter;
+    var days = raw.map(function (d) {
+      return { label: d.day, items: d.items.filter(function (e) { return f === 'ALL' || e.tag === f; }).map(function (e) {
+        return { time: e.time, tag: e.tag, text: e.text, why: e.why, bg: bg[e.tag], undo: !!e.undo };
+      }) };
+    }).filter(function (d) { return d.items.length > 0; });
+    var filters = ['ALL', 'ACT', 'ASK', 'SKIP', 'READ'].map(function (k) {
+      var on = f === k;
+      return { label: k, on: on ? 'true' : 'false', bg: on ? '#111111' : '#FFFFFF', c: on ? '#FFFFFF' : '#111111', pick: function () { self.setState({ filter: k }); } };
+    });
+    return { days: days, filters: filters };
+  }
+}
+</script>
+</body>
+</html>

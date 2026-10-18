@@ -87,7 +87,7 @@ export function PortalSetupCard({ aliasToken, verifiedPortals = [], forwardingRe
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground">Verified Portals:</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-act text-act-foreground border border-border font-semibold">
               {verifiedPortals.length} / 3 Connected
             </span>
           </div>
@@ -110,7 +110,7 @@ export function PortalSetupCard({ aliasToken, verifiedPortals = [], forwardingRe
             disabled={!aliasToken}
             className="gap-1.5 shrink-0"
           >
-            {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+            {copied ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}
             {copied ? 'Copied' : 'Copy Address'}
           </Button>
         </div>
@@ -134,11 +134,11 @@ export function PortalSetupCard({ aliasToken, verifiedPortals = [], forwardingRe
               >
                 {portal.name}
                 {isVerified ? (
-                  <span className="size-2 rounded-full bg-emerald-500" title="Portal attributable" />
+                  <span className="size-2 rounded-full bg-primary" title="Portal attributable" />
                 ) : forwardingReceived ? (
                   <span className="size-2 rounded-full bg-blue-500" title="Forwarding received" />
                 ) : (
-                  <span className="size-2 rounded-full bg-amber-400" title="Awaiting first alert" />
+                  <span className="size-2 rounded-full bg-muted-foreground" title="Awaiting first alert" />
                 )}
               </button>
             );
@@ -164,8 +164,8 @@ export function PortalSetupCard({ aliasToken, verifiedPortals = [], forwardingRe
             </div>
 
             {isCurrentVerified ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
-                <CheckCircle2 className="size-3.5 text-emerald-600" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-act text-act-foreground border border-border">
+                <CheckCircle2 className="size-3.5 text-act-foreground" />
                 Portal attributable
               </span>
             ) : forwardingReceived ? (
@@ -174,8 +174,8 @@ export function PortalSetupCard({ aliasToken, verifiedPortals = [], forwardingRe
                 Forwarding received
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
-                <Clock className="size-3.5 text-amber-600" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-ask text-ask-foreground border border-border">
+                <Clock className="size-3.5 text-ask-foreground" />
                 Awaiting first alert
               </span>
             )}

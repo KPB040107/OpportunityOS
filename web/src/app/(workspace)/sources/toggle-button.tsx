@@ -23,8 +23,8 @@ export function ToggleButton({ id, enabled }: { id: string; enabled: boolean }) 
       }}
       className={`text-xs font-semibold ${
         enabled
-          ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-          : 'text-muted-foreground hover:bg-muted'
+          ? 'bg-act text-act-foreground border border-border hover:opacity-90'
+          : 'text-muted-foreground hover:bg-muted border border-border'
       }`}
     >
       {isPending ? 'Updating...' : enabled ? 'Enabled' : 'Disabled'}

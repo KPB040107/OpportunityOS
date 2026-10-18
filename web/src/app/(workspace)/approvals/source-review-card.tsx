@@ -70,34 +70,34 @@ export function SourceReviewCard({ item }: { item: SourceReviewItem }) {
   }
 
   return (
-    <Card className="p-5 border-amber-200/80 bg-amber-50/20">
+    <Card className="p-5 border-[1.5px] border-border rounded-[14px] bg-white shadow-hard">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div className="space-y-2 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
+            <span className="rounded-full border-[1.5px] border-border bg-ask px-2.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
               Needs Source Review
             </span>
-            <span className="text-xs uppercase text-muted-foreground font-medium">
+            <span className="text-xs uppercase font-mono text-muted-foreground font-semibold">
               {item.type}
             </span>
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+            <span className="rounded-full border-[1.5px] border-border bg-skip px-2.5 py-0.5 font-mono text-[11px] font-medium text-foreground">
               Insufficient information to score
             </span>
           </div>
 
-          <h3 className="text-lg font-semibold">
-            <Link href={`/opportunities/${item.id}`} className="hover:text-primary transition-colors">
+          <h3 className="text-lg font-display font-bold text-foreground">
+            <Link href={`/opportunities/${item.id}`} className="hover:text-accent-text transition-colors">
               {item.title || 'Untitled Opportunity'}
             </Link>
           </h3>
           <p className="text-sm text-muted-foreground">{item.organization || 'Unknown Organisation'}</p>
 
-          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-            <p className="font-medium flex items-center gap-1.5 text-xs text-amber-900">
-              <AlertCircle className="size-4 text-amber-600 shrink-0" />
+          <div className="mt-3 rounded-[10px] border-[1.5px] border-border bg-[#F3F1EC] p-3 text-sm text-foreground">
+            <p className="font-semibold flex items-center gap-1.5 text-xs text-foreground">
+              <AlertCircle className="size-4 text-accent-text shrink-0" />
               The source has insufficient detail:
             </p>
-            <p className="mt-1 text-xs leading-relaxed text-amber-900">
+            <p className="mt-1 text-xs leading-relaxed text-ink-2">
               {item.explanation || 'No explicit eligibility criteria or deadlines were extracted from this listing. Approval cannot authorize actions on incomplete criteria.'}
             </p>
           </div>
@@ -106,7 +106,7 @@ export function SourceReviewCard({ item }: { item: SourceReviewItem }) {
         <div className="sm:shrink-0 flex flex-col items-end gap-2">
           <div className="flex flex-wrap gap-2">
             {item.application_url && (
-              <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs">
+              <Button asChild size="sm" variant="outline" className="gap-1.5 text-xs border-[1.5px] border-border shadow-[2px_2px_0_#111111]">
                 <a href={item.application_url} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="size-3.5" />
                   View original listing
@@ -118,10 +118,10 @@ export function SourceReviewCard({ item }: { item: SourceReviewItem }) {
               variant={approved ? 'default' : 'outline'}
               onClick={handleApprove}
               disabled={pending || approved}
-              className={`gap-1.5 text-xs ${
+              className={`gap-1.5 text-xs border-[1.5px] border-border shadow-[2px_2px_0_#111111] ${
                 approved
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                  : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'
+                  ? 'bg-act text-act-foreground font-bold'
+                  : 'bg-white text-foreground hover:bg-muted font-semibold'
               }`}
             >
               <CheckCircle2 className="size-3.5" />
@@ -132,7 +132,7 @@ export function SourceReviewCard({ item }: { item: SourceReviewItem }) {
               variant={saved ? 'default' : 'outline'}
               onClick={handleToggleSave}
               disabled={pending}
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs border-[1.5px] border-border shadow-[2px_2px_0_#111111]"
             >
               <Bookmark className={`size-3.5 ${saved ? 'fill-current' : ''}`} />
               {saved ? 'Saved' : 'Save'}
@@ -152,7 +152,7 @@ export function SourceReviewCard({ item }: { item: SourceReviewItem }) {
             {approved ? 'Tracked in your Applications board' : 'Approve directly to track in Applications, or save for review'}
           </span>
           {message && (
-            <span className="text-[11px] text-emerald-700 font-medium">{message}</span>
+            <span className="text-[11px] font-mono text-muted-foreground font-medium">{message}</span>
           )}
         </div>
       </div>

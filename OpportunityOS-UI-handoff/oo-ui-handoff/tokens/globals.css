@@ -1,0 +1,78 @@
+@import 'tailwindcss';
+
+/* OpportunityOS — "The Sorting Board" tokens.
+   Fonts are expected as CSS variables from next/font/google in app/layout.tsx:
+   --font-display (Bricolage Grotesque), --font-body (Instrument Sans), --font-mono (JetBrains Mono). */
+
+:root {
+  --background: #F3F1EC;   /* paper */
+  --foreground: #111111;   /* ink */
+  --card: #FFFFFF;
+  --ink-2: #3D3A35;
+  --muted: #ECEAE5;
+  --muted-foreground: #5F5B54;
+  --border: #111111;
+  --line: #DAD6CE;
+  --primary: #FF5A1F;              /* signal orange */
+  --primary-foreground: #111111;   /* ink text on orange */
+  --accent-text: #C23E0C;
+  --ring: #FF5A1F;
+
+  --act: #FFE3D6;  --act-foreground: #C23E0C;
+  --ask: #E1E8FF;  --ask-foreground: #2445C8;
+  --skip: #ECEAE5; --skip-foreground: #5F5B54;
+  --danger: #FDE4E1; --danger-foreground: #9F1D12;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-line: var(--line);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent-text: var(--accent-text);
+  --color-ring: var(--ring);
+  --color-act: var(--act);
+  --color-act-foreground: var(--act-foreground);
+  --color-ask: var(--ask);
+  --color-ask-foreground: var(--ask-foreground);
+  --color-skip: var(--skip);
+  --color-skip-foreground: var(--skip-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+
+  --font-sans: var(--font-body), system-ui, sans-serif;
+  --font-display: var(--font-display), system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+
+  --shadow-hard-sm: 2px 2px 0 #111111;
+  --shadow-hard: 3px 3px 0 #111111;
+  --shadow-hard-md: 4px 4px 0 #111111;
+  --shadow-hard-lg: 6px 6px 0 #111111;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+body { background: var(--background); color: var(--foreground); font-family: var(--font-body), system-ui, sans-serif; }
+a { color: var(--accent-text); }
+a:hover { color: #8F2C07; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), a { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+select { height: 46px; border: 1.5px solid var(--border); border-radius: 12px; padding: 0 12px; background: #fff; width: 100%; font-size: 15px; }
+label { font-size: 13px; font-weight: 600; }
+::selection { background: #FFE3D6; }
+
+/* Kicker / label style used everywhere: mono, uppercase, tracked */
+.kicker { font-family: var(--font-mono), monospace; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-text); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

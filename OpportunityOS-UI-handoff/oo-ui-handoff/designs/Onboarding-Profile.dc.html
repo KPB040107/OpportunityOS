@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpportunityOS — Set up your profile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+a{color:#C23E0C}a:hover{color:#8F2C07}
+@keyframes oo-scan{from{top:0}to{top:calc(100% - 3px)}}
+@keyframes oo-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes oo-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.oo-row{opacity:0;animation:oo-in .4s ease-out forwards}
+@media (prefers-reduced-motion: reduce){.oo-row{animation:none;opacity:1}}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; padding-bottom: 64px; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111; background: #F3F1EC">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid #DAD6CE">
+<div style="display: flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="width: 20px; height: 20px; border: 1.5px solid #111111; border-radius: 5px; background: #FF5A1F; box-shadow: 2px 2px 0 #111111"></span>
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 21px; letter-spacing: -0.02em">OpportunityOS</span>
+</div>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.08em">
+<li style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1.5px solid #111111; border-radius: 8px; background: #111111; color: #FFFFFF">1 PROFILE</li>
+<li aria-hidden="true" style="width: 24px; height: 1.5px; background: #111111"></li>
+<li style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1.5px solid #B9B4AB; border-radius: 8px; color: #5F5B54">2 ALERTS</li>
+</ol>
+</header>
+
+<main style="max-width: 1160px; margin: 0 auto; padding: 48px 24px 0; display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 12px; max-width: 720px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">STEP 1 OF 2 · ABOUT TWO MINUTES</span>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(36px, 4.4vw, 58px); line-height: 0.98; letter-spacing: -0.03em">Drop your resume.<br>We'll fill in the rest.</h1>
+<p style="margin: 0; font-size: 17px; line-height: 1.55; color: #3D3A35">Every detail we pull out is tagged with where it came from, so you can check it in seconds. The PDF is deleted once you confirm.</p>
+</div>
+
+<sc-if value="{{isIdle}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; min-height: 340px; padding: 40px 24px; box-sizing: border-box; border: 2px dashed #111111; border-radius: 16px; background: #FFFFFF; text-align: center">
+<span aria-hidden="true" style="width: 64px; height: 80px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 8px; background: #FFE3D6; box-shadow: 4px 4px 0 #111111; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500">PDF</span>
+<p style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 28px; letter-spacing: -0.02em">Drag your resume here</p>
+<p style="margin: 0; font-size: 14px; color: #5F5B54">PDF only. Private to you.</p>
+<button type="button" onClick="{{startParse}}" style="height: 50px; padding: 0 24px; border: 1.5px solid #111111; border-radius: 12px; background: #FF5A1F; box-shadow: 3px 3px 0 #111111; color: #111111; font-family: 'Instrument Sans', sans-serif; font-size: 15px; font-weight: 700">Choose a PDF</button>
+<a href="Onboarding-Alerts.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 500">No resume? Fill it in by hand</a>
+</div>
+</sc-if>
+
+<sc-if value="{{isWorking}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+
+<div style="flex: 0 1 380px; min-width: 280px; position: relative; box-sizing: border-box; padding: 28px; border: 1.5px solid #111111; border-radius: 12px; background: #FFFFFF; box-shadow: 6px 6px 0 #111111; display: flex; flex-direction: column; gap: 12px; overflow: hidden">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 24px">Ananya Rao</span>
+<span style="font-size: 12px; color: #5F5B54">ananya@college.edu · Bengaluru</span>
+<span style="margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; color: #5F5B54">EDUCATION</span>
+<sc-for list="{{doc}}" as="d" hint-placeholder-count="5">
+<sc-if value="{{d.heading}}" hint-placeholder-val="{{false}}">
+<span style="margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.12em; color: #5F5B54">{{d.text}}</span>
+</sc-if>
+<sc-if value="{{d.line}}" hint-placeholder-val="{{true}}">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px">
+<span style="flex: 0 0 auto; min-width: 20px; height: 20px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 6px; background: {{tagBg}}; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; display: flex; align-items: center; justify-content: center; opacity: {{tagOp}}">{{d.n}}</span>
+<span style="padding: 1px 4px; border-radius: 3px; background: {{hl}}">{{d.text}}</span>
+</span>
+</sc-if>
+</sc-for>
+<span aria-hidden="true" style="height: 6px; width: 85%; border-radius: 3px; background: #E6E2DA"></span>
+<span aria-hidden="true" style="height: 6px; width: 70%; border-radius: 3px; background: #E6E2DA"></span>
+<span aria-hidden="true" style="height: 6px; width: 78%; border-radius: 3px; background: #E6E2DA"></span>
+<sc-if value="{{isParsing}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; left: 0; right: 0; top: 0; height: 3px; background: #FF5A1F; box-shadow: 0 0 18px 4px rgba(255, 90, 31, 0.5); animation: oo-scan 1.4s ease-in-out infinite alternate"></div>
+</sc-if>
+</div>
+
+<div style="flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+<sc-if value="{{isParsing}}" hint-placeholder-val="{{false}}">
+<div style="min-height: 420px; display: flex; flex-direction: column; justify-content: center; gap: 10px">
+<p style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 32px; letter-spacing: -0.02em">Reading your resume…</p>
+<p style="margin: 0; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #5F5B54; animation: oo-pulse 1.4s ease-in-out infinite">EDUCATION · SKILLS · PROJECTS</p>
+</div>
+</sc-if>
+<sc-if value="{{isParsed}}" hint-placeholder-val="{{true}}">
+<sc-for list="{{fields}}" as="f" hint-placeholder-count="5">
+<div class="oo-row" style="box-sizing: border-box; padding: 14px 14px 14px 16px; border: 1.5px solid #111111; border-radius: 12px; background: #FFFFFF; display: flex; align-items: center; gap: 14px; animation-delay: {{f.delay}}">
+<span style="flex: 0 0 28px; height: 28px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 8px; background: #FF5A1F; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500; display: flex; align-items: center; justify-content: center">{{f.n}}</span>
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; color: #5F5B54">{{f.label}}</span>
+<span style="font-size: 17px; font-weight: 600">{{f.value}}</span>
+<sc-if value="{{f.hasSkills}}" hint-placeholder-val="{{false}}">
+<span style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{f.skills}}" as="s" hint-placeholder-count="3">
+<span style="padding: 3px 8px; border: 1.5px solid #111111; border-radius: 999px; font-size: 13px; font-weight: 500; background: {{s.bg}}">{{s.name}} · {{s.level}}</span>
+</sc-for>
+</span>
+</sc-if>
+</div>
+<button type="button" aria-label="{{f.editLabel}}" style="flex: 0 0 auto; height: 40px; padding: 0 12px; border: 1.5px solid #111111; border-radius: 10px; background: #FFFFFF; font-family: 'Instrument Sans', sans-serif; font-size: 13px; font-weight: 600">Edit</button>
+</div>
+</sc-for>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{isParsed}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; border-top: 1.5px solid #111111">
+<p style="margin: 0; font-size: 14px; color: #3D3A35">Skill levels are our suggestion. Adjust them before you continue.</p>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<button type="button" onClick="{{reset}}" style="height: 50px; padding: 0 18px; border: 1.5px solid #111111; border-radius: 12px; background: #FFFFFF; color: #111111; font-family: 'Instrument Sans', sans-serif; font-size: 15px; font-weight: 600">Use a different PDF</button>
+<a href="Onboarding-Alerts.dc.html" style="display: inline-flex; align-items: center; gap: 8px; height: 50px; padding: 0 22px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 12px; background: #FF5A1F; box-shadow: 3px 3px 0 #111111; color: #111111; font-size: 15px; font-weight: 700; text-decoration: none">Looks right →</a>
+</div>
+</div>
+</sc-if>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"startStage":{"editor":"enum","options":["idle","parsed"],"default":"parsed"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { stage: null };
+    this.timer = null;
+  }
+  componentWillUnmount() { if (this.timer) clearTimeout(this.timer); }
+  renderVals() {
+    var self = this;
+    var stage = this.state.stage || this.props.startStage || 'parsed';
+    var parsed = stage === 'parsed';
+    var doc = [
+      { line: true, heading: false, n: '1', text: 'B.Tech, Computer Science & Engineering' },
+      { line: true, heading: false, n: '2', text: '2023 – 2027 · CGPA 8.4 / 10' },
+      { line: false, heading: true, n: '', text: 'SKILLS' },
+      { line: true, heading: false, n: '3', text: 'Python (pandas, FastAPI), React, SQL' },
+      { line: false, heading: true, n: '', text: 'PROJECTS' },
+      { line: true, heading: false, n: '4', text: 'Campus ride-share app · React, Firebase' },
+      { line: false, heading: true, n: '', text: 'EXPERIENCE' },
+      { line: true, heading: false, n: '5', text: 'Web Dev Intern, summer 2025 · 3 months' }
+    ];
+    var fields = [
+      { n: '1', label: 'DEGREE', value: 'B.Tech · Computer Science', editLabel: 'Edit degree' },
+      { n: '2', label: 'GRADUATING · CGPA', value: '2027 · 8.4 / 10', editLabel: 'Edit graduation year and CGPA' },
+      { n: '3', label: 'SKILLS', value: '3 skills found', editLabel: 'Edit skills', hasSkills: true,
+        skills: [{ name: 'Python', level: 'Advanced', bg: '#FFE3D6' }, { name: 'React', level: 'Intermediate', bg: '#FFFFFF' }, { name: 'SQL', level: 'Beginner', bg: '#FFFFFF' }] },
+      { n: '4', label: 'PROJECT', value: 'Campus ride-share app', editLabel: 'Edit project' },
+      { n: '5', label: 'EXPERIENCE', value: '3 months · Web Dev Intern', editLabel: 'Edit experience' }
+    ].map(function (f, i) { f.delay = (0.1 + i * 0.1).toFixed(2) + 's'; if (!f.hasSkills) { f.hasSkills = false; f.skills = []; } return f; });
+    return {
+      isIdle: stage === 'idle',
+      isParsing: stage === 'parsing',
+      isParsed: parsed,
+      isWorking: stage === 'parsing' || parsed,
+      hl: parsed ? '#FFE3D6' : 'transparent',
+      tagBg: '#FF5A1F',
+      tagOp: parsed ? 1 : 0,
+      doc: doc,
+      fields: fields,
+      startParse: function () {
+        self.setState({ stage: 'parsing' });
+        if (self.timer) clearTimeout(self.timer);
+        self.timer = setTimeout(function () { self.setState({ stage: 'parsed' }); }, 2000);
+      },
+      reset: function () { self.setState({ stage: 'idle' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

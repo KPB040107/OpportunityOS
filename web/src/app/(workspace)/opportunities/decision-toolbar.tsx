@@ -43,11 +43,11 @@ export function DecisionToolbar({ opportunityId, canApprove, initialDecision }: 
   };
 
   return (
-    <Card className="mt-6 border-emerald-100 bg-gradient-to-r from-emerald-50/50 via-teal-50/20 to-white p-5">
+    <Card className="mt-6 border-border bg-white shadow-hard p-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-            <Sparkles className="size-4 text-emerald-600" />
+            <Sparkles className="size-4 text-primary" />
             Student Action & Earned Autonomy
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -58,7 +58,7 @@ export function DecisionToolbar({ opportunityId, canApprove, initialDecision }: 
           <Button
             size="sm"
             variant={currentChoice === 'approve' ? 'default' : 'outline'}
-            className={currentChoice === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'}
+            className={currentChoice === 'approve' ? 'bg-act text-act-foreground border-[1.5px] border-border font-semibold shadow-hard-sm' : 'border-[1.5px] border-border text-foreground hover:bg-muted font-semibold'}
             disabled={loading || !canApprove}
             onClick={() => handleChoice('approve')}
           >
@@ -91,20 +91,20 @@ export function DecisionToolbar({ opportunityId, canApprove, initialDecision }: 
       </div>
 
       {!canApprove && (
-        <p className="mt-3 text-xs text-amber-800">
+        <p className="mt-3 text-xs text-ask-foreground bg-ask/40 border border-border p-2 rounded-lg font-medium">
           Approval is available after eligibility is verified. You can still pin this listing while reviewing its requirements.
         </p>
       )}
 
       {ruleProposed && (
-        <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-100/70 p-4 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-300">
+        <div className="mt-4 rounded-xl border border-border bg-act p-4 text-xs text-act-foreground flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-300">
           <div className="flex items-center gap-2 font-medium">
-            <Sparkles className="size-5 text-emerald-700 shrink-0" />
+            <Sparkles className="size-5 text-act-foreground shrink-0" />
             <span>
               <strong>Standing rule proposed!</strong> 3 consistent decisions detected. Review and activate it to automate future listings.
             </span>
           </div>
-          <Button asChild size="sm" variant="default" className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs h-8">
+          <Button asChild size="sm" variant="default" className="bg-primary hover:opacity-90 text-primary-foreground border-[1.5px] border-border font-semibold text-xs h-8 shadow-hard-sm">
             <Link href="/rules">Review proposed rule &rarr;</Link>
           </Button>
         </div>

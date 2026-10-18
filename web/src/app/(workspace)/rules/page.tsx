@@ -90,7 +90,7 @@ export default async function RulesPage() {
       <section className="mb-10">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="size-5 text-amber-600" />
+            <Sparkles className="size-5 text-primary" />
             <h2 className="text-xl font-bold tracking-tight text-foreground">Suggested automation preferences</h2>
           </div>
           <span className="text-xs text-muted-foreground">
@@ -118,7 +118,7 @@ export default async function RulesPage() {
       <section className="mb-10">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Shield className="size-5 text-emerald-600" />
+            <Shield className="size-5 text-primary" />
             <h2 className="text-xl font-bold tracking-tight text-foreground">Active automation preferences</h2>
           </div>
           <span className="text-xs text-muted-foreground">
@@ -211,10 +211,10 @@ export default async function RulesPage() {
                             <ArrowRight className="size-3 text-muted-foreground" />
                             <span className={`rounded px-1.5 py-0.5 ${
                               item.effective_decision === 'ACT'
-                                ? 'bg-emerald-100 text-emerald-900'
+                                ? 'bg-act text-act-foreground border border-border'
                                 : item.effective_decision === 'IGNORE'
-                                ? 'bg-slate-100 text-slate-700'
-                                : 'bg-amber-100 text-amber-900'
+                                ? 'bg-skip text-skip-foreground border border-border'
+                                : 'bg-ask text-ask-foreground border border-border'
                             }`}>
                               {item.effective_decision}
                             </span>
@@ -222,8 +222,8 @@ export default async function RulesPage() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {item.question_avoided ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                              <CheckCircle2 className="size-3 text-emerald-600" />
+                            <span className="inline-flex items-center gap-1 rounded-full bg-act px-2 py-0.5 text-[11px] font-semibold text-act-foreground border border-border">
+                              <CheckCircle2 className="size-3 text-act-foreground" />
                               Question Avoided
                             </span>
                           ) : item.is_override ? (
@@ -234,7 +234,7 @@ export default async function RulesPage() {
                             <span className="text-muted-foreground">—</span>
                           )}
                           {item.is_seeded && (
-                            <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-800 font-medium border border-amber-200">
+                            <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-mono font-medium border border-line">
                               Seeded
                             </span>
                           )}

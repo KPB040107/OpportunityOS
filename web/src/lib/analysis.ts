@@ -14,7 +14,7 @@ export function trustBadgeDetails(tier?: string, badge?: string | null) {
   if (tier === 'corroborated') {
     return {
       label: badge || 'Corroborated Source',
-      className: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+      className: 'bg-act text-act-foreground border border-border',
       description: 'Direct official employer feed'
     };
   }
@@ -72,7 +72,7 @@ export function extractCompensationDetails(opp: {
         value: sTrim,
         paidStatus: isUnpaid ? 'Unpaid' : 'Paid',
         badgeText: isUnpaid ? 'Stipend: Unpaid' : `Stipend: ${sTrim} · Paid`,
-        className: isUnpaid ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-emerald-50 text-emerald-900 border-emerald-200',
+        className: isUnpaid ? 'bg-ask text-ask-foreground border border-border' : 'bg-act text-act-foreground border border-border',
       };
     }
     return {
@@ -80,7 +80,7 @@ export function extractCompensationDetails(opp: {
       value: sTrim,
       paidStatus: 'Paid',
       badgeText: `Salary: ${sTrim}`,
-      className: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+      className: 'bg-act text-act-foreground border border-border',
     };
   }
 
@@ -91,7 +91,7 @@ export function extractCompensationDetails(opp: {
         value: 'Unpaid',
         paidStatus: 'Unpaid',
         badgeText: 'Stipend: Unpaid',
-        className: 'bg-amber-50 text-amber-900 border-amber-200',
+        className: 'bg-ask text-ask-foreground border border-border',
       };
     }
     const m = rawDesc.match(/(?:stipend|remuneration|pay)\s*[:\-]\s*([^\n;]+?)(?:\.|\n|$)/i) ||
@@ -104,7 +104,7 @@ export function extractCompensationDetails(opp: {
         value: val,
         paidStatus: 'Paid',
         badgeText: `Stipend: ${val} · Paid`,
-        className: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+        className: 'bg-act text-act-foreground border border-border',
       };
     }
     if (/\bpaid\s+internship\b/i.test(rawDesc)) {
@@ -113,7 +113,7 @@ export function extractCompensationDetails(opp: {
         value: 'Paid (Amount not disclosed)',
         paidStatus: 'Paid',
         badgeText: 'Stipend: Paid',
-        className: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+        className: 'bg-act text-act-foreground border border-border',
       };
     }
     return {
@@ -136,7 +136,7 @@ export function extractCompensationDetails(opp: {
         value: val,
         paidStatus: 'Paid',
         badgeText: `Salary: ${val}`,
-        className: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+        className: 'bg-act text-act-foreground border border-border',
       };
     }
     return {

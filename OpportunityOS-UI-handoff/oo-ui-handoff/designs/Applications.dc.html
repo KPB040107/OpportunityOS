@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpportunityOS — Applications</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+a{color:#C23E0C}a:hover{color:#8F2C07}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F3F1EC; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111">
+<div style="flex: 1 1 240px; max-width: 100%"><dc-import name="Nav" active="apps" hint-size="100%,900px"></dc-import></div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px 40px 64px; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">{{total}} TRACKED · NEXT DEADLINE FRI 24 OCT</span>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4vw, 52px); line-height: 1; letter-spacing: -0.03em">Applications</h1>
+</div>
+<a href="#" style="display: inline-flex; align-items: center; height: 46px; padding: 0 18px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 12px; background: #FFFFFF; color: #111111; font-size: 14px; font-weight: 700; text-decoration: none">Download all deadlines (.ics)</a>
+</div>
+
+<div style="overflow-x: auto; padding-bottom: 8px">
+<div style="display: grid; grid-template-columns: repeat(5, minmax(230px, 1fr)); gap: 14px; min-width: 1180px">
+<sc-for list="{{cols}}" as="c" hint-placeholder-count="5">
+<section style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1.5px solid #111111; border-radius: 14px; background: {{c.bg}}; min-height: 520px">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 6px">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 18px">{{c.name}}</span>
+<span style="min-width: 24px; height: 24px; padding: 0 6px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 999px; background: #FFFFFF; font-family: 'JetBrains Mono', monospace; font-size: 12px; display: flex; align-items: center; justify-content: center">{{c.count}}</span>
+</div>
+<sc-for list="{{c.cards}}" as="k" hint-placeholder-count="2">
+<div style="padding: 14px; border: 1.5px solid #111111; border-radius: 12px; background: #FFFFFF; box-shadow: 3px 3px 0 #111111; display: flex; flex-direction: column; gap: 8px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: #5F5B54">{{k.kind}}</span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a href="Opportunity-Detail.dc.html" style="font-size: 15px; font-weight: 600; color: #111111; text-decoration: none">{{k.title}}</a>
+<span style="font-size: 13px; color: #3D3A35">{{k.org}}</span>
+</div>
+<span style="align-self: flex-start; padding: 3px 8px; border-radius: 6px; background: {{k.dateBg}}; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: {{k.dateC}}">{{k.date}}</span>
+<div style="display: flex; gap: 6px; padding-top: 6px; border-top: 1px solid #ECEAE5">
+<sc-if value="{{k.canBack}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{k.back}}" aria-label="Move back" style="flex: 0 0 36px; height: 34px; border: 1.5px solid #111111; border-radius: 8px; background: #FFFFFF; font-size: 14px">←</button>
+</sc-if>
+<sc-if value="{{k.canNext}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{k.next}}" style="flex: 1 1 auto; height: 34px; border: 1.5px solid #111111; border-radius: 8px; background: #FF5A1F; font-family: 'Instrument Sans', sans-serif; font-size: 13px; font-weight: 600; color: #111111">{{k.nextLabel}} →</button>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</section>
+</sc-for>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      cards: [
+        { id: 1, col: 0, kind: 'INTERNSHIP', title: 'SDE Intern', org: 'Paperkite · Bengaluru', date: 'CLOSES FRI 24 OCT', urgent: true },
+        { id: 2, col: 0, kind: 'JOB', title: 'Associate Engineer', org: 'Brightline · Pune', date: 'CLOSES SUN 2 NOV' },
+        { id: 3, col: 0, kind: 'HACKATHON', title: '48h Fintech Build', org: 'Orbitpay · Remote', date: 'SUBMIT MON 27 OCT', urgent: true },
+        { id: 4, col: 1, kind: 'INTERNSHIP', title: 'Data Analyst Intern', org: 'Northwind · Hyderabad', date: 'CLOSES SAT 25 OCT', urgent: true },
+        { id: 5, col: 2, kind: 'INTERNSHIP', title: 'Backend Intern', org: 'Corvid Cloud · Remote', date: 'APPLIED 9 OCT' },
+        { id: 6, col: 2, kind: 'HACKATHON', title: 'Smart Cities Hack', org: 'Civic Labs · Hyderabad', date: 'TEAM REGISTERED' },
+        { id: 7, col: 3, kind: 'INTERNSHIP', title: 'Frontend Intern', org: 'Sable Commerce · Remote', date: 'INTERVIEW WED 22 OCT', urgent: true },
+        { id: 8, col: 4, kind: 'INTERNSHIP', title: 'Web Intern', org: 'Hatchbox · Remote', date: 'NO REPLY · CLOSED' }
+      ]
+    };
+  }
+  renderVals() {
+    var self = this;
+    var names = ['Saved', 'Applying', 'Applied', 'Interview', 'Closed'];
+    var bgs = ['#FFFFFF', '#FFE3D6', '#ECEAE5', '#E1E8FF', '#F3F1EC'];
+    var move = function (id, d) {
+      self.setState({ cards: self.state.cards.map(function (c) { return c.id === id ? Object.assign({}, c, { col: Math.max(0, Math.min(4, c.col + d)) }) : c; }) });
+    };
+    var cols = names.map(function (n, i) {
+      var cards = self.state.cards.filter(function (c) { return c.col === i; }).map(function (c) {
+        return {
+          kind: c.kind, title: c.title, org: c.org, date: c.date,
+          dateBg: c.urgent && i < 4 ? '#111111' : '#F3F1EC', dateC: c.urgent && i < 4 ? '#FFFFFF' : '#3D3A35',
+          canBack: i > 0, canNext: i < 4, nextLabel: i < 4 ? names[i + 1] : '',
+          back: function () { move(c.id, -1); }, next: function () { move(c.id, 1); }
+        };
+      });
+      return { name: n, bg: bgs[i], cards: cards, count: cards.length };
+    });
+    return { cols: cols, total: this.state.cards.length };
+  }
+}
+</script>
+</body>
+</html>

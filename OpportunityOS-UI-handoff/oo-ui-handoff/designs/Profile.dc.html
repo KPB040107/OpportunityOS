@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpportunityOS — Profile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+a{color:#C23E0C}a:hover{color:#8F2C07}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F3F1EC; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111">
+<div style="flex: 1 1 240px; max-width: 100%"><dc-import name="Nav" active="profile" hint-size="100%,900px"></dc-import></div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px 40px 64px; display: flex; flex-direction: column; gap: 24px; max-width: 1080px">
+
+<section style="padding: 24px; border: 1.5px solid #111111; border-radius: 16px; background: #FFFFFF; box-shadow: 6px 6px 0 #111111; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px">
+<div style="display: flex; align-items: center; gap: 18px">
+<span aria-hidden="true" style="width: 72px; height: 72px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 16px; background: #FF5A1F; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 30px; display: flex; align-items: center; justify-content: center">AR</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 36px; line-height: 1; letter-spacing: -0.03em">Ananya Rao</h1>
+<span style="font-size: 15px; color: #3D3A35">B.Tech Computer Science · graduating 2027 · CGPA 8.4</span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<a href="Onboarding-Profile.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 10px; background: #FFFFFF; color: #111111; font-size: 14px; font-weight: 600; text-decoration: none">Re-upload resume</a>
+<button type="button" style="height: 44px; padding: 0 16px; border: 1.5px solid #111111; border-radius: 10px; background: #111111; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; font-size: 14px; font-weight: 700">Edit profile</button>
+</div>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<section style="flex: 1 1 380px; min-width: 0; padding: 20px; border: 1.5px solid #111111; border-radius: 14px; background: #FFFFFF; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 22px">Skills</h2>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54">TAP A LEVEL TO CHANGE IT</span>
+</div>
+<sc-for list="{{skills}}" as="s" hint-placeholder-count="5">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px">
+<span style="font-size: 16px; font-weight: 600">{{s.name}}</span>
+<div role="group" aria-label="{{s.name}} level" style="display: flex; gap: 4px">
+<sc-for list="{{s.levels}}" as="l" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{l.on}}" onClick="{{l.pick}}" style="height: 32px; padding: 0 10px; border: 1.5px solid #111111; border-radius: 8px; background: {{l.bg}}; color: {{l.c}}; font-family: 'JetBrains Mono', monospace; font-size: 11px">{{l.label}}</button>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<button type="button" style="align-self: flex-start; height: 40px; padding: 0 14px; border: 1.5px dashed #111111; border-radius: 10px; background: transparent; font-family: 'Instrument Sans', sans-serif; font-size: 14px; font-weight: 600; color: #111111">+ Add skill</button>
+</section>
+
+<section style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<div style="padding: 20px; border: 1.5px solid #111111; border-radius: 14px; background: #FFFFFF; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 22px">Looking for</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{looking}}" as="t" hint-placeholder-count="5">
+<span style="padding: 5px 10px; border: 1.5px solid #111111; border-radius: 999px; background: {{t.bg}}; font-size: 14px; font-weight: 500">{{t.label}}</span>
+</sc-for>
+</div>
+</div>
+<div style="padding: 20px; border: 1.5px solid #111111; border-radius: 14px; background: #FFFFFF; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 22px">Facts it uses to check eligibility</h2>
+<sc-for list="{{facts}}" as="f" hint-placeholder-count="5">
+<div style="display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ECEAE5">
+<span style="font-size: 14px; color: #3D3A35">{{f.k}}</span>
+<span style="font-size: 14px; font-weight: 600; color: {{f.c}}">{{f.v}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 22px">Projects</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px">
+<sc-for list="{{projects}}" as="p" hint-placeholder-count="3">
+<div style="padding: 16px; border: 1.5px solid #111111; border-radius: 12px; background: #FFFFFF; box-shadow: 3px 3px 0 #111111; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 16px; font-weight: 600">{{p.name}}</span>
+<span style="font-size: 14px; color: #3D3A35">{{p.desc}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54">{{p.stack}}</span>
+<a href="#" style="font-size: 13px; font-weight: 600">View on GitHub ↗</a>
+</div>
+</sc-for>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1250}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { levels: { Python: 'ADV', React: 'INT', SQL: 'BEG', Git: 'INT', 'Data analysis': 'INT' } };
+  }
+  renderVals() {
+    var self = this;
+    var skills = Object.keys(this.state.levels).map(function (name) {
+      var cur = self.state.levels[name];
+      return {
+        name: name,
+        levels: ['BEG', 'INT', 'ADV'].map(function (l) {
+          var on = cur === l;
+          return { label: l, on: on ? 'true' : 'false', bg: on ? '#111111' : '#FFFFFF', c: on ? '#FFFFFF' : '#3D3A35',
+            pick: function () { var x = Object.assign({}, self.state.levels); x[name] = l; self.setState({ levels: x }); } };
+        })
+      };
+    });
+    return {
+      skills: skills,
+      looking: [
+        { label: 'Internships', bg: '#FFE3D6' }, { label: 'Hackathons', bg: '#FFE3D6' }, { label: 'Full-time 2027', bg: '#FFFFFF' },
+        { label: 'Software engineering', bg: '#FFFFFF' }, { label: 'Data', bg: '#FFFFFF' }, { label: 'Bengaluru · Hyderabad · Remote', bg: '#FFFFFF' }
+      ],
+      facts: [
+        { k: 'Degree', v: 'B.Tech, CSE', c: '#111111' },
+        { k: 'Graduation year', v: '2027', c: '#111111' },
+        { k: 'CGPA', v: '8.4 / 10', c: '#111111' },
+        { k: 'Experience', v: '3 months', c: '#111111' },
+        { k: 'Age 18 or older', v: 'Not answered', c: '#2445C8' }
+      ],
+      projects: [
+        { name: 'Campus ride-share app', desc: 'Matches students heading the same way and splits fares.', stack: 'REACT · FIREBASE' },
+        { name: 'Canteen queue predictor', desc: 'Predicts rush hours from order logs.', stack: 'PYTHON · PANDAS · FASTAPI' },
+        { name: 'Notes search', desc: 'Full-text search over class notes PDFs.', stack: 'PYTHON · SQLITE' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

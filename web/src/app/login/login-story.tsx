@@ -57,9 +57,9 @@ export function LoginStory() {
 
       {/* Story Section */}
       <section ref={storyRef} className="relative h-[420vh]">
-        <div className="sticky top-0 h-screen box-border pt-20 pb-6 px-4 flex flex-col items-center justify-center gap-4 overflow-hidden">
+        <div className="sticky top-0 h-screen box-border pt-16 pb-4 px-4 flex flex-col items-center justify-center gap-3 sm:gap-4 overflow-hidden">
           {/* Animated Titles */}
-          <div className="relative w-full max-w-[760px] h-[132px] text-center">
+          <div className="relative w-full max-w-[760px] h-[116px] sm:h-[128px] text-center shrink-0">
             {/* Chapter 0 */}
             <div
               className="absolute inset-0 flex flex-col items-center gap-2 transition-transform duration-75 pointer-events-none"
@@ -151,7 +151,10 @@ export function LoginStory() {
           </div>
 
           {/* Interactive Sorting Board */}
-          <div className="w-full max-w-[1100px] shrink-0">
+          <div
+            className="shrink-0 border-[1.5px] border-border rounded-[16px] bg-white shadow-hard-lg overflow-hidden p-1 sm:p-2"
+            style={{ width: 'min(1100px, 100%, calc((100vh - 250px) * 1.764))' }}
+          >
             <SortingBoard progress={progress} />
           </div>
         </div>

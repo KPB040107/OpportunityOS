@@ -188,7 +188,7 @@ export function ProfileOnboardingView({
           </span>
         </Link>
         <ol className="list-none m-0 p-0 flex items-center gap-2 font-mono text-xs tracking-wider">
-          <li className="flex items-center gap-2 px-2.5 py-1.5 border-[1.5px] border-border rounded-[8px] bg-foreground text-background font-semibold">
+          <li className="flex items-center gap-2 px-2.5 py-1.5 border-[1.5px] border-border rounded-[8px] bg-white text-foreground font-bold shadow-hard-sm">
             1 PROFILE
           </li>
           <li aria-hidden="true" className="w-6 h-[1.5px] bg-border" />
@@ -279,9 +279,9 @@ export function ProfileOnboardingView({
         {/* State C: Parsed Draft Review */}
         {isParsed && !isParsing && (
           <div className="flex flex-col gap-6">
-            <div className="p-4 border-[1.5px] border-emerald-900 rounded-[12px] bg-emerald-50 text-emerald-950 flex items-center justify-between gap-4">
+            <div className="p-4 border-[1.5px] border-border rounded-[12px] bg-act text-act-foreground flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="size-5 text-emerald-700 shrink-0" />
+                <CheckCircle2 className="size-5 text-act-foreground shrink-0" />
                 <span className="text-sm font-medium">
                   Resume extracted successfully. Review and confirm your profile facts below.
                 </span>
@@ -292,7 +292,7 @@ export function ProfileOnboardingView({
                   setDraftId(null);
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
-                className="text-xs font-mono font-semibold text-emerald-900 underline hover:text-foreground"
+                className="text-xs font-mono font-semibold text-act-foreground underline hover:text-foreground"
               >
                 Upload different PDF
               </button>

@@ -53,16 +53,16 @@ export function RuleCard({ rule }: { rule: StandingRuleRecord }) {
   const isActive = status === 'active';
 
   return (
-    <Card className={`p-5 transition ${isProposed ? 'border-amber-300 bg-amber-50/40 shadow-xs' : isActive ? 'border-emerald-200 bg-emerald-50/30' : 'opacity-70 bg-muted/30'}`}>
+    <Card className={`p-5 transition ${isProposed ? 'border-border bg-ask/20 shadow-hard-sm' : isActive ? 'border-border bg-act/20 shadow-hard-sm' : 'opacity-70 bg-card border-border'}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              isProposed ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-              isActive ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
-              'bg-slate-100 text-slate-700 border border-slate-200'
+              isProposed ? 'bg-ask text-ask-foreground border border-border' :
+              isActive ? 'bg-act text-act-foreground border border-border' :
+              'bg-skip text-skip-foreground border border-border'
             }`}>
-              {isProposed ? <Sparkles className="size-3 text-amber-600" /> : <Shield className="size-3 text-emerald-600" />}
+              {isProposed ? <Sparkles className="size-3 text-ask-foreground" /> : <Shield className="size-3 text-act-foreground" />}
               {status.toUpperCase()}
             </span>
             <span className="text-xs text-muted-foreground uppercase font-medium">
@@ -78,7 +78,7 @@ export function RuleCard({ rule }: { rule: StandingRuleRecord }) {
             <>
               <Button
                 size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-primary hover:opacity-90 text-primary-foreground border-[1.5px] border-border shadow-hard-sm font-semibold"
                 disabled={loading}
                 onClick={() => handleAction('approve')}
               >
@@ -128,7 +128,7 @@ export function RuleCard({ rule }: { rule: StandingRuleRecord }) {
         </div>
         <div>
           <span className="text-muted-foreground">Governance:</span>
-          <p className="font-medium mt-0.5 text-emerald-800">
+          <p className="font-medium mt-0.5 text-foreground">
             Immutable guards enforced
           </p>
         </div>

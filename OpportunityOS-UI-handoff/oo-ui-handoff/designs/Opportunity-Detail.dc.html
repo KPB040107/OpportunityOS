@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpportunityOS — SDE Intern at Paperkite</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+a{color:#C23E0C}a:hover{color:#8F2C07}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F3F1EC; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111">
+<div style="flex: 1 1 240px; max-width: 100%"><dc-import name="Nav" active="opps" hint-size="100%,900px"></dc-import></div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 28px 40px 64px; display: flex; flex-direction: column; gap: 24px">
+
+<a href="Opportunities.dc.html" style="align-self: flex-start; display: inline-flex; align-items: center; min-height: 40px; font-size: 14px; font-weight: 600">← Opportunities</a>
+
+<div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start">
+
+<div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; color: #5F5B54">INTERNSHIP · BENGALURU · HYBRID · 6 MONTHS</span>
+<span style="padding: 2px 8px; border: 1px solid #111111; border-radius: 999px; font-family: 'JetBrains Mono', monospace; font-size: 10px; background: #FFFFFF">✓ COMPANY FEED</span>
+</div>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(36px, 4.4vw, 58px); line-height: 0.98; letter-spacing: -0.03em">SDE Intern</h1>
+<p style="margin: 0; font-size: 18px; color: #3D3A35">Paperkite · Stipend ₹40,000 / month · Jan – Jun 2027</p>
+<div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 14px; border: 1.5px solid #111111; border-radius: 10px; background: #FFFFFF">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #C23E0C">APPLY BY</span>
+<span style="font-size: 15px; font-weight: 600">Fri 24 Oct 2026 · 11:59 PM IST</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54">6 DAYS LEFT</span>
+</div>
+</div>
+
+<section style="padding: 20px; border: 1.5px solid #111111; border-radius: 14px; background: #FFFFFF; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 22px">Why 92</h2>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54">WEIGHTED, CHECKED BY RULES — NOT GUESSED</span>
+</div>
+<sc-for list="{{score}}" as="s" hint-placeholder-count="6">
+<div style="display: grid; grid-template-columns: 130px minmax(0, 1fr) 64px; align-items: center; gap: 12px">
+<span style="font-size: 14px; font-weight: 500">{{s.name}}</span>
+<div style="height: 14px; border: 1.5px solid #111111; border-radius: 4px; background: #F3F1EC; overflow: hidden">
+<div style="height: 100%; width: {{s.pct}}%; background: #FF5A1F"></div>
+</div>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; text-align: right">{{s.got}}/{{s.max}}</span>
+</div>
+</sc-for>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 22px">Skills</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54; margin-right: 4px">YOU HAVE</span>
+<sc-for list="{{matched}}" as="m" hint-placeholder-count="4">
+<span style="padding: 5px 10px; border: 1.5px solid #111111; border-radius: 999px; background: #FFE3D6; font-size: 14px; font-weight: 500">✓ {{m}}</span>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54; margin-right: 4px">NICE TO HAVE</span>
+<sc-for list="{{missing}}" as="m" hint-placeholder-count="2">
+<span style="padding: 5px 10px; border: 1.5px dashed #111111; border-radius: 999px; background: #FFFFFF; font-size: 14px; font-weight: 500; color: #3D3A35">{{m}}</span>
+</sc-for>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 22px">What the listing says</h2>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54">QUOTED WORD FOR WORD</span>
+</div>
+<div style="border: 1.5px solid #111111; border-radius: 14px; background: #FFFFFF; overflow: hidden">
+<sc-for list="{{reqs}}" as="r" hint-placeholder-count="6">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 14px 16px; border-bottom: 1px solid #DAD6CE">
+<span style="flex: 0 0 150px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: {{r.kc}}">{{r.kind}}</span>
+<span style="flex: 1 1 260px; min-width: 0; font-size: 15px">“{{r.quote}}”</span>
+<span style="flex: 0 0 auto; padding: 3px 9px; border: 1.5px solid {{r.sb}}; border-radius: 8px; background: {{r.sbg}}; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; color: {{r.sc}}">{{r.status}}</span>
+</div>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 13px; color: #5F5B54">Read from the Paperkite careers page on 17 Oct, 9:42 PM. <a href="#">Open original listing ↗</a></p>
+</section>
+</div>
+
+<aside style="flex: 1 1 300px; max-width: 420px; display: flex; flex-direction: column; gap: 16px">
+<div style="padding: 20px; border: 1.5px solid #111111; border-radius: 16px; background: #FF5A1F; box-shadow: 6px 6px 0 #111111; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em">DECISION</span>
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 44px; line-height: 1; letter-spacing: -0.03em">92</span>
+</div>
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 34px; line-height: 1">Act</span>
+<p style="margin: 0; font-size: 15px">Every hard requirement is met and the source is the company itself.</p>
+</div>
+
+<div style="padding: 18px; border: 1.5px solid #111111; border-radius: 14px; background: #FFFFFF; display: flex; flex-direction: column; gap: 12px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.1em; color: #5F5B54">WHAT IT DID FOR YOU</span>
+<sc-for list="{{did}}" as="d" hint-placeholder-count="3">
+<div style="display: flex; align-items: flex-start; gap: 10px">
+<span aria-hidden="true" style="flex: 0 0 22px; height: 22px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 6px; background: #FFE3D6; font-size: 12px; display: flex; align-items: center; justify-content: center">✓</span>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 600">{{d.title}}</span>
+<span style="font-size: 13px; color: #5F5B54">{{d.note}}</span>
+</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<a href="#" style="display: flex; align-items: center; justify-content: center; height: 50px; border: 1.5px solid #111111; border-radius: 12px; background: #111111; color: #FFFFFF; font-size: 15px; font-weight: 700; text-decoration: none">Open application page ↗</a>
+<a href="Applications.dc.html" style="display: flex; align-items: center; justify-content: center; height: 50px; border: 1.5px solid #111111; border-radius: 12px; background: #FFFFFF; color: #111111; font-size: 15px; font-weight: 700; text-decoration: none">Mark as applying</a>
+<button type="button" style="height: 46px; border: 0; background: transparent; color: #3D3A35; font-family: 'Instrument Sans', sans-serif; font-size: 14px; font-weight: 600; text-decoration: underline">Not interested — skip it</button>
+</div>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var score = [
+      ['Skills', 38, 40], ['Career fit', 18, 20], ['Interests', 12, 15], ['Location', 10, 10], ['Academics', 10, 10], ['Urgency', 4, 5]
+    ].map(function (s) { return { name: s[0], got: s[1], max: s[2], pct: Math.round(s[1] / 40 * 100) }; });
+    var st = {
+      met: { sb: '#111111', sbg: '#FFE3D6', sc: '#111111' },
+      miss: { sb: '#111111', sbg: '#FFFFFF', sc: '#3D3A35' },
+      info: { sb: '#DAD6CE', sbg: '#F3F1EC', sc: '#5F5B54' }
+    };
+    var kinds = {
+      must: { label: 'MUST · ELIGIBILITY', kc: '#C23E0C' },
+      req: { label: 'REQUIRED SKILL', kc: '#111111' },
+      pref: { label: 'PREFERRED SKILL', kc: '#5F5B54' },
+      other: { label: 'OTHER · BENEFIT', kc: '#5F5B54' }
+    };
+    var reqs = [
+      ['must', 'B.Tech / B.E. students graduating in 2026 or 2027', 'met', '✓ YOU: 2027'],
+      ['must', 'Minimum CGPA of 7.0', 'met', '✓ YOU: 8.4'],
+      ['req', 'Strong fundamentals in Python or Java', 'met', '✓ ADVANCED'],
+      ['req', 'Hands-on experience with React', 'met', '✓ INTERMEDIATE'],
+      ['pref', 'Familiarity with TypeScript is a plus', 'miss', 'NOT ON PROFILE'],
+      ['pref', 'Exposure to Docker or cloud deployments', 'miss', 'NOT ON PROFILE'],
+      ['other', 'Stipend of ₹40,000 per month', 'info', 'INFO'],
+      ['other', 'Six-month internship, January to June 2027', 'info', 'INFO']
+    ].map(function (r) {
+      var k = kinds[r[0]], s = st[r[2]];
+      return { kind: k.label, kc: k.kc, quote: r[1], status: r[3], sb: s.sb, sbg: s.sbg, sc: s.sc };
+    });
+    return {
+      score: score,
+      matched: ['Python', 'React', 'SQL', 'Git'],
+      missing: ['TypeScript', 'Docker'],
+      reqs: reqs,
+      did: [
+        { title: 'Added to your tracker', note: 'Under Saved, 17 Oct' },
+        { title: 'Deadline on your calendar', note: 'Fri 24 Oct, 11:59 PM IST' },
+        { title: 'Reminder set', note: 'Thu 23 Oct, 7:00 PM — one day before' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

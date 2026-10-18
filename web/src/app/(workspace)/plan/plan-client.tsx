@@ -263,12 +263,12 @@ export function PlanClient({
 
           <div className="flex items-center gap-2">
             {activePlan?.status === 'confirmed' ? (
-              <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="flex items-center gap-1.5 rounded-full bg-act px-3 py-1 text-xs font-semibold text-act-foreground border border-border">
                 <CheckCircle2 className="size-3.5" />
                 Plan Confirmed
               </span>
             ) : (
-              <span className="rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">
+              <span className="rounded-full bg-ask px-3 py-1 text-xs font-semibold text-ask-foreground border border-border">
                 Draft Preview
               </span>
             )}
@@ -285,7 +285,7 @@ export function PlanClient({
         <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-muted">
           <div
             className={`h-full transition-all duration-500 ${
-              percentUsed > 90 ? 'bg-amber-500' : 'bg-primary'
+              percentUsed > 90 ? 'bg-primary' : 'bg-primary/80'
             }`}
             style={{ width: `${percentUsed}%` }}
           />
@@ -390,7 +390,7 @@ export function PlanClient({
                     <p className="text-xs text-muted-foreground italic">No busy blocks added.</p>
                   ) : (
                     busyBlocks.map((b, idx) => (
-                      <div key={idx} className="flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5">
+                      <div key={idx} className="flex items-center justify-between rounded-lg border border-border bg-card p-2.5">
                         <div>
                           <p className="text-xs font-semibold text-foreground">{b.title}</p>
                           <p className="text-[11px] text-muted-foreground">
@@ -479,16 +479,16 @@ export function PlanClient({
       {pressureNotes.map((note, idx) => (
         <div
           key={idx}
-          className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-800 dark:text-amber-300"
+          className="flex items-start gap-3 rounded-lg border border-border bg-ask/30 p-4 text-sm text-foreground"
         >
-          <ShieldAlert className="size-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+          <ShieldAlert className="size-5 shrink-0 mt-0.5 text-ask-foreground" />
           <div>
             <p className="font-semibold">
               {note.type === 'same_day_deadline_pressure'
                 ? 'Same-Day Deadline Pressure Detected'
                 : 'High Capacity Utilization'}
             </p>
-            <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">{note.message}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{note.message}</p>
           </div>
         </div>
       ))}
@@ -517,7 +517,7 @@ export function PlanClient({
                     {item.duration_minutes || 30} mins
                   </span>
                   {item.deadline && (
-                    <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                    <span className="text-[11px] font-semibold text-ask-foreground bg-ask px-2 py-0.5 rounded border border-border">
                       Due: {item.deadline.slice(0, 10)}
                     </span>
                   )}
@@ -555,7 +555,7 @@ export function PlanClient({
       {unscheduledItems.length > 0 && (
         <div className="space-y-3 pt-6 border-t border-border">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="size-4 text-amber-500" />
+            <AlertTriangle className="size-4 text-primary" />
             <h2 className="text-lg font-semibold text-foreground">
               Unscheduled Opportunities ({unscheduledItems.length})
             </h2>

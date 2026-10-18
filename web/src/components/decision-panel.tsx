@@ -25,12 +25,12 @@ export function DecisionSummary({match}:{match:Match|undefined}){
    <div className="mt-4">
      <div className="flex flex-wrap items-center gap-2">
        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
-         match.decision==='ACT'?'bg-emerald-100 text-emerald-900':match.decision==='ASK'?'bg-amber-100 text-amber-900':'bg-slate-100 text-slate-700'
+         match.decision==='ACT'?'bg-act text-act-foreground border border-border':match.decision==='ASK'?'bg-ask text-ask-foreground border border-border':'bg-skip text-skip-foreground border border-border'
        }`}>
          {match.decision}
        </span>
        {isInsufficient ? (
-         <span className="rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-medium text-amber-900">
+         <span className="rounded-full bg-ask border border-border px-2.5 py-0.5 text-xs font-semibold text-ask-foreground">
            Insufficient information to score
          </span>
        ) : match.match_score === null ? (
@@ -80,9 +80,9 @@ export function DecisionPanel({match,id}:{match:Match|undefined;id:string}){
          ))}
        </ul>
        {isInsufficient ? (
-         <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
-           <h4 className="text-sm font-semibold text-amber-950">Scoring Not Evaluated · Verification Needed</h4>
-           <p className="mt-1 text-xs text-amber-900 leading-relaxed">
+         <div className="mt-6 rounded-lg border border-border bg-ask/30 p-4">
+           <h4 className="text-sm font-semibold text-foreground">Scoring Not Evaluated · Verification Needed</h4>
+           <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
              This listing did not contain sufficient verifiable requirements or facts to compute a meaningful match score.
              Numerical scores are only calculated when mandatory criteria and profile evidence can be evaluated.
            </p>
@@ -90,9 +90,9 @@ export function DecisionPanel({match,id}:{match:Match|undefined;id:string}){
              const unknownChecks = (match.eligibility_checks || []).filter(c => c.status === 'UNKNOWN');
              if (!unknownChecks.length) return null;
              return (
-               <div className="mt-3 pt-3 border-t border-amber-200/60">
-                 <p className="text-xs font-semibold text-amber-950">Eligibility checks requiring verification:</p>
-                 <ul className="mt-1.5 list-disc pl-4 space-y-1 text-xs text-amber-900">
+               <div className="mt-3 pt-3 border-t border-line">
+                 <p className="text-xs font-semibold text-foreground">Eligibility checks requiring verification:</p>
+                 <ul className="mt-1.5 list-disc pl-4 space-y-1 text-xs text-muted-foreground">
                    {unknownChecks.map((c, i) => (
                      <li key={i}>
                        <strong className="capitalize">{c.kind.replaceAll('_', ' ')}:</strong> {c.reason}

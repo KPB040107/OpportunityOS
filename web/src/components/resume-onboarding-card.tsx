@@ -471,7 +471,7 @@ export function ResumeOnboardingCard({
                         New Field
                       </span>
                     ) : field.hasConflict ? (
-                      <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
+                      <span className="rounded bg-ask border border-border px-1.5 py-0.5 text-[10px] font-medium text-ask-foreground">
                         Overwrites ({String(field.existingValue)})
                       </span>
                     ) : (

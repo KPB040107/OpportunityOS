@@ -87,7 +87,7 @@ export function LoginForm({ next }: { next?: string }) {
         )}
 
         {state.success && (
-          <div role="status" className="p-3 border-[1.5px] border-emerald-900 rounded-[10px] bg-emerald-50 text-emerald-900 text-xs font-medium">
+          <div role="status" className="p-3 border-[1.5px] border-border rounded-[10px] bg-act text-act-foreground text-xs font-semibold">
             {state.success}
           </div>
         )}

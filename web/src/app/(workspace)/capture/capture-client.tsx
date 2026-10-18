@@ -554,7 +554,7 @@ export function CaptureClient() {
                     Saving...
                   </>
                 ) : (
-                  'Save to OpportunityOS'
+                  'Save to Trajectory'
                 )}
               </Button>
             </div>
@@ -565,7 +565,7 @@ export function CaptureClient() {
       {/* State: Saved Success */}
       {status === 'saved' && (
         <Card className="p-8 text-center space-y-4">
-          <div className="size-12 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto">
+          <div className="size-12 rounded-full bg-act text-act-foreground border border-border flex items-center justify-center mx-auto">
             <CheckCircle2 className="size-7" />
           </div>
           <div>

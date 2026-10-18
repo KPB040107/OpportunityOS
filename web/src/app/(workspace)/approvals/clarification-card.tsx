@@ -112,7 +112,7 @@ export function ClarificationCard({ clarification }: { clarification: Clarificat
 
           {state.error && <p className="mt-2 text-xs font-medium text-red-700">{state.error}</p>}
           {state.success && (
-            <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+            <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-act-foreground">
               <CheckCircle className="size-4" />
               {state.success}
             </p>

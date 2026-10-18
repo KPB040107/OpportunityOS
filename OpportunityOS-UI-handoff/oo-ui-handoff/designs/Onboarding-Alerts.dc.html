@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpportunityOS — Alerts and autonomy</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+a{color:#C23E0C}a:hover{color:#8F2C07}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; padding-bottom: 64px; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111; background: #F3F1EC">
+
+<header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid #DAD6CE">
+<div style="display: flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="width: 20px; height: 20px; border: 1.5px solid #111111; border-radius: 5px; background: #FF5A1F; box-shadow: 2px 2px 0 #111111"></span>
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 21px; letter-spacing: -0.02em">OpportunityOS</span>
+</div>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.08em">
+<li style="padding: 6px 10px; border: 1.5px solid #111111; border-radius: 8px; background: #FFE3D6">✓ PROFILE</li>
+<li aria-hidden="true" style="width: 24px; height: 1.5px; background: #111111"></li>
+<li style="padding: 6px 10px; border: 1.5px solid #111111; border-radius: 8px; background: #111111; color: #FFFFFF">2 ALERTS</li>
+</ol>
+</header>
+
+<main style="max-width: 860px; margin: 0 auto; padding: 48px 24px 0; display: flex; flex-direction: column; gap: 36px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">STEP 2 OF 2</span>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(36px, 4.4vw, 58px); line-height: 0.98; letter-spacing: -0.03em">How should we<br>reach you?</h1>
+<p style="margin: 0; font-size: 17px; line-height: 1.55; color: #3D3A35">Pick what you're comfortable with. Everything here can be changed later.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 16px; padding: 18px 18px 18px 20px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 12px; background: {{r.bg}}; box-shadow: {{r.shadow}}">
+<div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 17px; font-weight: 600">{{r.title}}</span>
+<span style="font-size: 14px; line-height: 1.5; color: #3D3A35">{{r.body}}</span>
+</div>
+<button type="button" role="switch" aria-checked="{{r.on}}" aria-label="{{r.title}}" onClick="{{r.toggle}}" style="flex: 0 0 60px; height: 44px; padding: 0; border: 0; background: transparent; display: flex; align-items: center">
+<span style="width: 60px; height: 32px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 999px; padding: 3px; background: {{r.track}}; display: flex; justify-content: {{r.align}}">
+<span style="width: 23px; height: 23px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 50%; background: #FFFFFF"></span>
+</span>
+</button>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 26px; letter-spacing: -0.02em">How much should it do on its own?</h2>
+<p style="margin: 0; font-size: 14px; color: #3D3A35">It never submits an application. This decides when it tracks and schedules for you, and when it checks with you first.</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{modes}}" as="m" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{m.selected}}" onClick="{{m.pick}}" style="min-height: 92px; box-sizing: border-box; padding: 14px; border: 1.5px solid #111111; border-radius: 12px; background: {{m.bg}}; box-shadow: {{m.shadow}}; text-align: left; display: flex; flex-direction: column; gap: 6px; font-family: 'Instrument Sans', sans-serif; color: #111111">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 19px">{{m.name}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #3D3A35">{{m.rule}}</span>
+</button>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.5">{{modeText}}</p>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding-top: 20px; border-top: 1.5px solid #111111">
+<a href="Onboarding-Profile.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 600">← Back</a>
+<a href="Curating.dc.html" style="display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 24px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 12px; background: #FF5A1F; box-shadow: 3px 3px 0 #111111; color: #111111; font-size: 16px; font-weight: 700; text-decoration: none">Finish setup →</a>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":960}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { email: true, calendar: false, push: true, mode: 'balanced' };
+  }
+  renderVals() {
+    var self = this;
+    var defs = [
+      { key: 'email', title: 'Email alerts', body: 'New strong matches and deadline reminders in your inbox.' },
+      { key: 'calendar', title: 'Calendar sync', body: 'Confirmed deadlines go onto your Google Calendar. An .ics download always works too.' },
+      { key: 'push', title: 'Browser notifications', body: 'A ping when something needs your answer, before it expires.' }
+    ];
+    var rows = defs.map(function (d) {
+      var on = !!self.state[d.key];
+      return {
+        title: d.title, body: d.body, on: on ? 'true' : 'false',
+        bg: on ? '#FFFFFF' : '#F3F1EC',
+        shadow: on ? '4px 4px 0 #111111' : 'none',
+        track: on ? '#FF5A1F' : '#DAD6CE',
+        align: on ? 'flex-end' : 'flex-start',
+        toggle: function () { var u = {}; u[d.key] = !self.state[d.key]; self.setState(u); }
+      };
+    });
+    var modeDefs = [
+      { id: 'cautious', name: 'Cautious', rule: 'Acts at 80+', text: 'Acts only on near-certain matches. Asks you about everything else.' },
+      { id: 'balanced', name: 'Balanced', rule: 'Acts at 70+', text: 'Acts on strong matches and asks when it is unsure. A good place to start.' },
+      { id: 'autopilot', name: 'Autopilot', rule: 'Acts at 60+', text: 'Acts on good matches. Asks only when a fact it needs is missing.' }
+    ];
+    var current = modeDefs[1];
+    var modes = modeDefs.map(function (m) {
+      var sel = self.state.mode === m.id;
+      if (sel) current = m;
+      return {
+        name: m.name, rule: m.rule, selected: sel ? 'true' : 'false',
+        bg: sel ? '#FFE3D6' : '#FFFFFF',
+        shadow: sel ? '4px 4px 0 #111111' : 'none',
+        pick: function () { self.setState({ mode: m.id }); }
+      };
+    });
+    return { rows: rows, modes: modes, modeText: current.text };
+  }
+}
+</script>
+</body>
+</html>

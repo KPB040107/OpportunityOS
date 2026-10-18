@@ -34,7 +34,7 @@ export function BookmarkletCard({ appOrigin }: { appOrigin: string }) {
         <div>
           <div className="flex items-center gap-2">
             <Bookmark className="size-5 text-primary" />
-            <h2 className="text-lg font-semibold">&ldquo;Save to OpportunityOS&rdquo; Bookmarklet</h2>
+            <h2 className="text-lg font-semibold">&ldquo;Save to Trajectory&rdquo; Bookmarklet</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             1-click capture from LinkedIn, Internshala, and Unstop tabs directly from your browser.
@@ -62,11 +62,11 @@ export function BookmarkletCard({ appOrigin }: { appOrigin: string }) {
             title="Drag to Bookmarks Bar"
           >
             <Bookmark className="size-4" />
-            Save to OpportunityOS
+            Save to Trajectory
           </a>
 
           <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5">
-            {copied ? <Check className="size-4 text-emerald-600" /> : <Copy className="size-4" />}
+            {copied ? <Check className="size-4 text-primary" /> : <Copy className="size-4" />}
             {copied ? 'Copied' : 'Copy Code'}
           </Button>
         </div>
@@ -81,7 +81,7 @@ export function BookmarkletCard({ appOrigin }: { appOrigin: string }) {
         </div>
         <div className="flex gap-2">
           <span className="size-5 rounded-full bg-muted flex items-center justify-center font-bold text-foreground shrink-0">2</span>
-          <span>Click <strong>Save to OpportunityOS</strong> in your bookmarks bar.</span>
+          <span>Click <strong>Save to Trajectory</strong> in your bookmarks bar.</span>
         </div>
         <div className="flex gap-2">
           <span className="size-5 rounded-full bg-muted flex items-center justify-center font-bold text-foreground shrink-0">3</span>

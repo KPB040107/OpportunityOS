@@ -173,17 +173,17 @@ export default async function ApprovalsPage() {
 
       {/* 1. Actionable Approvals (ELIGIBLE items needing human authorization) */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
+        <h2 className="text-lg font-display font-bold flex items-center gap-2 text-foreground">
           <span>Actionable Approvals</span>
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">
+          <span className="rounded-full border-[1.5px] border-border bg-ask px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground">
             {pendingActionableApprovals.length}
           </span>
         </h2>
 
         {pendingActionableApprovals.length === 0 ? (
-          <Card className="p-8 text-center bg-muted/30">
-            <CheckCircle2 className="mx-auto size-8 text-emerald-600" />
-            <h3 className="mt-3 text-sm font-semibold">No pending approvals</h3>
+          <Card className="p-8 text-center border-[1.5px] border-border rounded-[14px] bg-white shadow-hard">
+            <CheckCircle2 className="mx-auto size-8 text-foreground" />
+            <h3 className="mt-3 text-sm font-display font-bold text-foreground">No pending approvals</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               There are no eligible opportunities awaiting your permission. Items needing facts or source checks appear below.
             </p>
@@ -194,27 +194,27 @@ export default async function ApprovalsPage() {
               const opp = appr.match?.opportunity;
               const match = appr.match;
               return (
-                <Card key={appr.id} className="p-5 border-amber-200/80 bg-amber-50/20">
+                <Card key={appr.id} className="p-5 border-[1.5px] border-border rounded-[14px] bg-white shadow-hard">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-900">
+                        <span className="rounded-full border-[1.5px] border-border bg-act px-2.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
                           Eligible · Needs Human Sign-off
                         </span>
                         {opp?.type && (
-                          <span className="text-xs uppercase text-muted-foreground font-medium">
+                          <span className="text-xs uppercase font-mono text-muted-foreground font-semibold">
                             {opp.type}
                           </span>
                         )}
                         {match?.match_score !== null && match?.match_score !== undefined && (
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs font-mono text-muted-foreground">
                             Match Score: {match.match_score}/100
                           </span>
                         )}
                       </div>
-                      <h3 className="text-lg font-semibold">
+                      <h3 className="text-lg font-display font-bold text-foreground">
                         {opp?.id ? (
-                          <Link href={`/opportunities/${opp.id}`} className="hover:text-primary transition-colors">
+                          <Link href={`/opportunities/${opp.id}`} className="hover:text-accent-text transition-colors">
                             {opp.title || 'Untitled Opportunity'}
                           </Link>
                         ) : (
@@ -223,12 +223,12 @@ export default async function ApprovalsPage() {
                       </h3>
                       <p className="text-sm text-muted-foreground">{opp?.organization || 'Unknown Organisation'}</p>
 
-                      <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                        <p className="font-medium flex items-center gap-1.5 text-xs">
-                          <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+                      <div className="mt-3 rounded-[10px] border-[1.5px] border-border bg-[#F3F1EC] p-3 text-sm text-foreground">
+                        <p className="font-semibold flex items-center gap-1.5 text-xs text-foreground">
+                          <AlertTriangle className="size-4 text-accent-text shrink-0" />
                           Why approval is required:
                         </p>
-                        <p className="mt-1 text-xs leading-relaxed">{appr.reason}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-ink-2">{appr.reason}</p>
                       </div>
                     </div>
 
@@ -293,10 +293,10 @@ export default async function ApprovalsPage() {
       {sourceReviews.length > 0 && (
         <div className="space-y-4 pt-4 border-t border-border">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <AlertCircle className="size-5 text-amber-600" />
+            <h2 className="text-lg font-display font-bold flex items-center gap-2 text-foreground">
+              <AlertCircle className="size-5 text-accent-text" />
               <span>Source Review</span>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">
+              <span className="rounded-full border-[1.5px] border-border bg-ask px-2.5 py-0.5 font-mono text-xs font-semibold text-foreground">
                 {sourceReviews.length}
               </span>
             </h2>
@@ -315,32 +315,32 @@ export default async function ApprovalsPage() {
       {/* 4. Resolved Approvals History */}
       {resolvedApprovals.length > 0 && (
         <details className="space-y-3 pt-6 border-t border-border">
-          <summary className="cursor-pointer text-base font-semibold text-muted-foreground">Resolved Approvals History ({resolvedApprovals.length})</summary>
+          <summary className="cursor-pointer text-base font-display font-bold text-muted-foreground">Resolved Approvals History ({resolvedApprovals.length})</summary>
           <div className="grid gap-2">
             {resolvedApprovals.map((appr) => {
               const opp = appr.match?.opportunity;
               return (
                 <div
                   key={appr.id}
-                  className="flex items-center justify-between p-3 rounded-xl border border-border bg-card text-xs"
+                  className="flex items-center justify-between p-3.5 rounded-[12px] border-[1.5px] border-border bg-white shadow-hard text-xs"
                 >
                   <div className="space-y-0.5">
-                    <p className="font-medium text-foreground">
+                    <p className="font-bold text-foreground">
                       {opp?.title || 'Opportunity'} ({opp?.organization || 'Organisation'})
                     </p>
-                    <p className="text-muted-foreground">
+                    <p className="text-muted-foreground font-mono">
                       Decision: <span className="font-semibold uppercase">{appr.status}</span> · Resolved {formatDate(appr.decided_at || appr.created_at)}
                     </p>
-                    <p className="text-muted-foreground">Execution: {appr.resume_status}</p>
+                    <p className="text-muted-foreground font-mono">Execution: {appr.resume_status}</p>
                     {appr.resume_status === 'failed' && new Date(appr.expires_at).getTime() > checkedAt && (
                       <RetryWork id={appr.id} kind="resume" />
                     )}
                   </div>
                   <span
-                    className={`rounded-full px-2.5 py-0.5 font-semibold capitalize ${
+                    className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold uppercase border-[1.5px] border-border ${
                       appr.status === 'approved'
-                        ? 'bg-emerald-50 text-emerald-800'
-                        : 'bg-red-50 text-red-800'
+                        ? 'bg-act text-accent-text'
+                        : 'bg-danger text-danger-foreground'
                     }`}
                   >
                     {appr.status}

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpportunityOS — Sorting your matches</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+@keyframes oo-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+</style>
+</helmet>
+<div style="min-height: 100vh; box-sizing: border-box; padding: 40px 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111; background: #F3F1EC">
+
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; min-height: 116px; max-width: 760px">
+<sc-if value="{{working}}" hint-placeholder-val="{{true}}">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: #FF5A1F; animation: oo-pulse 1.2s ease-in-out infinite"></span>SORTING {{count}} LISTINGS FOR YOU</span>
+<p aria-live="polite" style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: clamp(26px, 3.2vw, 42px); line-height: 1.05; letter-spacing: -0.02em">{{phrase}}</p>
+</sc-if>
+<sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">ALL SORTED</span>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4.4vw, 58px); line-height: 0.98; letter-spacing: -0.03em">Here's your first next step.</h1>
+</sc-if>
+</div>
+
+<div style="width: min(1100px, 100%, calc((100vh - 300px) * 1.76))">
+<dc-import name="Scene" p="{{p}}" hint-size="100%,560px"></dc-import>
+</div>
+
+<sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px">
+<a href="Home.dc.html" style="display: inline-flex; align-items: center; height: 52px; padding: 0 26px; box-sizing: border-box; border: 1.5px solid #111111; border-radius: 12px; background: #FF5A1F; box-shadow: 3px 3px 0 #111111; color: #111111; font-size: 16px; font-weight: 700; text-decoration: none">Open my dashboard →</a>
+<button type="button" onClick="{{replay}}" style="height: 52px; padding: 0 20px; border: 1.5px solid #111111; border-radius: 12px; background: #FFFFFF; color: #111111; font-family: 'Instrument Sans', sans-serif; font-size: 15px; font-weight: 600">Replay</button>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { p: 0, start: 0 };
+    this.raf = null;
+  }
+  componentDidMount() { this.run(); }
+  componentWillUnmount() { if (this.raf) cancelAnimationFrame(this.raf); }
+  run() {
+    var self = this;
+    if (this.raf) cancelAnimationFrame(this.raf);
+    var t0 = null;
+    var DURATION = 11000;
+    var step = function (ts) {
+      if (t0 === null) t0 = ts;
+      var k = Math.min(1, (ts - t0) / DURATION);
+      self.setState({ p: k });
+      if (k < 1) self.raf = requestAnimationFrame(step);
+      else self.raf = null;
+    };
+    this.raf = requestAnimationFrame(step);
+  }
+  renderVals() {
+    var self = this;
+    var k = this.state.p;
+    var phrases = [
+      'Reading the fine print so you don’t have to…',
+      'Checking if “freshers welcome” really means freshers…',
+      'Untangling eligibility criteria…',
+      'Binning the pay-to-apply scams…',
+      'Asking hackathons when they actually close…',
+      'Putting deadlines on your calendar…'
+    ];
+    var idx = Math.min(phrases.length - 1, Math.floor(k * phrases.length));
+    return {
+      p: k,
+      working: k < 1,
+      done: k >= 1,
+      count: Math.round(Math.min(1, k * 3) * 18),
+      phrase: phrases[idx],
+      replay: function () { self.setState({ p: 0 }); self.run(); }
+    };
+  }
+}
+</script>
+</body>
+</html>

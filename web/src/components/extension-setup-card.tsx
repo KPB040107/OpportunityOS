@@ -24,9 +24,9 @@ export function ExtensionSetupCard() {
               <Puzzle className="size-4" />
             </span>
             <h2 className="text-lg font-bold text-foreground">
-              OpportunityOS Browser Extension
+              Trajectory Browser Extension
             </h2>
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+            <span className="rounded-full bg-act px-2.5 py-0.5 text-xs font-semibold text-act-foreground border border-border">
               Recommended
             </span>
           </div>
@@ -89,7 +89,7 @@ export function ExtensionSetupCard() {
           onClick={handleCopyPath}
           className="gap-1.5 shrink-0 bg-white border-indigo-200 hover:bg-indigo-50 text-xs h-8"
         >
-          {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+          {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
           {copied ? 'Path Copied!' : 'Copy Folder Path'}
         </Button>
       </div>

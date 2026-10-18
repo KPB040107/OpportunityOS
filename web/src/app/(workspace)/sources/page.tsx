@@ -132,14 +132,14 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Building2 className="size-5 text-emerald-600" />
+              <Building2 className="size-5 text-primary" />
               Connected Company ATS Feeds
             </h2>
             <p className="text-xs text-muted-foreground">
               Official company career boards with direct public endpoints. Opportunities enter as Corroborated Tier.
             </p>
           </div>
-          <span className="rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold">
+          <span className="rounded-full bg-act text-act-foreground border border-border px-2.5 py-0.5 text-xs font-semibold">
             {companyFeeds.length} Active Feeds
           </span>
         </div>
@@ -153,10 +153,10 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                      <ShieldCheck className="size-3.5 text-emerald-600" />
+                      <ShieldCheck className="size-3.5 text-primary" />
                       Corroborated · {ds.source_kind.replace('_', ' ')}
                     </span>
-                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-mono border bg-emerald-50 text-emerald-800 border-emerald-200">
+                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-mono border border-border bg-act text-act-foreground">
                       {ds.adapter}
                     </span>
                   </div>
@@ -175,7 +175,7 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
 
                 <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                   <div className="flex items-center gap-1.5">
-                    <span className={`size-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    <span className={`size-1.5 rounded-full ${isActive ? 'bg-primary' : 'bg-muted-foreground'}`} />
                     <span>{ds.last_scan ? `Scanned ${formatDate(ds.last_scan)}` : 'Scheduled discovery active'}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -187,14 +187,14 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
                         type="submit"
                         className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium border transition-colors ${
                           isMuted
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                            ? 'bg-act text-act-foreground border-border hover:opacity-90'
                             : 'bg-muted text-muted-foreground border-border hover:text-foreground'
                         }`}
                         title={isMuted ? 'Unmute this source' : 'Mute opportunities from this source'}
                       >
                         {isMuted ? (
                           <>
-                            <Volume2 className="size-3 text-emerald-600" />
+                            <Volume2 className="size-3 text-act-foreground" />
                             Unmute
                           </>
                         ) : (
@@ -261,7 +261,7 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
 
                 <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                   <div className="flex items-center gap-1.5">
-                    <span className={`size-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    <span className={`size-1.5 rounded-full ${isActive ? 'bg-primary' : 'bg-muted-foreground'}`} />
                     <span>{ds.last_scan ? `Scanned ${formatDate(ds.last_scan)}` : 'Scheduled discovery active'}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -347,7 +347,7 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
 
                 <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                   <div className="flex items-center gap-1.5">
-                    <span className={`size-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                    <span className={`size-1.5 rounded-full ${isActive ? 'bg-primary' : 'bg-muted-foreground'}`} />
                     <span>{ds.last_scan ? `Scanned ${formatDate(ds.last_scan)}` : 'Scheduled discovery active'}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -421,11 +421,11 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         {src.type === 'rss' ? (
-                          <Rss className="size-3.5 text-amber-600" />
+                          <Rss className="size-3.5 text-foreground" />
                         ) : src.type === 'email_forward' ? (
                           <Mail className="size-3.5 text-blue-600" />
                         ) : (
-                          <Globe className="size-3.5 text-emerald-600" />
+                          <Globe className="size-3.5 text-foreground" />
                         )}
                         {src.type}
                       </span>
@@ -436,10 +436,10 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
                         <span
                           className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
                             isOk
-                              ? 'bg-emerald-50 text-emerald-800'
+                              ? 'bg-act text-act-foreground border border-border'
                               : isError
-                              ? 'bg-red-50 text-red-800'
-                              : 'bg-amber-50 text-amber-800'
+                              ? 'bg-danger text-danger-foreground border border-border'
+                              : 'bg-ask text-ask-foreground border border-border'
                           }`}
                         >
                           {isOk ? (
@@ -509,7 +509,7 @@ export default async function SourcesPage({ searchParams }: { searchParams?: Pro
           </div>
         )}
         {params.success && (
-          <div role="status" className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+          <div role="status" className="mt-3 rounded-lg border border-border bg-act p-3 text-xs text-act-foreground font-semibold">
             {params.success}
           </div>
         )}

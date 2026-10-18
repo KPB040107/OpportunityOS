@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scroll keyframes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+</style>
+</helmet>
+<div style="width: 1320px; height: 1060px; box-sizing: border-box; padding: 48px; display: flex; flex-direction: column; gap: 28px; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111; background: #F3F1EC">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 24px">
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 40px; letter-spacing: -0.03em">The sorting board at four scroll points</h1>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #5F5B54">ACT · ASK · SKIP</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 40px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">0% · THE PILE</span>
+<div style="border: 1.5px solid #111111; border-radius: 14px; overflow: hidden; background: #F3F1EC; box-shadow: 4px 4px 0 #111111"><dc-import name="Scene" p="0" hint-size="100%,330px"></dc-import></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">32% · 01 READ — EVERY LISTING SCANNED</span>
+<div style="border: 1.5px solid #111111; border-radius: 14px; overflow: hidden; background: #F3F1EC; box-shadow: 4px 4px 0 #111111"><dc-import name="Scene" p="0.32" hint-size="100%,330px"></dc-import></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">76% · 02–03 SORTED, WITH REASONS</span>
+<div style="border: 1.5px solid #111111; border-radius: 14px; overflow: hidden; background: #F3F1EC; box-shadow: 4px 4px 0 #111111"><dc-import name="Scene" p="0.76" hint-size="100%,330px"></dc-import></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #C23E0C">100% · 04 YOUR NEXT STEP</span>
+<div style="border: 1.5px solid #111111; border-radius: 14px; overflow: hidden; background: #F3F1EC; box-shadow: 4px 4px 0 #111111"><dc-import name="Scene" p="1" hint-size="100%,330px"></dc-import></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1320,"height":1060}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

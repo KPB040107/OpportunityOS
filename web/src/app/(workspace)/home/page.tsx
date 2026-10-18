@@ -1,17 +1,13 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/auth';
-import { Card } from '@/components/ui/card';
 import { LiveUpdates } from '@/components/live-updates';
 import { AutonomyCounter, type HomeCounterData } from '@/components/autonomy-counter';
 import { formatDate } from '@/lib/utils';
 import {
   ArrowRight,
   CheckCircle2,
-  Clock,
   Calendar,
-  HelpCircle,
-  ChevronRight,
-  Zap,
+  ChevronRight
 } from 'lucide-react';
 
 export default async function HomePage() {
@@ -19,7 +15,12 @@ export default async function HomePage() {
   const today = new Date().toISOString().slice(0, 10);
 
   // Fetch Home dashboard data concurrently
-  const [counterRes, approvalsRes, clarificationsRes, matchesRes, upcomingRes] = await Promise.all([
+  const [profileRes, counterRes, approvalsRes, clarificationsRes, matchesRes, upcomingRes] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('user_id', user.id)
+      .maybeSingle(),
     supabase.rpc('get_home_counter'),
     supabase
       .from('approvals')
@@ -50,6 +51,8 @@ export default async function HomePage() {
       .order('deadline', { ascending: true })
       .limit(5)
   ]);
+
+  const studentName = profileRes.data?.display_name || 'there';
 
   const counterData = (counterRes.data || {
     items_read: 0,
@@ -88,7 +91,7 @@ export default async function HomePage() {
       type: string;
       trust_tier: string | null;
     } | null;
-  }>).map(appr => ({
+  }>).map((appr) => ({
     ...appr,
     opportunity: appr.match?.opportunity || appr.opportunity || null
   }));
@@ -130,14 +133,13 @@ export default async function HomePage() {
     trust_tier: string | null;
   }>;
 
-  // Next-Action Suggestion: Computed deterministically in code
+  // Next-Action Suggestion: Computed deterministically
   interface ActionSuggestion {
     title: string;
     description: string;
     cta: string;
     href: string;
-    badge: string;
-    badgeColor: string;
+    kicker: string;
   }
 
   let nextAction: ActionSuggestion;
@@ -145,287 +147,342 @@ export default async function HomePage() {
   if (pendingApprovals.length > 0) {
     const topAppr = pendingApprovals[0];
     nextAction = {
-      badge: 'Immediate Action Required',
-      badgeColor: 'bg-amber-100 text-amber-900 border-amber-200',
+      kicker: 'YOUR NEXT STEP · IMMEDIATE APPROVAL REQUIRED',
       title: `Approve: ${topAppr.opportunity?.title || 'Pending Request'}`,
-      description: `OpportunityOS recommends action on ${topAppr.opportunity?.organization || 'this listing'}. Your explicit approval is required before action expiry.`,
+      description: `Trajectory recommends action on ${topAppr.opportunity?.organization || 'this listing'}. Your explicit approval is required before action expiry.`,
       cta: 'Review Approval',
-      href: `/approvals/${topAppr.id}`,
+      href: `/approvals/${topAppr.id}`
     };
   } else if (pendingClarifications.length > 0) {
     const topClar = pendingClarifications[0];
     nextAction = {
-      badge: 'Unlock Opportunities',
-      badgeColor: 'bg-sky-100 text-sky-900 border-sky-200',
+      kicker: 'YOUR NEXT STEP · CLARIFY PROFILE FACT',
       title: `Clarify ${topClar.missing_fact.replace('_', ' ')}`,
       description: `Answering this missing profile fact will automatically re-evaluate ${topClar.affected_opportunity_ids.length} matched opportunities.`,
       cta: 'Answer Question',
-      href: '/approvals',
+      href: '/approvals'
     };
   } else if (topMatches.length > 0 && topMatches[0].decision === 'ACT') {
     const topAct = topMatches[0];
     nextAction = {
-      badge: 'Top Recommendation',
-      badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-200',
-      title: `${topAct.opportunity?.title || 'Strong Match'} (${topAct.match_score ?? 90}%)`,
-      description: `Verified ${topAct.opportunity?.type || 'opportunity'} from ${topAct.opportunity?.organization || 'an official source'}. Tracker updated.`,
-      cta: 'View Opportunity',
-      href: `/opportunities/${topAct.opportunity_id}`,
+      kicker: 'YOUR NEXT STEP · TOP RECOMMENDATION',
+      title: `Apply to ${topAct.opportunity?.title || 'Strong Match'} (${topAct.match_score ?? 90}%)`,
+      description: `Verified ${topAct.opportunity?.type || 'opportunity'} from ${topAct.opportunity?.organization || 'an official source'}. Added to calendar tracker.`,
+      cta: 'Open Application',
+      href: `/opportunities/${topAct.opportunity_id}`
     };
   } else {
     nextAction = {
-      badge: 'All Caught Up',
-      badgeColor: 'bg-slate-100 text-slate-800 border-slate-200',
+      kicker: 'YOUR NEXT STEP · ALL CAUGHT UP',
       title: 'Active Feeds Monitoring',
-      description: 'OpportunityOS is scanning autonomous feeds, email alerts, and portal sources.',
+      description: 'Trajectory is actively monitoring feeds, official portal alerts, and deadlines.',
       cta: 'Explore Opportunities',
-      href: '/opportunities',
+      href: '/opportunities'
     };
   }
 
+  const currentDateFormatted = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  }).toUpperCase();
+
+  const totalWaiting = pendingApprovals.length + pendingClarifications.length;
+
   return (
-    <>
+    <div className="flex flex-col gap-8 font-sans text-foreground">
       <LiveUpdates userId={user.id} />
 
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary">Workspace Overview</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground">Home</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Autonomous opportunity governance · Verified decisions · Time-boxed commitments
-          </p>
-        </div>
+      {/* Date & Main Greeting */}
+      <div className="flex flex-col gap-2">
+        <span className="font-mono text-xs tracking-[0.12em] text-accent-text font-semibold uppercase">
+          {currentDateFormatted}
+        </span>
+        <h1 className="font-display font-extrabold text-4xl sm:text-5xl lg:text-6xl tracking-tight leading-none text-foreground m-0">
+          Good day, {studentName}.
+        </h1>
+        <p className="text-base sm:text-lg text-ink-2 leading-relaxed m-0">
+          Since yesterday: {counterData.items_read} listings read, {counterData.items_acted} handled for you, {totalWaiting} waiting on you.
+        </p>
       </div>
 
-      {/* 1. Autonomy Counter */}
+      {/* 1. Bento Stat Cards & Dividend */}
       <AutonomyCounter data={counterData} />
 
-      {/* 2. Next-Action Recommendation (Pure Code Logic) */}
-      <Card className="mb-8 border-primary/20 bg-gradient-to-r from-primary/5 via-white to-primary/5 p-5 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${nextAction.badgeColor}`}>
-                <Zap className="mr-1 size-3" />
-                {nextAction.badge}
-              </span>
-              <span className="text-xs text-muted-foreground">Recommended Next Step</span>
-            </div>
-            <h2 className="text-lg font-bold text-foreground">{nextAction.title}</h2>
-            <p className="text-sm text-muted-foreground">{nextAction.description}</p>
-          </div>
+      {/* 2. Next-Action Banner (The Sorting Board Hero) */}
+      <section className="p-6 sm:p-7 border-[1.5px] border-border rounded-[16px] bg-primary shadow-hard-lg flex flex-wrap items-center justify-between gap-6 text-foreground">
+        <div className="flex-1 min-w-[280px] max-w-[620px] flex flex-col gap-2">
+          <span className="font-mono text-xs tracking-[0.12em] text-foreground font-bold">
+            {nextAction.kicker}
+          </span>
+          <h2 className="font-display font-extrabold text-2xl sm:text-4xl tracking-tight leading-tight m-0 text-foreground">
+            {nextAction.title}
+          </h2>
+          <p className="text-sm sm:text-base text-foreground/90 font-medium leading-relaxed m-0">
+            {nextAction.description}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             href={nextAction.href}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-primary/90"
+            className="inline-flex items-center justify-center h-12 px-6 border-[1.5px] border-border rounded-[12px] bg-white text-foreground font-sans text-sm font-bold shadow-[2px_2px_0_#111111] hover:scale-[1.02] active:translate-x-0.5 active:translate-y-0.5 transition-all no-underline"
           >
-            <span>{nextAction.cta}</span>
-            <ArrowRight className="size-4" />
+            {nextAction.cta} →
+          </Link>
+          <Link
+            href="/opportunities"
+            className="inline-flex items-center justify-center h-12 px-6 border-[1.5px] border-border rounded-[12px] bg-white text-foreground font-sans text-sm font-bold shadow-[2px_2px_0_#111111] hover:bg-muted transition-all no-underline"
+          >
+            Browse All →
           </Link>
         </div>
-      </Card>
+      </section>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* 3. Grouped Questions & Actionable Reviews */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <HelpCircle className="size-5 text-amber-600" />
-              <h2 className="text-lg font-bold text-foreground">Actionable Reviews & Questions</h2>
-            </div>
-            {(pendingApprovals.length > 0 || pendingClarifications.length > 0) && (
-              <Link href="/approvals" className="text-xs font-semibold text-primary hover:underline">
-                View all ({pendingApprovals.length + pendingClarifications.length})
-              </Link>
-            )}
+      {/* 3. Split: Waiting on you & Deadlines this week */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+        {/* Waiting on you */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="font-display font-bold text-2xl text-foreground m-0">
+              Waiting on you
+            </h2>
+            <Link
+              href="/approvals"
+              className="text-xs font-mono font-semibold text-accent-text hover:underline"
+            >
+              All {totalWaiting} →
+            </Link>
           </div>
 
-          {pendingApprovals.length === 0 && pendingClarifications.length === 0 ? (
-            <Card className="p-6 text-center">
-              <CheckCircle2 className="mx-auto size-8 text-emerald-500" />
-              <p className="mt-2 text-sm font-semibold">Zero pending review requests</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                All opportunities have been either acted on or ignored. The agent only asks when evidence is incomplete.
+          {totalWaiting === 0 ? (
+            <div className="p-8 border-[1.5px] border-border rounded-[14px] bg-white shadow-hard text-center flex flex-col items-center gap-2">
+              <CheckCircle2 className="size-8 text-foreground" />
+              <p className="font-display font-bold text-base text-foreground m-0">
+                Zero pending review requests
               </p>
-            </Card>
+              <p className="text-xs text-muted-foreground m-0 max-w-sm">
+                All opportunities have been either acted on or ignored. Trajectory only asks when evidence is incomplete.
+              </p>
+            </div>
           ) : (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               {pendingApprovals.map((appr) => (
-                <Card key={appr.id} className="border-amber-200/80 bg-amber-50/30 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
-                        Approval Request (ASK)
-                      </span>
-                      <h3 className="mt-1.5 text-sm font-semibold text-foreground">
-                        {appr.opportunity?.title || 'Opportunity Review'}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {appr.opportunity?.organization || 'Unknown Organization'} · Expires {formatDate(appr.expires_at)}
-                      </p>
-                    </div>
+                <div
+                  key={appr.id}
+                  className="p-4 sm:p-5 border-[1.5px] border-border rounded-[12px] bg-white shadow-hard flex flex-col gap-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-0.5 border-[1.5px] border-border rounded-full bg-act text-foreground font-mono text-[11px] font-semibold">
+                      APPROVE
+                    </span>
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      EXPIRES {formatDate(appr.expires_at).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-base text-foreground m-0">
+                      {appr.opportunity?.title || 'Opportunity Review'}
+                    </h3>
+                    <p className="text-xs text-ink-2 m-0 mt-0.5">
+                      {appr.opportunity?.organization || 'Unknown Organization'} · Requires your confirmation
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
                     <Link
                       href={`/approvals/${appr.id}`}
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 shadow-2xs hover:bg-amber-50"
+                      className="inline-flex items-center justify-center h-9 px-4 border-[1.5px] border-border rounded-[8px] bg-white text-foreground text-xs font-sans font-bold shadow-[2px_2px_0_#111111] hover:scale-[1.01] active:translate-x-0.5 active:translate-y-0.5 transition-all no-underline"
                     >
-                      <span>Review</span>
-                      <ArrowRight className="size-3" />
+                      Approve →
+                    </Link>
+                    <Link
+                      href={`/approvals/${appr.id}`}
+                      className="inline-flex items-center justify-center h-9 px-4 border-[1.5px] border-border rounded-[8px] bg-white text-foreground text-xs font-sans font-semibold hover:bg-muted transition-all no-underline"
+                    >
+                      Review
                     </Link>
                   </div>
-                </Card>
+                </div>
               ))}
 
               {pendingClarifications.map((clar) => (
-                <Card key={clar.id} className="border-sky-200/80 bg-sky-50/30 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-semibold text-sky-900">
-                        Missing Fact Clarification
-                      </span>
-                      <h3 className="mt-1.5 text-sm font-semibold text-foreground">
-                        {clar.question_text || `Confirm your ${clar.missing_fact}`}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        Affects {clar.affected_opportunity_ids.length} opportunity listing{clar.affected_opportunity_ids.length === 1 ? '' : 's'}
-                      </p>
-                    </div>
+                <div
+                  key={clar.id}
+                  className="p-4 sm:p-5 border-[1.5px] border-border rounded-[12px] bg-white shadow-hard flex flex-col gap-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-0.5 border-[1.5px] border-border rounded-full bg-ask text-foreground font-mono text-[11px] font-semibold">
+                      QUESTION
+                    </span>
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      AFFECTS {clar.affected_opportunity_ids.length} LISTING{clar.affected_opportunity_ids.length === 1 ? '' : 'S'}
+                    </span>
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-base text-foreground m-0">
+                      {clar.question_text || `Confirm your ${clar.missing_fact.replace('_', ' ')}`}
+                    </h3>
+                    <p className="text-xs text-ink-2 m-0 mt-0.5">
+                      Missing profile fact needed to evaluate eligibility
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
                     <Link
                       href="/approvals"
-                      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-900 shadow-2xs hover:bg-sky-50"
+                      className="inline-flex items-center justify-center h-9 px-4 border-[1.5px] border-border rounded-[8px] bg-white text-foreground text-xs font-sans font-bold shadow-[2px_2px_0_#111111] hover:scale-[1.01] active:translate-x-0.5 active:translate-y-0.5 transition-all no-underline"
                     >
-                      <span>Clarify</span>
-                      <ArrowRight className="size-3" />
+                      Answer Now →
                     </Link>
                   </div>
-                </Card>
+                </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        {/* 4. Confirmed Upcoming Deadlines */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Clock className="size-5 text-primary" />
-              <h2 className="text-lg font-bold text-foreground">Confirmed Deadlines</h2>
-            </div>
-            <Link href="/applications" className="text-xs font-semibold text-primary hover:underline">
-              View in Applications
+        {/* Deadlines this week */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="font-display font-bold text-2xl text-foreground m-0">
+              Deadlines this week
+            </h2>
+            <Link
+              href="/applications"
+              className="text-xs font-mono font-semibold text-accent-text hover:underline"
+            >
+              Tracker →
             </Link>
           </div>
 
           {upcomingDeadlines.length === 0 ? (
-            <Card className="p-6 text-center">
-              <Calendar className="mx-auto size-8 text-muted-foreground/60" />
-              <p className="mt-2 text-sm font-semibold">No upcoming deadlines</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                All active opportunities either have passed or have unconfirmed deadlines.
+            <div className="p-8 border-[1.5px] border-border rounded-[14px] bg-white shadow-hard text-center flex flex-col items-center gap-2">
+              <Calendar className="size-8 text-muted-foreground" />
+              <p className="font-display font-bold text-base text-foreground m-0">
+                No upcoming deadlines
               </p>
-            </Card>
+              <p className="text-xs text-muted-foreground m-0 max-w-sm">
+                All tracked opportunities either have passed or have unconfirmed dates.
+              </p>
+            </div>
           ) : (
-            <div className="space-y-3">
-              {upcomingDeadlines.map((opp) => (
-                <Card key={opp.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          {opp.type}
-                        </span>
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.2 text-[11px] font-semibold text-emerald-800">
-                          Due {opp.deadline}
-                        </span>
-                      </div>
-                      <h3 className="mt-1 text-sm font-semibold text-foreground hover:text-primary transition-colors">
-                        <Link href={`/opportunities/${opp.id}`}>{opp.title}</Link>
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {opp.organization || 'Unknown'} {opp.location ? `· ${opp.location}` : ''}
-                      </p>
+            <div className="border-[1.5px] border-border rounded-[14px] bg-white shadow-hard divide-y divide-line overflow-hidden">
+              {upcomingDeadlines.map((opp) => {
+                const dateObj = new Date(opp.deadline);
+                const dow = isNaN(dateObj.getTime())
+                  ? 'DUE'
+                  : dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+                const dayNum = isNaN(dateObj.getTime())
+                  ? '!'
+                  : dateObj.getDate();
+
+                return (
+                  <div
+                    key={opp.id}
+                    className="p-4 flex items-center gap-4 hover:bg-[#F3F1EC]/40 transition-colors"
+                  >
+                    <div className="shrink-0 w-12 text-center flex flex-col">
+                      <span className="font-mono text-[11px] font-bold text-accent-text leading-tight">
+                        {dow}
+                      </span>
+                      <span className="font-display font-extrabold text-2xl text-accent-text leading-tight">
+                        {dayNum}
+                      </span>
                     </div>
-                    <Link
-                      href={`/opportunities/${opp.id}`}
-                      className="inline-flex size-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground"
-                    >
-                      <ChevronRight className="size-4" />
-                    </Link>
+                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                      <Link
+                        href={`/opportunities/${opp.id}`}
+                        className="text-sm font-bold text-foreground truncate hover:text-accent-text no-underline"
+                      >
+                        {opp.title}
+                      </Link>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {opp.type.toUpperCase()} · {opp.organization || 'Organization'}
+                      </span>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full border-[1.5px] border-border bg-act font-mono text-[10px] font-semibold text-accent-text whitespace-nowrap">
+                        ON CALENDAR
+                      </span>
+                      <Link
+                        href={`/opportunities/${opp.id}`}
+                        className="size-7 rounded-[6px] border-[1.5px] border-border bg-white flex items-center justify-center text-foreground hover:bg-muted"
+                      >
+                        <ChevronRight className="size-4" />
+                      </Link>
+                    </div>
                   </div>
-                </Card>
-              ))}
+                );
+              })}
             </div>
           )}
-        </div>
+        </section>
       </div>
 
-      {/* 5. Strongest Current Matches */}
-      <section className="mt-10">
-        <div className="mb-4 flex items-center justify-between">
+      {/* 4. Strongest Current Matches */}
+      <section className="flex flex-col gap-3 pt-2">
+        <div className="flex items-baseline justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold tracking-tight text-foreground">Strongest Current Matches</h2>
-            <p className="text-xs text-muted-foreground">
-              Ranked by deterministic score weights (Skills 40%, Career 20%, Interests 15%, Location 10%, Academic 10%, Urgency 5%)
+            <h2 className="font-display font-bold text-2xl text-foreground m-0">
+              Strongest matches
+            </h2>
+            <p className="text-xs text-muted-foreground m-0 mt-1">
+              Ranked by deterministic score weights against your confirmed profile
             </p>
           </div>
-          <Link href="/opportunities" className="text-sm font-semibold text-primary hover:underline">
-            Browse all opportunities →
+          <Link
+            href="/opportunities"
+            className="text-xs font-mono font-semibold text-accent-text hover:underline"
+          >
+            All opportunities →
           </Link>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {topMatches.map((m) => {
             const opp = m.opportunity;
             const isAct = m.decision === 'ACT';
-            const isAsk = m.decision === 'ASK';
-            const badgeClass = isAct
-              ? 'bg-emerald-100 text-emerald-900 border-emerald-200'
-              : isAsk
-              ? 'bg-amber-100 text-amber-900 border-amber-200'
-              : 'bg-slate-100 text-slate-800 border-slate-200';
 
             return (
-              <Card key={m.id} className="flex flex-col justify-between p-4 shadow-xs hover:border-primary/40 transition">
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {opp?.type || 'Opportunity'}
+              <Link
+                key={m.id}
+                href={`/opportunities/${m.opportunity_id}`}
+                className="p-4 border-[1.5px] border-border rounded-[14px] bg-white shadow-hard text-foreground no-underline flex flex-col justify-between gap-3 hover:translate-x-0.5 hover:translate-y-0.5 transition-all group"
+              >
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
+                      {opp?.type || 'OPPORTUNITY'}
                     </span>
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${badgeClass}`}>
-                      {m.decision} · {m.match_score ?? 'N/A'}/100
+                    <span
+                      className={`px-2 py-0.5 border-[1.5px] border-border rounded-full font-mono text-[10px] font-semibold ${
+                        isAct ? 'bg-act text-accent-text' : 'bg-ask text-ask-foreground'
+                      }`}
+                    >
+                      {m.decision}
                     </span>
                   </div>
 
-                  <h3 className="mt-2 text-sm font-bold text-foreground line-clamp-2">
-                    <Link href={`/opportunities/${m.opportunity_id}`} className="hover:text-primary transition-colors">
-                      {opp?.title || 'Opportunity'}
-                    </Link>
-                  </h3>
-                  <p className="mt-1 text-xs text-muted-foreground line-clamp-1">
-                    {opp?.organization || 'Unknown'} {opp?.location ? `· ${opp.location}` : ''}
-                  </p>
-
-                  <p className="mt-3 text-xs text-muted-foreground line-clamp-2">
-                    {m.explanation || 'Evaluated against confirmed profile criteria.'}
-                  </p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    {opp?.deadline ? `Due ${opp.deadline}` : 'Deadline not stated'}
+                  <span className="font-display font-extrabold text-4xl leading-none text-foreground tracking-tight">
+                    {m.match_score ?? '—'}
                   </span>
-                  <Link
-                    href={`/opportunities/${m.opportunity_id}`}
-                    className="font-semibold text-primary hover:underline inline-flex items-center gap-1"
-                  >
-                    <span>Inspect</span>
-                    <ArrowRight className="size-3" />
-                  </Link>
+
+                  <div className="flex flex-col">
+                    <h3 className="font-display font-bold text-base text-foreground leading-snug group-hover:text-accent-text transition-colors line-clamp-2 m-0">
+                      {opp?.title || 'Opportunity'}
+                    </h3>
+                    <span className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                      {opp?.organization || 'Official listing'}
+                    </span>
+                  </div>
                 </div>
-              </Card>
+
+                <div className="pt-2.5 border-t border-line text-xs text-ink-2 line-clamp-2">
+                  {m.explanation || 'Verified against confirmed skills and graduation criteria.'}
+                </div>
+              </Link>
             );
           })}
         </div>
       </section>
-    </>
+    </div>
   );
 }

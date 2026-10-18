@@ -28,13 +28,13 @@ export const STAGE_CONFIG: Array<{
   badgeColor: string;
   icon: LucideIcon;
 }> = [
-  { id: 'saved', label: 'Saved for later', shortLabel: 'Saved', color: 'border-amber-200 bg-amber-50/50', badgeColor: 'bg-amber-100 text-amber-800 border-amber-200', icon: Clock },
-  { id: 'to_apply', label: 'To Apply (Priority Queue)', shortLabel: 'To Apply', color: 'border-emerald-200 bg-emerald-50/50', badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: Send },
-  { id: 'applied', label: 'Applied', shortLabel: 'Applied', color: 'border-blue-200 bg-blue-50/50', badgeColor: 'bg-blue-100 text-blue-800 border-blue-200', icon: Briefcase },
-  { id: 'assessment', label: 'Assessment / Online Test', shortLabel: 'Assessment', color: 'border-indigo-200 bg-indigo-50/50', badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: FileText },
-  { id: 'interview', label: 'Interviewing', shortLabel: 'Interview', color: 'border-purple-200 bg-purple-50/50', badgeColor: 'bg-purple-100 text-purple-800 border-purple-200', icon: UserCheck },
-  { id: 'offer', label: 'Offer Received', shortLabel: 'Offer', color: 'border-green-200 bg-green-50/50', badgeColor: 'bg-green-100 text-green-800 border-green-200', icon: Award },
-  { id: 'rejected', label: 'Archived / Rejected', shortLabel: 'Archived', color: 'border-slate-200 bg-slate-50/50', badgeColor: 'bg-slate-100 text-slate-800 border-slate-200', icon: Archive }
+  { id: 'saved', label: 'Saved for later', shortLabel: 'Saved', color: 'border-border bg-white', badgeColor: 'bg-skip text-foreground border-border', icon: Clock },
+  { id: 'to_apply', label: 'To Apply (Priority Queue)', shortLabel: 'To Apply', color: 'border-border bg-act', badgeColor: 'bg-primary text-foreground border-border', icon: Send },
+  { id: 'applied', label: 'Applied', shortLabel: 'Applied', color: 'border-border bg-skip', badgeColor: 'bg-white text-foreground border-border', icon: Briefcase },
+  { id: 'assessment', label: 'Assessment / Online Test', shortLabel: 'Assessment', color: 'border-border bg-ask', badgeColor: 'bg-ask text-ask-foreground border-border', icon: FileText },
+  { id: 'interview', label: 'Interviewing', shortLabel: 'Interview', color: 'border-border bg-ask', badgeColor: 'bg-white text-foreground border-border', icon: UserCheck },
+  { id: 'offer', label: 'Offer Received', shortLabel: 'Offer', color: 'border-border bg-act', badgeColor: 'bg-primary text-foreground border-border', icon: Award },
+  { id: 'rejected', label: 'Archived / Rejected', shortLabel: 'Archived', color: 'border-border bg-background', badgeColor: 'bg-skip text-muted-foreground border-border', icon: Archive }
 ];
 
 export interface ApplicationsPageProps {

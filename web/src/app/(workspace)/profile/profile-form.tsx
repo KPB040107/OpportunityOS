@@ -512,7 +512,7 @@ export function ProfileForm({ profile, skills, projects = [] }: ProfileFormProps
 
         {/* Historic / Retired interests warning (P-01) */}
         {userHistoricInterests.length > 0 && (
-          <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3.5 text-xs text-amber-700 dark:text-amber-300">
+          <div className="mb-6 rounded-lg border border-border bg-ask/30 p-3.5 text-xs text-foreground font-medium">
             <span className="font-semibold uppercase tracking-wide">Historic Preferences:</span>
             <span className="ml-1">
               Your profile previously tracked {userHistoricInterests.join(', ')}. Scholarship and Program listings have been retired from active discovery; your historic selections remain preserved on file.
@@ -609,7 +609,7 @@ export function ProfileForm({ profile, skills, projects = [] }: ProfileFormProps
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         emailConsent
-                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                          ? 'bg-act text-act-foreground border border-border'
                           : 'bg-muted text-muted-foreground border border-border'
                       }`}
                     >
@@ -657,7 +657,7 @@ export function ProfileForm({ profile, skills, projects = [] }: ProfileFormProps
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         calendarConsent
-                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                          ? 'bg-act text-act-foreground border border-border'
                           : 'bg-muted text-muted-foreground border border-border'
                       }`}
                     >

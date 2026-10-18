@@ -78,13 +78,13 @@ function NavigationLinks() {
               href={href}
               className={`flex items-center justify-between gap-3 min-h-[40px] px-3 py-1.5 rounded-[10px] border-[1.5px] text-sm font-medium transition-all ${
                 isActive
-                  ? 'bg-foreground text-background border-foreground font-semibold shadow-[2px_2px_0_#111111]'
+                  ? 'bg-white text-foreground border-border font-bold shadow-[2px_2px_0_#111111]'
                   : 'bg-transparent text-ink-2 border-transparent hover:border-line hover:bg-white/60'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Icon className="size-4 shrink-0" />
-                <span>{name}</span>
+                <Icon className={`size-4 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className={isActive ? 'text-foreground font-bold' : ''}>{name}</span>
               </div>
             </Link>
           ))}
@@ -104,7 +104,7 @@ function NavigationLinks() {
               href={href}
               className={`flex items-center gap-2.5 min-h-[38px] px-3 py-1.5 rounded-[10px] border-[1.5px] text-sm font-medium transition-all ${
                 isActive
-                  ? 'bg-foreground text-background border-foreground font-semibold shadow-[2px_2px_0_#111111]'
+                  ? 'bg-white text-foreground border-border font-bold shadow-[2px_2px_0_#111111]'
                   : 'bg-transparent text-ink-2 border-transparent hover:border-line hover:bg-white/60'
               }`}
             >

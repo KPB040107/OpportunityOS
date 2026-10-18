@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpportunityOS — Approvals and questions</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F1EC}
+a{color:#C23E0C}a:hover{color:#8F2C07}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #F3F1EC; font-family: 'Instrument Sans', system-ui, sans-serif; color: #111111">
+<div style="flex: 1 1 240px; max-width: 100%"><dc-import name="Nav" active="approvals" hint-size="100%,900px"></dc-import></div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px 40px 64px; display: flex; flex-direction: column; gap: 28px; max-width: 980px">
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: #2445C8">{{remaining}} WAITING ON YOU</span>
+<h1 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: clamp(34px, 4vw, 52px); line-height: 1; letter-spacing: -0.03em">Approvals &amp; questions</h1>
+<p style="margin: 0; font-size: 16px; color: #3D3A35">It only asks when it isn't sure. Answer once and it re-checks every listing your answer affects.</p>
+</div>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 24px">Questions about you</h2>
+<sc-for list="{{questions}}" as="q" hint-placeholder-count="2">
+<div style="padding: 18px 20px; border: 1.5px solid #111111; border-radius: 14px; background: {{q.bg}}; box-shadow: {{q.shadow}}; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="padding: 2px 8px; border: 1.5px solid #111111; border-radius: 999px; background: #E1E8FF; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500">QUESTION</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54">{{q.meta}}</span>
+</div>
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 24px; letter-spacing: -0.01em">{{q.title}}</span>
+<span style="font-size: 14px; color: #3D3A35">{{q.why}}</span>
+<sc-if value="{{q.open}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{q.options}}" as="o" hint-placeholder-count="2">
+<button type="button" onClick="{{o.pick}}" style="height: 42px; padding: 0 16px; border: 1.5px solid #111111; border-radius: 10px; background: #FFFFFF; box-shadow: 2px 2px 0 #111111; font-family: 'Instrument Sans', sans-serif; font-size: 14px; font-weight: 600; color: #111111">{{o.label}}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{q.done}}" hint-placeholder-val="{{false}}">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #2445C8">✓ YOU SAID “{{q.answer}}” · RE-CHECKING {{q.count}} LISTINGS</span>
+</sc-if>
+</div>
+</sc-for>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 24px">Needs your approval</h2>
+<sc-for list="{{approvals}}" as="a" hint-placeholder-count="2">
+<div style="display: flex; flex-wrap: wrap; border: 1.5px solid #111111; border-radius: 14px; background: #FFFFFF; box-shadow: {{a.shadow}}; overflow: hidden; opacity: {{a.op}}">
+<div style="flex: 0 0 96px; box-sizing: border-box; padding: 16px; border-right: 1.5px solid #111111; background: #E1E8FF; display: flex; flex-direction: column; justify-content: center">
+<span style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 36px; line-height: 1">{{a.score}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #3D3A35">MATCH</span>
+</div>
+<div style="flex: 1 1 320px; min-width: 0; box-sizing: border-box; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em; color: #5F5B54">{{a.kind}} · EXPIRES {{a.expires}}</span>
+<span style="font-size: 18px; font-weight: 600">{{a.title}}</span>
+<span style="font-size: 14px; color: #2445C8">{{a.why}}</span>
+<span style="font-size: 13px; color: #3D3A35">If you approve: {{a.plan}}</span>
+</div>
+<div style="flex: 0 1 220px; box-sizing: border-box; padding: 16px 18px; display: flex; flex-direction: column; justify-content: center; gap: 8px">
+<sc-if value="{{a.open}}" hint-placeholder-val="{{true}}">
+<button type="button" onClick="{{a.approve}}" style="height: 44px; border: 1.5px solid #111111; border-radius: 10px; background: #111111; color: #FFFFFF; font-family: 'Instrument Sans', sans-serif; font-size: 14px; font-weight: 700">Approve</button>
+<button type="button" onClick="{{a.skip}}" style="height: 44px; border: 1.5px solid #111111; border-radius: 10px; background: #FFFFFF; color: #111111; font-family: 'Instrument Sans', sans-serif; font-size: 14px; font-weight: 600">Skip</button>
+</sc-if>
+<sc-if value="{{a.done}}" hint-placeholder-val="{{false}}">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; text-align: center">{{a.result}}</span>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 20px; color: #3D3A35">Resolved this week</h2>
+<div style="border: 1.5px solid #DAD6CE; border-radius: 12px; background: #FFFFFF">
+<sc-for list="{{resolved}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #ECEAE5; font-size: 14px">
+<span>{{r.text}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5F5B54">{{r.when}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1150}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { answers: {}, decisions: {} };
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var qdefs = [
+      { id: 'age', title: 'Are you 18 or older?', meta: 'AFFECTS 2 HACKATHONS', count: 2, why: 'Global AI Challenge and one other require participants to be adults. Your resume doesn’t say.', options: ['Yes', 'No'] },
+      { id: 'pytorch', title: 'How well do you know PyTorch?', meta: 'AFFECTS 3 LISTINGS', count: 3, why: 'ML Intern at Quill Health lists it as required. It isn’t on your profile yet.', options: ['Not at all', 'Beginner', 'Intermediate', 'Advanced'] }
+    ];
+    var questions = qdefs.map(function (q) {
+      var ans = st.answers[q.id];
+      return {
+        title: q.title, meta: q.meta, why: q.why, count: q.count,
+        open: !ans, done: !!ans, answer: ans || '',
+        bg: ans ? '#F3F1EC' : '#FFFFFF', shadow: ans ? 'none' : '4px 4px 0 #111111',
+        options: q.options.map(function (o) { return { label: o, pick: function () { var a = Object.assign({}, self.state.answers); a[q.id] = o; self.setState({ answers: a }); } }; })
+      };
+    });
+    var adefs = [
+      { id: 'tess', score: '74', kind: 'INTERNSHIP · REMOTE', expires: 'IN 3 DAYS', title: 'Product Intern at Tessellate', why: 'Good fit, but the listing doesn’t say whether 2027 graduates can apply.', plan: 'add to your tracker and put Thu 30 Oct on your calendar.' },
+      { id: 'lumen', score: '76', kind: 'INTERNSHIP · BENGALURU', expires: 'IN 5 DAYS', title: 'UX Research Intern at Lumen Studio', why: 'Strong match, but no application deadline is stated.', plan: 'add to your tracker and remind you every Monday to check it.' }
+    ];
+    var approvals = adefs.map(function (a) {
+      var d = st.decisions[a.id];
+      return {
+        score: a.score, kind: a.kind, expires: a.expires, title: a.title, why: a.why, plan: a.plan,
+        open: !d, done: !!d, result: d === 'approve' ? '✓ APPROVED · TRACKING' : 'SKIPPED',
+        shadow: d ? 'none' : '4px 4px 0 #111111', op: d === 'skip' ? 0.6 : 1,
+        approve: function () { var x = Object.assign({}, self.state.decisions); x[a.id] = 'approve'; self.setState({ decisions: x }); },
+        skip: function () { var x = Object.assign({}, self.state.decisions); x[a.id] = 'skip'; self.setState({ decisions: x }); }
+      };
+    });
+    var remaining = questions.filter(function (q) { return q.open; }).length + approvals.filter(function (a) { return a.open; }).length;
+    return {
+      questions: questions, approvals: approvals, remaining: remaining,
+      resolved: [
+        { text: 'You confirmed your CGPA is 8.4 — re-checked 6 listings, 2 moved to Act', when: 'THU 16 OCT' },
+        { text: 'You approved Data Analyst Intern at Northwind', when: 'WED 15 OCT' },
+        { text: 'You skipped Campus Ambassador at Brandwave', when: 'TUE 14 OCT' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

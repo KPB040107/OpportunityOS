@@ -145,7 +145,7 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
       <AutonomyCounter data={counterData} />
 
       {!profile && (
-        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4 border-emerald-200 bg-emerald-50">
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4 border-border bg-act/30 shadow-hard">
           <div>
             <h2 className="font-semibold">Start with your profile</h2>
             <p className="mt-1 text-sm text-muted-foreground">Add your academic details, skills, and interests.</p>
@@ -260,7 +260,7 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
                     {item.source_type === 'url' ? (
                       <Link2 className="size-3.5" />
                     ) : item.source_type === 'discovery' ? (
-                      <Globe className="size-3.5 text-emerald-600" />
+                      <Globe className="size-3.5 text-primary" />
                     ) : item.source_type === 'capture' ? (
                       <Globe className="size-3.5 text-blue-600" />
                     ) : (
@@ -278,7 +278,7 @@ export default async function OpportunitiesPage({ searchParams }: OpportunitiesP
                   </span>
                   <span
                     className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-                      item.status === 'failed' ? 'bg-red-50 text-red-800' : 'bg-emerald-50 text-primary'
+                      item.status === 'failed' ? 'bg-danger text-danger-foreground border border-border' : 'bg-act text-act-foreground border border-border'
                     }`}
                   >
                     {item.source_type === 'capture' && item.status === 'queued'

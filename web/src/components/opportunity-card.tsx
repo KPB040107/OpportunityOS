@@ -103,7 +103,7 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
               </span>
             )}
             {opp.is_saved && (
-              <span className="rounded-full bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold">
+              <span className="rounded-full bg-act text-foreground border border-border px-2 py-0.5 text-[10px] font-mono font-semibold">
                 Saved
               </span>
             )}
@@ -114,8 +114,8 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
         </div>
 
         {/* Title & Employer */}
-        <h3 className="text-lg font-semibold leading-snug">
-          <Link href={`/opportunities/${opp.id}`} className="hover:text-primary transition-colors">
+        <h3 className="text-lg font-display font-bold leading-snug">
+          <Link href={`/opportunities/${opp.id}`} className="hover:text-accent-text transition-colors">
             {opp.title || 'Untitled Opportunity'}
           </Link>
         </h3>
@@ -125,7 +125,7 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
 
         {/* Risk Signals */}
         {opp.risk_signals && opp.risk_signals.length > 0 && (
-          <p className="mt-2 text-xs font-medium text-red-700 bg-red-50 p-2 rounded-lg border border-red-200">
+          <p className="mt-2 text-xs font-medium text-danger-foreground bg-danger p-2 rounded-lg border border-danger-foreground/30">
             Risk Signal: {opp.risk_signals.join(' · ')}
           </p>
         )}
@@ -145,8 +145,8 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
             <dd className="font-medium text-foreground truncate flex items-center gap-1.5">
               <span>{comp.value}</span>
               {comp.paidStatus && comp.paidStatus !== 'Not disclosed' && (
-                <span className={`rounded px-1.5 py-0.2 text-[9px] font-semibold uppercase ${
-                  comp.paidStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                <span className={`rounded px-1.5 py-0.2 text-[9px] font-mono font-semibold uppercase border border-border ${
+                  comp.paidStatus === 'Paid' ? 'bg-act text-accent-text' : 'bg-skip text-muted-foreground'
                 }`}>
                   {comp.paidStatus}
                 </span>
@@ -176,33 +176,33 @@ export function OpportunityCard({ opportunity }: OpportunityCardProps) {
           <div className="flex flex-wrap items-center gap-2 mb-1.5">
             {match?.decision ? (
               <span
-                className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                className={`rounded-full px-2.5 py-0.5 text-xs font-mono font-semibold border-[1.5px] border-border ${
                   match.decision === 'ACT'
-                    ? 'bg-emerald-100 text-emerald-900'
+                    ? 'bg-act text-accent-text'
                     : match.decision === 'ASK'
-                    ? 'bg-amber-100 text-amber-900'
-                    : 'bg-slate-100 text-slate-700'
+                    ? 'bg-ask text-ask-foreground'
+                    : 'bg-skip text-muted-foreground'
                 }`}
               >
                 {match.decision}
               </span>
             ) : (
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+              <span className="rounded-full bg-skip border border-border px-2 py-0.5 text-xs font-mono text-muted-foreground">
                 Awaiting Evaluation
               </span>
             )}
 
-            {/* Honest Score Rendering: If UNKNOWN, suppress numerical score and show 'Review facts' */}
+            {/* Honest Score Rendering */}
             {isUnknown ? (
-              <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+              <span className="rounded-full bg-ask border border-border px-2 py-0.5 text-[11px] font-mono font-medium text-foreground">
                 Review facts
               </span>
             ) : isInsufficient ? (
-              <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+              <span className="rounded-full bg-skip border border-border px-2 py-0.5 text-[11px] font-mono font-medium text-foreground">
                 Insufficient information to score
               </span>
             ) : match?.match_score !== null && match?.match_score !== undefined ? (
-              <span className="text-xs text-muted-foreground font-medium">
+              <span className="text-xs font-mono text-muted-foreground font-medium">
                 Match {match.match_score}/100 · {Math.round((match.confidence || 0) * 100)}% confidence
               </span>
             ) : null}

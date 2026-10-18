@@ -323,7 +323,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
               <span>{comp.value}</span>
               {comp.paidStatus && comp.paidStatus !== 'Not disclosed' && (
                 <span className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                  comp.paidStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'
+                  comp.paidStatus === 'Paid' ? 'bg-act text-act-foreground border border-border' : 'bg-ask text-ask-foreground border border-border'
                 }`}>
                   {comp.paidStatus}
                 </span>
@@ -400,10 +400,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
                   key={idx}
                   className={`p-3.5 rounded-lg border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
                     isPass
-                      ? 'bg-emerald-50/50 border-emerald-200'
+                      ? 'bg-act/30 border-border'
                       : isFail
-                      ? 'bg-red-50/50 border-red-200'
-                      : 'bg-amber-50/40 border-amber-200'
+                      ? 'bg-danger/30 border-border'
+                      : 'bg-ask/30 border-border'
                   }`}
                 >
                   <div>
@@ -414,10 +414,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                           isPass
-                            ? 'bg-emerald-100 text-emerald-800'
+                            ? 'bg-act text-act-foreground border border-border'
                             : isFail
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-amber-100 text-amber-800'
+                            ? 'bg-danger text-danger-foreground border border-border'
+                            : 'bg-ask text-ask-foreground border border-border'
                         }`}
                       >
                         {isPass ? (
@@ -465,9 +465,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           {/* Matched Skills */}
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
-              <CheckCircle2 className="size-3.5 text-emerald-600" />
+          <div className="rounded-xl border border-border bg-act/20 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-act-foreground flex items-center gap-1.5">
+              <CheckCircle2 className="size-3.5 text-act-foreground" />
               Matched Skills ({matchedSkills.length})
             </h3>
             {matchedSkills.length > 0 ? (
@@ -475,9 +475,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
                 {matchedSkills.map(s => (
                   <span
                     key={s}
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald-100/80 px-2.5 py-1 text-xs font-medium text-emerald-900 border border-emerald-200"
+                    className="inline-flex items-center gap-1 rounded-md bg-act px-2.5 py-1 text-xs font-semibold text-act-foreground border border-border"
                   >
-                    <CheckCircle2 className="size-3 text-emerald-600" />
+                    <CheckCircle2 className="size-3 text-act-foreground" />
                     {s}
                   </span>
                 ))}
@@ -488,9 +488,9 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
           </div>
 
           {/* Missing Skills (Skill Gap) */}
-          <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-800 flex items-center gap-1.5">
-              <HelpCircle className="size-3.5 text-amber-600" />
+          <div className="rounded-xl border border-border bg-ask/20 p-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ask-foreground flex items-center gap-1.5">
+              <HelpCircle className="size-3.5 text-ask-foreground" />
               Skill Gap ({missingSkills.length})
             </h3>
             {missingSkills.length > 0 ? (
@@ -498,7 +498,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
                 {missingSkills.map(s => (
                   <span
                     key={s}
-                    className="inline-flex items-center gap-1 rounded-md bg-amber-100/70 px-2.5 py-1 text-xs font-medium text-amber-900 border border-amber-200"
+                    className="inline-flex items-center gap-1 rounded-md bg-ask px-2.5 py-1 text-xs font-semibold text-ask-foreground border border-border"
                   >
                     {s}
                   </span>
@@ -556,7 +556,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
             {/* Required Skills */}
             {requiredSkillsReqs.length > 0 && (
               <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 inline-block px-2.5 py-1 rounded-md">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-act-foreground bg-act border border-border inline-block px-2.5 py-1 rounded-md">
                   Required Technical Skills ({requiredSkillsReqs.length})
                 </h3>
                 <ul className="mt-3 space-y-3">
@@ -564,7 +564,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
                     <li key={r.id} className="p-3 bg-muted/20 rounded-lg border border-border">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold uppercase text-muted-foreground">Skill Requirement</span>
-                        <span className="rounded bg-emerald-100 text-emerald-800 px-1.5 py-0.5 text-[10px] font-medium">Required</span>
+                        <span className="rounded bg-act text-act-foreground border border-border px-1.5 py-0.5 text-[10px] font-semibold">Required</span>
                       </div>
                       <p className="mt-1 text-sm font-medium">{r.value}</p>
                       {r.evidence_snippet && (
@@ -644,7 +644,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
           {/* Source-Stated Requirements */}
           <div className="p-4 rounded-xl border border-border bg-slate-50">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-foreground flex items-center gap-1.5">
-              <ShieldCheck className="size-4 text-emerald-600" />
+              <ShieldCheck className="size-4 text-primary" />
               Source-Stated Requirements
             </h3>
             <p className="mt-1 text-[11px] text-muted-foreground">
@@ -654,7 +654,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
               {statedSkills.length > 0 ? (
                 statedSkills.map(s => (
                   <li key={s} className="flex items-center gap-1.5">
-                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                    <span className="size-1.5 rounded-full bg-primary" />
                     <strong>{s}</strong>: Verified technical requirement from source text
                   </li>
                 ))
@@ -744,7 +744,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
             <p className="mt-1 font-medium text-foreground">
               {matchedSkills.length} of {totalStatedSkills} skills demonstrated
             </p>
-            <p className="mt-1 text-[11px] text-emerald-700 font-medium">
+            <p className="mt-1 text-[11px] text-muted-foreground font-medium">
               {missingSkills.length === 0 ? 'Full coverage of stated skills' : `${missingSkills.length} skill gap(s) to address`}
             </p>
           </div>
@@ -777,7 +777,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
               </li>
             ) : (
               <li className="flex items-start gap-2">
-                <span className="size-1.5 rounded-full bg-emerald-500 mt-1.5" />
+                <span className="size-1.5 rounded-full bg-primary mt-1.5" />
                 <span>
                   <strong>Strong keyword alignment:</strong> Your profile covers all explicitly extracted technical skills for this role.
                 </span>
@@ -806,10 +806,10 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
             <span
               className={`rounded-full px-3 py-1 text-xs font-bold ${
                 match.decision === 'ACT'
-                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                  ? 'bg-act text-act-foreground border border-border'
                   : match.decision === 'ASK'
-                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                  : 'bg-slate-100 text-slate-800 border border-slate-200'
+                  ? 'bg-ask text-ask-foreground border border-border'
+                  : 'bg-skip text-skip-foreground border border-border'
               }`}
             >
               {match.eligibility_status === 'UNKNOWN' || match.reason_codes?.includes('UNKNOWN_ELIGIBILITY')
@@ -849,7 +849,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
                 <div key={idx} className="p-3 rounded-lg bg-slate-50 border text-xs">
                   <span className="font-semibold uppercase text-[10px] text-primary">{se.component}</span>
                   <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                    <div className="border-l-2 border-emerald-400 pl-2">
+                    <div className="border-l-2 border-primary pl-2">
                       <span className="text-[10px] text-muted-foreground block font-medium">Opportunity Quote:</span>
                       <blockquote className="italic text-foreground">“{se.opportunity_quote}”</blockquote>
                     </div>
