@@ -14,7 +14,8 @@ import {
   Home,
   GraduationCap,
   Award,
-  Link2
+  Link2,
+  Kanban
 } from 'lucide-react';
 import { signOut } from '@/app/login/actions';
 
@@ -30,7 +31,7 @@ function NavigationLinks() {
       href: '/opportunities',
       name: 'Opportunities',
       icon: Inbox,
-      isActive: (pathname === '/opportunities' || pathname === '/inbox') && !currentType
+      isActive: (pathname.startsWith('/opportunities') || pathname === '/inbox') && !currentType
     },
     {
       href: '/opportunities?type=internship',
@@ -51,7 +52,7 @@ function NavigationLinks() {
       isActive: (pathname === '/opportunities' || pathname === '/inbox') && currentType === 'hackathon'
     },
     { href: '/approvals', name: 'Approvals', icon: CheckCircle2, isActive: pathname.startsWith('/approvals') },
-    { href: '/applications', name: 'Applications', icon: CheckCircle2, isActive: pathname === '/applications' },
+    { href: '/applications', name: 'Applications', icon: Kanban, isActive: pathname === '/applications' },
     { href: '/activity', name: 'Activity', icon: Activity, isActive: pathname === '/activity' }
   ];
 

@@ -898,7 +898,7 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
                   </p>
 
                   <ul className="mt-3 space-y-2">
-                    {(source.extracted_json.evidence || []).map((e, index) => (
+                    {(source.extracted_json?.evidence || []).map((e, index) => (
                       <li key={index}>
                         <p className="text-[10px] uppercase font-semibold text-muted-foreground">
                           {e.field.replaceAll('_', ' ')}

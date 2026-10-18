@@ -96,7 +96,7 @@ export function AutonomyCounter({ data }: { data: HomeCounterData }) {
 
         <div className="flex flex-wrap items-center gap-3">
           <span className="font-mono text-xs text-muted-foreground">
-            {data.active_rules} active rules · {data.breakdown.real.questions_avoided} real avoids
+            {data.active_rules} active rules · {data.breakdown?.real?.questions_avoided ?? data.questions_avoided} real avoids
           </span>
           <Link
             href="/rules"

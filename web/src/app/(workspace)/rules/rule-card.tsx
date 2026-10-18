@@ -117,7 +117,7 @@ export function RuleCard({ rule }: { rule: StandingRuleRecord }) {
         <div>
           <span className="text-muted-foreground">Conditions:</span>
           <p className="font-medium mt-0.5">
-            Min Score: {rule.conditions.min_score ?? 60} · Min Conf: {Math.round((rule.conditions.min_confidence ?? 0.65) * 100)}%
+            Min Score: {rule.conditions?.min_score ?? 60} · Min Conf: {Math.round((rule.conditions?.min_confidence ?? 0.65) * 100)}%
           </p>
         </div>
         <div>
