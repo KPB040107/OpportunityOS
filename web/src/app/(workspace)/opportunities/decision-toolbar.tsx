@@ -9,13 +9,14 @@ import { recordDecisionAction } from '@/app/(workspace)/rules/actions';
 
 interface DecisionToolbarProps {
   opportunityId: string;
+  canApprove: boolean;
   initialDecision?: {
     choice: string;
     created_at: string;
   } | null;
 }
 
-export function DecisionToolbar({ opportunityId, initialDecision }: DecisionToolbarProps) {
+export function DecisionToolbar({ opportunityId, canApprove, initialDecision }: DecisionToolbarProps) {
   const [currentChoice, setCurrentChoice] = useState<string | null>(initialDecision?.choice || null);
   const [loading, setLoading] = useState(false);
   const [ruleProposed, setRuleProposed] = useState(false);
@@ -58,7 +59,7 @@ export function DecisionToolbar({ opportunityId, initialDecision }: DecisionTool
             size="sm"
             variant={currentChoice === 'approve' ? 'default' : 'outline'}
             className={currentChoice === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'border-emerald-300 text-emerald-800 hover:bg-emerald-50'}
-            disabled={loading}
+            disabled={loading || !canApprove}
             onClick={() => handleChoice('approve')}
           >
             <CheckCircle2 className="size-4 mr-1.5" />
@@ -88,6 +89,12 @@ export function DecisionToolbar({ opportunityId, initialDecision }: DecisionTool
           </Button>
         </div>
       </div>
+
+      {!canApprove && (
+        <p className="mt-3 text-xs text-amber-800">
+          Approval is available after eligibility is verified. You can still pin this listing while reviewing its requirements.
+        </p>
+      )}
 
       {ruleProposed && (
         <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-100/70 p-4 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-300">

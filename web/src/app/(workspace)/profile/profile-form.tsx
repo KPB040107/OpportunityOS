@@ -153,9 +153,15 @@ export function ProfileForm({ profile, skills, projects = [] }: ProfileFormProps
     }
   }
 
-  function handleRevokeCalendar() {
-    setCalendarConsent(false);
-    setConsentMessage('Google Calendar sync permission has been revoked. Direct links and .ICS downloads will be provided instead.');
+  async function handleRevokeCalendar() {
+    try {
+      const { data, error } = await supabase.rpc('update_calendar_consent', { p_enabled: false });
+      if (error || data?.success !== true) throw new Error('Calendar preference update failed');
+      setCalendarConsent(false);
+      setConsentMessage('Calendar sync opt-in is off. Verified deadlines still offer calendar links and .ICS files.');
+    } catch {
+      setConsentMessage('Could not turn off calendar sync. Please try again.');
+    }
   }
 
   // Detect historic (retired) interest types in current profile (P-01)
@@ -647,7 +653,7 @@ export function ProfileForm({ profile, skills, projects = [] }: ProfileFormProps
                 <div>
                   <div className="flex items-center gap-2 font-medium text-sm text-foreground">
                     <Calendar className="size-4 text-primary" />
-                    <span>Google Calendar Sync Permission</span>
+                    <span>Demo Calendar Sync Opt-in</span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                         calendarConsent
@@ -655,11 +661,11 @@ export function ProfileForm({ profile, skills, projects = [] }: ProfileFormProps
                           : 'bg-muted text-muted-foreground border border-border'
                       }`}
                     >
-                      {calendarConsent ? 'Permission Granted' : 'Disabled / Revoked'}
+                      {calendarConsent ? 'Opted in' : 'Off'}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Allow OpportunityOS to automatically create and update verified deadline events on your Google Calendar. When disabled or revoked, OpportunityOS provides direct calendar links and downloadable .ICS calendar files instead.
+                    Direct event creation currently works only for the connected demo account. Other accounts receive calendar links and downloadable .ICS files for verified deadlines, even when this opt-in is on.
                   </p>
                 </div>
               </label>
@@ -672,7 +678,7 @@ export function ProfileForm({ profile, skills, projects = [] }: ProfileFormProps
                   onClick={handleRevokeCalendar}
                   className="text-xs h-7 text-muted-foreground hover:text-red-500 hover:border-red-500/30"
                 >
-                  Revoke Sync
+                  Turn off opt-in
                 </Button>
               )}
             </div>

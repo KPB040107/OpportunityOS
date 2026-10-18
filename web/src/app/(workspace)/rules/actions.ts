@@ -23,8 +23,8 @@ export async function recordDecisionAction(
       p_status: 'to_apply',
       p_notes: reason || 'Approved by student'
     });
-    if (trackError) {
-      return { success: false, error: trackError.message };
+    if (trackError || trackData?.success !== true) {
+      return { success: false, error: trackData?.error || trackError?.message || 'Could not approve this opportunity.' };
     }
     revalidatePath('/inbox');
     revalidatePath('/rules');

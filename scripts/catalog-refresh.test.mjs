@@ -44,6 +44,27 @@ const contract = createDecisionContract({
   enableMissingDeadlinePolicy: true
 });
 
+test('Stripe style minimum requirements keep real bullets and exclude source metadata', () => {
+  const description = [
+    'Who you are',
+    '• Rigorous thinker: you enjoy solving unfamiliar problems.',
+    'Minimum requirements',
+    '• A strong understanding of computer science through pursuit of a Bachelor’s degree.',
+    '• Experience with programming. We work mostly in Ruby, Java, and JavaScript.',
+    'Preferred qualifications',
+    '• Familiarity with distributed systems is helpful.',
+    'Link: https://stripe.com/careers/listing/software-engineer-intern/8031833'
+  ].join('\n');
+  const extracted = extractSkillsAndRequirements(description);
+  const structured = buildStructuredRequirements(extracted.requirements, extracted.skills, description);
+
+  assert.ok(structured.some(r => r.kind === 'degree' && r.mandatory));
+  assert.ok(structured.some(r => r.value.startsWith('Rigorous thinker:') && !r.mandatory));
+  assert.ok(structured.some(r => r.kind === 'skill' && r.value === 'Ruby' && !r.mandatory));
+  assert.ok(structured.every(r => !/^minimum requirements$|^link:/i.test(r.value)));
+  assert.ok(structured.every(r => description.includes(r.evidence)));
+});
+
 test('Ecera System qualification extraction produces structured requirements with exact quotes', () => {
   const result = extractSkillsAndRequirements(eceraText);
 

@@ -158,8 +158,8 @@ export function buildStructuredRequirements(extractedReqs = [], extractedSkills 
       r => r.kind === 'skill' && (r.value.toLowerCase() === skLower || r.value.toLowerCase().includes(skLower))
     );
     if (existing) {
-      existing.requirement_class = 'required_skill';
-      existing.mandatory = true;
+      // A skill mentioned in a listing is not automatically a required skill.
+      // Keep the classification supported by the requirement's quoted context.
     } else {
       let quote = '';
       const lines = rawText.split(/\r?\n/);
@@ -183,8 +183,8 @@ export function buildStructuredRequirements(extractedReqs = [], extractedSkills 
         reqs.push({
           kind: 'skill',
           value: skill,
-          mandatory: true,
-          requirement_class: 'required_skill',
+          mandatory: false,
+          requirement_class: 'preferred_skill',
           evidence: quote,
           evidence_snippet: quote
         });

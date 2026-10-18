@@ -101,12 +101,13 @@ export function extractSkillsFromText(text = '') {
   return Array.from(found);
 }
 
-const HEADING_LINE_REGEX = /^(?:#{1,6}\s+|(?:\*{1,3}|_{1,3})|(?:\d+\.|\b[A-Z0-9_-]+\b\s*[:–-]))?\s*(?:about(?:\s+(?:us|the\s+company|the\s+role|the\s+team|the\s+hackathon|the\s+event))?|overview|responsibilities|roles?\s+(?:&|and)\s+responsibilities|key\s+responsibilities|what\s+you(?:'ll|\s+will)\s+do|qualifications|basic\s+qualifications|minimum\s+qualifications|preferred\s+qualifications|requirements|job\s+requirements|role\s+requirements|skills?\s+(?:&|and)\s+requirements|required\s+skills?|eligibility(?:\s+(?:criteria|requirements|rules))?|who\s+can\s+participate|who\s+is\s+eligible|who\s+should\s+apply|who\s+you\s+are|what\s+you\s+bring|rules|hackathon\s+rules|participation\s+rules|competition\s+rules|guidelines|terms\s+(?:&|and)\s+conditions|prizes(?:\s+(?:&|and)\s+(?:rewards|awards))?|awards|bounties|what\s+to\s+build|problem\s+statements?|challenges|themes|tracks|submission\s+(?:guidelines|requirements|criteria)|submissions?|how\s+to\s+submit|important\s+dates|timeline|schedule|deadlines?|what\s+we\s+offer|benefits|perks|compensation|judging(?:\s+criteria)?|evaluation\s+criteria)\b/i;
+const HEADING_LINE_REGEX = /^(?:#{1,6}\s+|(?:\*{1,3}|_{1,3})|(?:\d+\.|\b[A-Z0-9_-]+\b\s*[:–-]))?\s*(?:about(?:\s+(?:us|the\s+company|the\s+role|the\s+team|the\s+hackathon|the\s+event))?|overview|responsibilities|roles?\s+(?:&|and)\s+responsibilities|key\s+responsibilities|what\s+you(?:'ll|\s+will)\s+do|qualifications|basic\s+qualifications|minimum\s+(?:qualifications|requirements)|preferred\s+qualifications|requirements|job\s+requirements|role\s+requirements|skills?\s+(?:&|and)\s+requirements|required\s+skills?|eligibility(?:\s+(?:criteria|requirements|rules))?|who\s+can\s+participate|who\s+is\s+eligible|who\s+should\s+apply|who\s+you\s+are|what\s+you\s+bring|rules|hackathon\s+rules|participation\s+rules|competition\s+rules|guidelines|terms\s+(?:&|and)\s+conditions|prizes(?:\s+(?:&|and)\s+(?:rewards|awards))?|awards|bounties|what\s+to\s+build|problem\s+statements?|challenges|themes|tracks|submission\s+(?:guidelines|requirements|criteria)|submissions?|how\s+to\s+submit|important\s+dates|timeline|schedule|deadlines?|what\s+we\s+offer|benefits|perks|compensation|judging(?:\s+criteria)?|evaluation\s+criteria)\b/i;
 
-const qualSectionRegex = /^(?:qualifications|requirements|required\s+skills|skills\s+required|what\s+we\s+are\s+looking\s+for|who\s+you\s+are|what\s+you\s+bring|key\s+requirements|technical\s+skills|eligibility(?:\s+(?:criteria|requirements|rules))?|who\s+can\s+participate|who\s+is\s+eligible|who\s+should\s+apply|basic\s+qualifications|minimum\s+qualifications|preferred\s+qualifications|what\s+you'?ll\s+need|what\s+you\s+will\s+need|role\s+requirements|job\s+requirements|desired\s+profile|candidate\s+profile|skills\s+&\s+requirements|requirements\s+&\s+qualifications|must[- ]haves?|rules|hackathon\s+rules|participation\s+rules|what\s+to\s+build)\b/i;
+const qualSectionRegex = /^(?:qualifications|requirements|required\s+skills|skills\s+required|what\s+we\s+are\s+looking\s+for|who\s+you\s+are|what\s+you\s+bring|key\s+requirements|technical\s+skills|eligibility(?:\s+(?:criteria|requirements|rules))?|who\s+can\s+participate|who\s+is\s+eligible|who\s+should\s+apply|basic\s+qualifications|minimum\s+(?:qualifications|requirements)|preferred\s+qualifications|what\s+you'?ll\s+need|what\s+you\s+will\s+need|role\s+requirements|job\s+requirements|desired\s+profile|candidate\s+profile|skills\s+&\s+requirements|requirements\s+&\s+qualifications|must[- ]haves?|rules|hackathon\s+rules|participation\s+rules|what\s+to\s+build)\b/i;
 const preferredSectionRegex = /^(?:preferred\s+qualifications|nice\s+to\s+have|nice-to-have|bonus\s+points|bonus\s+qualifications|good\s+to\s+have|good-to-have|preferred\s+skills|preferred\s+requirements|what\s+would\s+be\s+nice\s+to\s+have|plus|bonus|optional\s+qualifications)\b/i;
 const benefitSectionRegex = /^(?:what\s+we\s+offer|benefits|perks|compensation|what\s+you'?ll\s+get|what\s+you\s+get|stipend\s+&\s+perks|perks\s+&\s+benefits|why\s+join\s+us)\b/i;
 const endSectionRegex = /^(?:about\s+us|about\s+the\s+company|about\s+the\s+team|equal\s+opportunity|eeo|how\s+to\s+apply|selection\s+process|hiring\s+process|interview\s+process|application\s+process)\b/i;
+const sourceMetadataRegex = /^(?:link|application\s+(?:link|url)|apply\s+(?:link|url)|source\s+url)\s*:/i;
 
 const softSkillRegex = /\b(?:team\s+player|communication(?:\s+skills?)?|written\s+and\s+verbal|eager\s+to\s+learn|willingness\s+to\s+learn|fast\s+learner|quick\s+learner|self-starter|self-motivated|problem[- ]solving|problem\s+solver|interpersonal(?:\s+skills?)?|adaptability|attention\s+to\s+detail|work\s+independently|collaborative|collaboration|passion\s+for|passionate\s+about|enthusiastic|positive\s+attitude|growth\s+mindset|work\s+ethic|time\s+management|critical\s+thinking|curious|ownership\s+mindset|organizational\s+skills?|analytical\s+mindset|creative\s+thinking)\b/i;
 const explicitPreferredRegex = /\b(?:preferred|plus|bonus|nice\s+to\s+have|nice-to-have|good\s+to\s+have|good-to-have|optional|helpful|not\s+mandatory|not\s+required|an\s+advantage)\b/i;
@@ -191,17 +192,27 @@ function extractRequirementsFromSection(text = '') {
 
   let inQualificationSection = false;
   let sectionIsPreferred = false;
+  let sectionIsGeneral = false;
   let inBenefitSection = false;
 
   for (const rawLine of lines) {
     const isBullet = /^[•\-\*\d+\.]\s+/.test(rawLine);
     const stripped = rawLine.replace(/^[#*_~<>\s\-\d\.]+|[#*_~<>:\s]+$/g, '').trim();
 
+    if (sourceMetadataRegex.test(stripped)) {
+      inQualificationSection = false;
+      inBenefitSection = false;
+      sectionIsPreferred = false;
+      sectionIsGeneral = false;
+      continue;
+    }
+
     if (!isBullet) {
       if (endSectionRegex.test(stripped)) {
         inQualificationSection = false;
         inBenefitSection = false;
         sectionIsPreferred = false;
+        sectionIsGeneral = false;
         continue;
       }
 
@@ -209,6 +220,7 @@ function extractRequirementsFromSection(text = '') {
         inBenefitSection = true;
         inQualificationSection = false;
         sectionIsPreferred = false;
+        sectionIsGeneral = false;
         continue;
       }
 
@@ -216,6 +228,7 @@ function extractRequirementsFromSection(text = '') {
         inQualificationSection = true;
         inBenefitSection = false;
         sectionIsPreferred = true;
+        sectionIsGeneral = false;
         continue;
       }
 
@@ -223,6 +236,7 @@ function extractRequirementsFromSection(text = '') {
         inQualificationSection = true;
         inBenefitSection = false;
         sectionIsPreferred = false;
+        sectionIsGeneral = /^who\s+you\s+are\b/i.test(stripped);
         continue;
       }
     }
@@ -280,8 +294,8 @@ function extractRequirementsFromSection(text = '') {
         if (skillsInLine.length > 0) {
           for (const skill of skillsInLine) {
             if (!seenSkillNames.has(skill.toLowerCase())) {
-              const isPref = sectionIsPreferred || isLineExplicitPreferred;
-              const isMand = !isPref && (isLineExplicitMandatory || isBullet);
+              const isPref = sectionIsPreferred || isLineExplicitPreferred || /\b(?:we work mostly in|our (?:stack|technologies)|technologies we use)\b/i.test(cleanLine);
+              const isMand = !isPref && (isLineExplicitMandatory || (isBullet && !sectionIsGeneral));
               const reqClass = isPref ? 'preferred_skill' : (isMand ? 'required_skill' : 'preferred_skill');
               let skillVal = skill;
               if (!cleanLine.toLowerCase().includes(skill.toLowerCase())) {
@@ -304,7 +318,7 @@ function extractRequirementsFromSection(text = '') {
           // Non-skill criteria: degree, cgpa, graduation_year, academic_year, branch, location, other
           let kind = 'other';
           let val = cleanLine;
-          const mandatory = !sectionIsPreferred && !isLineExplicitPreferred && (isLineExplicitMandatory || isBullet);
+          const mandatory = !sectionIsPreferred && !isLineExplicitPreferred && (isLineExplicitMandatory || (isBullet && !sectionIsGeneral));
 
           if (/\b(?:degree|b\.?tech|b\.?e\.?|m\.?tech|bca|mca|bachelor|master|diploma)\b/i.test(cleanLine)) {
             kind = 'degree';
@@ -388,7 +402,7 @@ function extractRequirementsFlexible(sectionText = '') {
   for (const rawLine of lines) {
     const stripped = rawLine.replace(/^[#*_~<>\s\-\d\.]+|[#*_~<>:\s]+$/g, '').trim();
     if (!stripped) continue;
-    if (qualSectionRegex.test(stripped) || endSectionRegex.test(stripped) || benefitSectionRegex.test(stripped) || HEADING_LINE_REGEX.test(stripped)) {
+    if (qualSectionRegex.test(stripped) || endSectionRegex.test(stripped) || benefitSectionRegex.test(stripped) || HEADING_LINE_REGEX.test(stripped) || sourceMetadataRegex.test(stripped)) {
       continue;
     }
 

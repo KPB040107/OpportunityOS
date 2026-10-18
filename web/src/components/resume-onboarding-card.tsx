@@ -828,11 +828,11 @@ export function ResumeOnboardingCard({
                 <div className="text-xs">
                   <div className="flex items-center gap-1.5 font-medium text-foreground">
                     <Calendar className="size-3.5 text-primary" />
-                    <span>Google Calendar Sync Permission</span>
+                    <span>Demo Calendar Sync Opt-in</span>
                     <span className="text-[10px] text-muted-foreground font-normal">(Default off)</span>
                   </div>
                   <p className="mt-0.5 text-muted-foreground">
-                    Allow OpportunityOS to automatically create and update verified deadline events on your Google Calendar. When disabled or disconnected, direct event links and downloadable .ICS calendar files are offered instead.
+                    Direct event creation currently works only for the connected demo account. Other accounts receive calendar links and downloadable .ICS files for verified deadlines, even when this opt-in is on.
                   </p>
                 </div>
               </label>

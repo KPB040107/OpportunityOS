@@ -372,7 +372,11 @@ export default async function OpportunityPage({ params }: { params: Promise<{ id
       </Card>
 
       {/* Action Decision Toolbar and Panel */}
-      <DecisionToolbar opportunityId={id} initialDecision={decisionRes.data} />
+      <DecisionToolbar
+        opportunityId={id}
+        canApprove={match?.status === 'complete' && match.eligibility_status === 'ELIGIBLE'}
+        initialDecision={decisionRes.data}
+      />
       <DecisionPanel match={match} id={id} />
       <ActionStatus matchId={match?.id} opportunityId={id} />
 
