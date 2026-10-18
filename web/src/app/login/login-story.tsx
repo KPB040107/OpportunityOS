@@ -71,7 +71,7 @@ export function LoginStory() {
               <h1 className="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl tracking-tight leading-none text-foreground m-0">
                 Hundreds of listings.
                 <br />
-                Half of them aren't for you.
+                Half of them aren&apos;t for you.
               </h1>
               <span className="font-mono text-xs tracking-[0.12em] text-muted-foreground animate-pulse">
                 SCROLL TO SORT ↓

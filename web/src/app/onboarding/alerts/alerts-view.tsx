@@ -16,11 +16,10 @@ export function AlertsView({
   const [emailAlerts, setEmailAlerts] = useState(initialEmail);
   const [calendarSync, setCalendarSync] = useState(initialCalendar);
   const [browserPush, setBrowserPush] = useState(true);
-  const [mode, setMode] = useState<'cautious' | 'balanced' | 'autopilot'>(
-    (['cautious', 'balanced', 'autopilot'].includes(initialMode)
-      ? initialMode
-      : 'balanced') as any
-  );
+  type AutonomyMode = 'cautious' | 'balanced' | 'autopilot';
+  const initialValidMode: AutonomyMode =
+    initialMode === 'cautious' || initialMode === 'autopilot' ? initialMode : 'balanced';
+  const [mode, setMode] = useState<AutonomyMode>(initialValidMode);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const modeDescriptions = {
@@ -65,7 +64,7 @@ export function AlertsView({
             reach you?
           </h1>
           <p className="text-base sm:text-lg text-ink-2 leading-relaxed m-0">
-            Pick what you're comfortable with. You can change every setting later in Automation Rules.
+            Pick what you&apos;re comfortable with. You can change every setting later in Automation Rules.
           </p>
         </div>
 
@@ -191,17 +190,19 @@ export function AlertsView({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                { id: 'cautious', name: 'Cautious', threshold: 'SCORE ≥ 80' },
-                { id: 'balanced', name: 'Balanced', threshold: 'SCORE ≥ 70 (DEFAULT)' },
-                { id: 'autopilot', name: 'Autopilot', threshold: 'SCORE ≥ 60' }
-              ].map((m) => {
+              {(
+                [
+                  { id: 'cautious' as const, name: 'Cautious', threshold: 'SCORE ≥ 80' },
+                  { id: 'balanced' as const, name: 'Balanced', threshold: 'SCORE ≥ 70 (DEFAULT)' },
+                  { id: 'autopilot' as const, name: 'Autopilot', threshold: 'SCORE ≥ 60' }
+                ] as const
+              ).map((m) => {
                 const isSelected = mode === m.id;
                 return (
                   <button
                     key={m.id}
                     type="button"
-                    onClick={() => setMode(m.id as any)}
+                    onClick={() => setMode(m.id)}
                     className={`p-4 border-[1.5px] border-border rounded-[12px] text-left flex flex-col gap-1.5 transition-all ${
                       isSelected
                         ? 'bg-white shadow-[4px_4px_0_#111111] border-border'

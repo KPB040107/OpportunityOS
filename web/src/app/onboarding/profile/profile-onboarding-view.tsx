@@ -4,31 +4,23 @@ import React, { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Upload,
-  FileText,
   CheckCircle2,
-  AlertTriangle,
-  ArrowRight,
-  ShieldCheck,
   RefreshCw,
-  FolderGit2,
   Trash2
 } from 'lucide-react';
 import type { Profile, Skill } from '@/lib/types';
 
 interface ProfileOnboardingViewProps {
   currentProfile: Profile | null;
-  currentSkills: Skill[];
+  currentSkills?: Skill[];
 }
 
 export function ProfileOnboardingView({
-  currentProfile,
-  currentSkills
+  currentProfile
 }: ProfileOnboardingViewProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +55,6 @@ export function ProfileOnboardingView({
     }
 
     setError(null);
-    setIsUploading(true);
     setIsParsing(true);
     setFileName(file.name);
 
@@ -96,27 +87,39 @@ export function ProfileOnboardingView({
       }
 
       // Populate skills
-      const rawSkills = data.draft?.skills || data.extracted_skills || [];
-      const extractedSkills = rawSkills.map((s: any) => ({
-        name: typeof s === 'string' ? s : (s.skill || s.name),
-        level: s.suggestedLevel || s.level || 'intermediate'
+      interface RawSkill {
+        name?: string;
+        skill?: string;
+        suggestedLevel?: 'beginner' | 'intermediate' | 'advanced';
+        level?: 'beginner' | 'intermediate' | 'advanced';
+      }
+      const rawSkills: Array<RawSkill | string> = data.draft?.skills || data.extracted_skills || [];
+      const extractedSkills = rawSkills.map((s) => ({
+        name: typeof s === 'string' ? s : (s.skill || s.name || ''),
+        level: (typeof s !== 'string' ? s.suggestedLevel || s.level : null) || 'intermediate'
       }));
       setSkills(extractedSkills);
 
       // Populate projects
-      const rawProjects = data.draft?.projects || data.extracted_projects || [];
-      const extractedProjects = rawProjects.map((p: any) => ({
-        title: p.title,
-        description: p.description,
+      interface RawProject {
+        title?: string;
+        description?: string;
+        technologies?: string[];
+        github_url?: string | null;
+      }
+      const rawProjects: RawProject[] = data.draft?.projects || data.extracted_projects || [];
+      const extractedProjects = rawProjects.map((p) => ({
+        title: p.title || 'Untitled Project',
+        description: p.description || '',
         technologies: p.technologies || [],
         github_url: p.github_url || null
       }));
       setProjects(extractedProjects);
-    } catch (err: any) {
-      setError(err.message || 'Error uploading resume.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error uploading resume.';
+      setError(msg);
       setDraftId(null);
     } finally {
-      setIsUploading(false);
       setIsParsing(false);
     }
   };
@@ -131,7 +134,7 @@ export function ProfileOnboardingView({
     setError(null);
 
     try {
-      const selectedFields: Record<string, any> = {};
+      const selectedFields: Record<string, string | number> = {};
       if (displayName) selectedFields.display_name = displayName;
       if (degree) selectedFields.degree = degree;
       if (branch) selectedFields.branch = branch;
@@ -164,8 +167,9 @@ export function ProfileOnboardingView({
 
       // Successfully saved profile and purged PDF -> move to Step 2: Alerts
       router.push('/onboarding/alerts');
-    } catch (err: any) {
-      setError(err.message || 'Error confirming profile.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error confirming profile.';
+      setError(msg);
       setIsConfirming(false);
     }
   };
@@ -203,7 +207,7 @@ export function ProfileOnboardingView({
           <h1 className="font-display font-extrabold text-4xl sm:text-6xl tracking-tight leading-[0.98] text-foreground m-0">
             Drop your resume.
             <br />
-            We'll fill in the rest.
+            We&apos;ll fill in the rest.
           </h1>
           <p className="text-base sm:text-lg text-ink-2 leading-relaxed m-0">
             Every detail we pull out is tagged with where it came from, so you can check it in seconds. The PDF file is permanently purged once you confirm.

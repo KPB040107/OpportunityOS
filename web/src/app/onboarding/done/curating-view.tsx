@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { SortingBoard } from '@/components/sorting-board';
 
 const PHRASES = [
@@ -15,7 +14,6 @@ const PHRASES = [
 ];
 
 export function CuratingView() {
-  const router = useRouter();
   const [progress, setProgress] = useState(0);
   const rafRef = useRef<number | null>(null);
 
@@ -81,7 +79,7 @@ export function CuratingView() {
               All Sorted
             </span>
             <h1 className="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl tracking-tight leading-none text-foreground m-0">
-              Here's your first next step.
+              Here&apos;s your first next step.
             </h1>
           </>
         )}
