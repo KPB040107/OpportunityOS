@@ -40,7 +40,7 @@ export default async function HomePage() {
       .select('id, opportunity_id, decision, match_score, confidence, explanation, eligibility_status, opportunity:opportunities(id, title, organization, deadline, type, location, trust_tier)')
       .eq('user_id', user.id)
       .eq('status', 'complete')
-      .order('match_score', { ascending: false })
+      .order('match_score', { ascending: false, nullsFirst: false })
       .limit(4),
     supabase
       .from('opportunities')
