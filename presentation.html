@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trajectory — Project Presentation</title>
+  <style>
+    :root {
+      --bg-dark: #0B0F19;
+      --card-dark: #151C2C;
+      --border-dark: #2D3748;
+      --bg-light: #F8F9FA;
+      --card-light: #FFFFFF;
+      --border-light: #E2E8F0;
+      --orange: #FF5A1F;
+      --orange-light: #FFF1EB;
+      --blue: #2563EB;
+      --green: #10B981;
+      --red: #EF4444;
+      --text-dark: #111827;
+      --text-light: #F9FAFB;
+      --text-muted: #94A3B8;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: #050811;
+      color: var(--text-light);
+      font-family: var(--font);
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Top Controls Bar */
+    header {
+      height: 48px;
+      background: rgba(11, 15, 25, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border-dark);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-badge {
+      width: 12px;
+      height: 12px;
+      background: var(--orange);
+      border-radius: 3px;
+      box-shadow: 0 0 10px rgba(255, 90, 31, 0.5);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      background: var(--card-dark);
+      color: var(--text-light);
+      border: 1px solid var(--border-dark);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: all 0.15s ease;
+    }
+
+    .btn:hover {
+      border-color: var(--orange);
+      color: var(--orange);
+    }
+
+    .btn-orange {
+      background: var(--orange);
+      color: #fff;
+      border-color: var(--orange);
+    }
+    .btn-orange:hover {
+      background: #e04b16;
+      color: #fff;
+    }
+
+    .slide-counter {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      min-width: 60px;
+      text-align: center;
+    }
+
+    /* Main Stage */
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+    }
+
+    .viewport {
+      width: 100%;
+      max-width: 1200px;
+      aspect-ratio: 16 / 9;
+      max-height: calc(100vh - 100px);
+      position: relative;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border-dark);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      padding: 44px 56px;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow-y: auto;
+    }
+
+    .slide.active {
+      display: flex;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.995); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Dark Slide Theme */
+    .slide.dark {
+      background: var(--bg-dark);
+      color: var(--text-light);
+    }
+
+    /* Light Slide Theme */
+    .slide.light {
+      background: var(--bg-light);
+      color: var(--text-dark);
+    }
+
+    /* Typography */
+    .kicker {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--orange);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .slide-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      margin-bottom: 24px;
+      line-height: 1.15;
+    }
+
+    .slide.dark .slide-title { color: #fff; }
+    .slide.light .slide-title { color: var(--text-dark); }
+
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .slide-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+      padding-top: 14px;
+      font-size: 11px;
+      color: var(--text-muted);
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+    }
+
+    /* Reusable Grid & Layout Components */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+
+    .card {
+      border-radius: 10px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slide.dark .card {
+      background: var(--card-dark);
+      border: 1px solid var(--border-dark);
+    }
+
+    .slide.light .card {
+      background: var(--card-light);
+      border: 1px solid var(--border-light);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-desc {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .slide.dark .card-desc { color: #CBD5E1; }
+    .slide.light .card-desc { color: #4B5563; }
+
+    /* Badge Components */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      letter-spacing: 0.5px;
+    }
+
+    .badge-orange { background: rgba(255, 90, 31, 0.15); color: var(--orange); border: 1px solid var(--orange); }
+    .badge-green { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid var(--green); }
+    .badge-blue { background: rgba(37, 99, 235, 0.15); color: var(--blue); border: 1px solid var(--blue); }
+    .badge-gray { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid var(--text-muted); }
+
+    /* Pipeline Flow */
+    .pipeline-step {
+      text-align: center;
+      padding: 16px 12px;
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--orange);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 12px;
+      margin: 0 auto 10px;
+    }
+
+    /* Progress bar at bottom */
+    .progress-bar {
+      height: 3px;
+      background: var(--border-dark);
+      width: 100%;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--orange);
+      transition: width 0.2s ease;
+      width: 4.54%;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Controls Bar -->
+  <header>
+    <div class="brand">
+      <div class="brand-badge"></div>
+      <span>Trajectory</span>
+      <span style="font-size: 12px; color: var(--text-muted); font-weight: normal; margin-left: 8px;">Judges Round Presentation</span>
+    </div>
+    <div class="controls">
+      <button class="btn" onclick="prevSlide()" title="Previous slide (Left Arrow)">← Prev</button>
+      <div class="slide-counter" id="counter">1 / 22</div>
+      <button class="btn" onclick="nextSlide()" title="Next slide (Right Arrow or Space)">Next →</button>
+      <button class="btn" onclick="toggleFullscreen()" title="Toggle Fullscreen (F)">⛶ Fullscreen</button>
+      <a href="/Trajectory-Presentation.pptx" download class="btn btn-orange" title="Download PowerPoint (.pptx) file">⬇ Download .PPTX</a>
+    </div>
+  </header>
+
+  <!-- Main Viewport -->
+  <main>
+    <div class="viewport" id="viewport">
+
+      <!-- SLIDE 1: Title -->
+      <div class="slide dark active" data-slide="1">
+        <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+          <div style="margin-bottom: 20px;">
+            <span class="badge badge-orange">AUTONOMOUS STUDENT INTELLIGENCE SYSTEM</span>
+          </div>
+          <h1 style="font-size: 64px; font-weight: 900; letter-spacing: -2px; line-height: 0.95; margin-bottom: 18px; color: #fff;">
+            Trajectory
+          </h1>
+          <p style="font-size: 22px; color: #E2E8F0; margin-bottom: 12px; font-weight: 500;">
+            The autonomous student opportunity intelligence and action system
+          </p>
+          <p style="font-size: 16px; color: var(--orange); font-weight: 700; margin-bottom: 36px; font-family: var(--font-mono);">
+            AI extracts grounded evidence. Deterministic code decides. n8n orchestrates.
+          </p>
+          
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div class="badge badge-gray" style="padding: 8px 14px; font-size: 12px;">01 DISCOVER</div>
+            <span style="color: var(--orange); align-self: center;">→</span>
+            <div class="badge badge-gray" style="padding: 8px 14px; font-size: 12px;">02 UNDERSTAND</div>
+            <span style="color: var(--orange); align-self: center;">→</span>
+            <div class="badge badge-gray" style="padding: 8px 14px; font-size: 12px;">03 EVALUATE</div>
+            <span style="color: var(--orange); align-self: center;">→</span>
+            <div class="badge badge-gray" style="padding: 8px 14px; font-size: 12px;">04 DECIDE</div>
+            <span style="color: var(--orange); align-self: center;">→</span>
+            <div class="badge badge-gray" style="padding: 8px 14px; font-size: 12px;">05 ACT</div>
+            <span style="color: var(--orange); align-self: center;">→</span>
+            <div class="badge badge-gray" style="padding: 8px 14px; font-size: 12px;">06 FOLLOW UP</div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Judges Round Presentation</span>
+          <span>Internships  ·  Jobs  ·  Hackathons</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 2: The Problem We Solve -->
+      <div class="slide light" data-slide="2">
+        <div>
+          <div class="kicker">CHALLENGE & SOLUTION</div>
+          <h2 class="slide-title">The Problem We Solve</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-2" style="margin-bottom: 12px;">
+            <div style="text-align: center; font-weight: 800; font-size: 12px; color: #64748B; padding: 6px; background: #E2E8F0; border-radius: 6px;">
+              TODAY (MANUAL OVERLOAD)
+            </div>
+            <div style="text-align: center; font-weight: 800; font-size: 12px; color: var(--orange); padding: 6px; background: var(--orange-light); border-radius: 6px;">
+              WITH TRAJECTORY (AUTONOMOUS)
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-title">🔍 Scattered Sources</div>
+                <div class="card-desc">Company boards, hackathon sites, email alerts, and web pages—all checked by hand every day.</div>
+              </div>
+              <div class="card" style="border-left: 3px solid var(--orange);">
+                <div class="card-title" style="color: var(--orange);">✔ One Profile, One Pipeline</div>
+                <div class="card-desc">Feeds, forwarded email alerts, and browser captures flow into one unified evaluation loop.</div>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-title">📋 Manual Eligibility Checks</div>
+                <div class="card-desc">Every listing re-read for CGPA, branch, graduation year, region, and buried fine print.</div>
+              </div>
+              <div class="card" style="border-left: 3px solid var(--orange);">
+                <div class="card-title" style="color: var(--orange);">✔ Evidence-Backed Decisions</div>
+                <div class="card-desc">AI extracts literal quoted facts; deterministic code checks eligibility, scores, and confidence.</div>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-title">⚠️ Risky & Fake Listings</div>
+                <div class="card-desc">Fee-charging traps and suspicious postings look identical to authentic career opportunities.</div>
+              </div>
+              <div class="card" style="border-left: 3px solid var(--orange);">
+                <div class="card-title" style="color: var(--orange);">✔ Safe Next Actions</div>
+                <div class="card-desc">Track, notify, calendar, or ask. Trajectory NEVER auto-submits applications or impersonates students.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Trajectory Architecture</span>
+          <span>Slide 2 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 3: One Loop: Discover to Follow-Up -->
+      <div class="slide light" data-slide="3">
+        <div>
+          <div class="kicker">END-TO-END PIPELINE</div>
+          <h2 class="slide-title">One Loop: Discover to Follow-Up</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-6" style="margin-bottom: 24px;">
+            <div class="card pipeline-step">
+              <div class="step-num">1</div>
+              <div style="font-weight: 800; font-size: 13px; margin-bottom: 4px;">Discover</div>
+              <div style="font-size: 10px; color: #64748B; margin-bottom: 8px;">Public feeds, email, capture</div>
+              <span class="badge badge-gray">WF 08 | 01</span>
+            </div>
+            <div class="card pipeline-step">
+              <div class="step-num">2</div>
+              <div style="font-weight: 800; font-size: 13px; margin-bottom: 4px;">Understand</div>
+              <div style="font-size: 10px; color: #64748B; margin-bottom: 8px;">Safe fetch, AI quoted facts</div>
+              <span class="badge badge-gray">WF 02</span>
+            </div>
+            <div class="card pipeline-step">
+              <div class="step-num">3</div>
+              <div style="font-weight: 800; font-size: 13px; margin-bottom: 4px;">Evaluate</div>
+              <div style="font-size: 10px; color: #64748B; margin-bottom: 8px;">0–100 score, confidence</div>
+              <span class="badge badge-gray">WF 03</span>
+            </div>
+            <div class="card pipeline-step">
+              <div class="step-num">4</div>
+              <div style="font-weight: 800; font-size: 13px; margin-bottom: 4px;">Decide</div>
+              <div style="font-size: 10px; color: #64748B; margin-bottom: 8px;">ACT, ASK, IGNORE policy</div>
+              <span class="badge badge-gray">WF 03</span>
+            </div>
+            <div class="card pipeline-step">
+              <div class="step-num">5</div>
+              <div style="font-weight: 800; font-size: 13px; margin-bottom: 4px;">Act</div>
+              <div style="font-size: 10px; color: #64748B; margin-bottom: 8px;">Track, calendar, approval</div>
+              <span class="badge badge-gray">WF 04 | 05</span>
+            </div>
+            <div class="card pipeline-step">
+              <div class="step-num">6</div>
+              <div style="font-weight: 800; font-size: 13px; margin-bottom: 4px;">Follow up</div>
+              <div style="font-size: 10px; color: #64748B; margin-bottom: 8px;">Reminders & digests</div>
+              <span class="badge badge-gray">WF 06 | 07</span>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card" style="border: 1px solid var(--blue); background: #F8FAFC;">
+              <div class="card-title" style="color: var(--blue);">🔁 Feedback Loop</div>
+              <div class="card-desc">A profile edit or a newly answered clarification question instantly re-evaluates all affected opportunities. Stale runs are fenced, and verified AI evidence is cached per user.</div>
+            </div>
+            <div class="card" style="border: 1px solid var(--orange); background: #FFF7ED;">
+              <div class="card-title" style="color: var(--orange);">🛡️ Autonomy Boundary</div>
+              <div class="card-desc">Trajectory never applies to an employer on a student's behalf, never invents a deadline, and never shares student profile data externally.</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Core Flow Architecture</span>
+          <span>Slide 3 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 4: System Architecture -->
+      <div class="slide dark" data-slide="4">
+        <div>
+          <div class="kicker">TECHNICAL TOPOLOGY</div>
+          <h2 class="slide-title">System Architecture</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-4" style="margin-bottom: 20px;">
+            <div class="card">
+              <div class="badge badge-orange" style="align-self: flex-start;">INPUT LAYER</div>
+              <div class="card-title" style="font-size: 13px;">CAPTURE TOOLS</div>
+              <div class="card-desc" style="font-size: 11px;">
+                • Chrome Extension (MV3)<br>
+                • One-click Bookmarklet<br>
+                • Pasted Text / URL<br>
+                • Resume PDF Upload<br>
+                • Forwarded Email (IMAP)<br>
+                • Public Feeds (Lever, Greenhouse, Ashby, Devpost, JSearch)
+              </div>
+            </div>
+            <div class="card">
+              <div class="badge badge-blue" style="align-self: flex-start;">USER WORKSPACE</div>
+              <div class="card-title" style="font-size: 13px;">NEXT.JS 16 WEB APP</div>
+              <div class="card-desc" style="font-size: 11px;">
+                • React 19 & TypeScript 5<br>
+                • Tailwind CSS 4 & Radix UI<br>
+                • SSR Session Auth Guards<br>
+                • Route Handlers & APIs<br>
+                • Interactive Sorting Board<br>
+                • 7-Stage Application Kanban
+              </div>
+            </div>
+            <div class="card">
+              <div class="badge badge-green" style="align-self: flex-start;">EXECUTION ENGINE</div>
+              <div class="card-title" style="font-size: 13px;">N8N ORCHESTRATOR</div>
+              <div class="card-desc" style="font-size: 11px;">
+                • Self-hosted in Docker<br>
+                • 15 Workflows & 168 Nodes<br>
+                • Webhook & Cron Triggers<br>
+                • Cryptographic Wait Nodes<br>
+                • Durable Queue Polling<br>
+                • Zero-loss Crash Recovery
+              </div>
+            </div>
+            <div class="card">
+              <div class="badge badge-gray" style="align-self: flex-start;">ISOLATED STORAGE</div>
+              <div class="card-title" style="font-size: 13px;">SUPABASE & DATA</div>
+              <div class="card-desc" style="font-size: 11px;">
+                • PostgreSQL with Strict RLS<br>
+                • Private Worker Schemas<br>
+                • PL/pgSQL Security Definers<br>
+                • Realtime Channels<br>
+                • Private Storage (Resumes)<br>
+                • 70 Audited Migrations
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="background: rgba(255, 90, 31, 0.08); border: 1px solid var(--orange);">
+            <div style="font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 4px;">
+              AI ENGINES &amp; INTEGRATIONS: Groq gpt-oss-120b (Primary) · Gemini 3.5 Flash Lite (Fallback) · Google Calendar API (OAuth2) · Gmail SMTP / IMAP
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted);">
+              Deployment: Next.js on localhost · Pinned Docker n8n container · Cloud Supabase PostgreSQL · Webhook-only Cloudflare gateway
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Enterprise Topology</span>
+          <span>Slide 4 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 5: Technology Stack -->
+      <div class="slide light" data-slide="5">
+        <div>
+          <div class="kicker">MODERN TOOLCHAIN</div>
+          <h2 class="slide-title">Technology Stack</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-3" style="gap: 16px;">
+            <div class="card">
+              <div class="badge badge-orange" style="align-self: flex-start;">FRONTEND</div>
+              <div class="card-title">Next.js 16 (App Router)</div>
+              <div class="card-desc">React 19, TypeScript 5, Tailwind CSS 4, Radix UI primitives, Zod schema validation, Lucide icons.</div>
+            </div>
+            <div class="card">
+              <div class="badge badge-blue" style="align-self: flex-start;">DATABASE &amp; AUTH</div>
+              <div class="card-title">Supabase PostgreSQL</div>
+              <div class="card-desc">Auth (SSR sessions), Row-Level Security, PL/pgSQL RPCs, Realtime channels, 70 migrations, 21 SQL tests.</div>
+            </div>
+            <div class="card">
+              <div class="badge badge-green" style="align-self: flex-start;">ORCHESTRATION</div>
+              <div class="card-title">Self-Hosted n8n (Docker)</div>
+              <div class="card-desc">15 workflows, 168 nodes. Webhook listeners, Cron schedules, Wait nodes, and pure JavaScript Code nodes.</div>
+            </div>
+            <div class="card">
+              <div class="badge badge-orange" style="align-self: flex-start;">AI INTELLIGENCE</div>
+              <div class="card-title">Groq + Gemini 3.5 Flash Lite</div>
+              <div class="card-desc">Groq gpt-oss-120b primary with Gemini fallback. LLM chain with forced JSON schemas and zero-hallucination quote gates.</div>
+            </div>
+            <div class="card">
+              <div class="badge badge-blue" style="align-self: flex-start;">INTEGRATIONS</div>
+              <div class="card-title">Calendar &amp; Mail Protocols</div>
+              <div class="card-desc">Lever, Greenhouse, Ashby, Devpost, JSearch India. Google Calendar OAuth2, Gmail SMTP outgoing, and IMAP incoming.</div>
+            </div>
+            <div class="card">
+              <div class="badge badge-green" style="align-self: flex-start;">TESTING &amp; TOOLING</div>
+              <div class="card-title">Verification Harness</div>
+              <div class="card-desc">Chrome Extension (MV3), Bookmarklet, unpdf in-process parser, 246 Node contract tests, Cloudflare secure tunnel.</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Production Specifications</span>
+          <span>Slide 5 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 6: Security and Data Isolation -->
+      <div class="slide dark" data-slide="6">
+        <div>
+          <div class="kicker">DEFENSE IN DEPTH</div>
+          <h2 class="slide-title">Security and Data Isolation</h2>
+        </div>
+        <div class="slide-body">
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="card" style="flex-direction: row; align-items: center; gap: 16px;">
+              <div class="step-num" style="margin: 0;">1</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Edge Hardening</div>
+                <div style="font-size: 11px; color: #CBD5E1;">Public Cloudflare tunnel exposes webhooks only. Header authentication enforced; root and settings paths return 404.</div>
+              </div>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; gap: 16px;">
+              <div class="step-num" style="margin: 0;">2</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Identity Verification</div>
+                <div style="font-size: 11px; color: #CBD5E1;">Resource owner always comes from verified Supabase session cookies, NEVER trusted from request bodies.</div>
+              </div>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; gap: 16px;">
+              <div class="step-num" style="margin: 0;">3</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Data Isolation</div>
+                <div style="font-size: 11px; color: #CBD5E1;">Row-Level Security (RLS) on all public tables; owner-scoped security definer RPCs; privileged worker schema stays private.</div>
+              </div>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; gap: 16px;">
+              <div class="step-num" style="margin: 0;">4</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Source Fetch Safety</div>
+                <div style="font-size: 11px; color: #CBD5E1;">SSRF-fenced reader: DNS resolved and pinned; private and loopback IP ranges blocked; robots.txt strictly honored.</div>
+              </div>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; gap: 16px;">
+              <div class="step-num" style="margin: 0;">5</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Action Safety Boundaries</div>
+                <div style="font-size: 11px; color: #CBD5E1;">Separate, revocable consents for email and calendar; idempotent queue execution ensures actions are never duplicated.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Five Layers of Protection</span>
+          <span>Slide 6 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 7: AI Proposes, Code Decides -->
+      <div class="slide light" data-slide="7">
+        <div>
+          <div class="kicker">CORE PHILOSOPHY</div>
+          <h2 class="slide-title">AI Proposes, Code Decides</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-4" style="margin-bottom: 20px;">
+            <div class="card" style="text-align: center;">
+              <div style="font-weight: 800; font-size: 13px;">Messy Input</div>
+              <div style="font-size: 11px; color: #64748B;">Job pages, alerts, resume</div>
+            </div>
+            <div class="card" style="text-align: center;">
+              <div style="font-weight: 800; font-size: 13px;">AI Proposes</div>
+              <div style="font-size: 11px; color: #64748B;">Literal quoted facts</div>
+            </div>
+            <div class="card" style="text-align: center;">
+              <div style="font-weight: 800; font-size: 13px;">Validation Gate</div>
+              <div style="font-size: 11px; color: #64748B;">Exact text match check</div>
+            </div>
+            <div class="card" style="text-align: center; border: 2px solid var(--orange); background: var(--orange-light);">
+              <div style="font-weight: 800; font-size: 13px; color: var(--orange);">Code Decides</div>
+              <div style="font-size: 11px; color: #64748B;">ACT / ASK / IGNORE</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card" style="border: 1px solid var(--green);">
+              <div class="card-title" style="color: var(--green);">✔ WHAT THE AI MODEL MAY DO</div>
+              <div class="card-desc">
+                • Extract title, organization, deadline, and eligibility.<br>
+                • Provide verbatim quotes for every extracted fact.<br>
+                • Propose matching evidence quoting both listing and profile.<br>
+                • Parse messy markdown and text; nothing more.<br>
+                • Seamlessly failover from Groq to Gemini Flash Lite.
+              </div>
+            </div>
+            <div class="card" style="border: 1px solid var(--red);">
+              <div class="card-title" style="color: var(--red);">✖ WHAT THE MODEL MAY NEVER DO</div>
+              <div class="card-desc">
+                • Return policy fields or declare eligibility status.<br>
+                • Call external tools, write to DB, or execute side-effects.<br>
+                • See student credentials, API keys, or private nonces.<br>
+                • Invent a deadline: missing facts stay NULL.<br>
+                • Bypass the quota reservation or budget ceilings.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Zero-Hallucination Guarantees</span>
+          <span>Slide 7 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 8: Grounded Extraction Pipeline -->
+      <div class="slide dark" data-slide="8">
+        <div>
+          <div class="kicker">EXTRACTION PROTOCOL</div>
+          <h2 class="slide-title">Grounded Extraction Pipeline</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-2" style="gap: 24px;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div class="card" style="padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 700; color: #fff;"><span style="color: var(--orange);">01.</span> Safe Source Read</div>
+                <div style="font-size: 10.5px; color: #CBD5E1;">Public static pages only; DNS pinned, redirects checked, robots.txt honored.</div>
+              </div>
+              <div class="card" style="padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 700; color: #fff;"><span style="color: var(--orange);">02.</span> Hash &amp; Dedupe</div>
+                <div style="font-size: 10.5px; color: #CBD5E1;">Prepared text hashed before AI call; cached extractions reused per user.</div>
+              </div>
+              <div class="card" style="padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 700; color: #fff;"><span style="color: var(--orange);">03.</span> Bounded Chunking</div>
+                <div style="font-size: 10.5px; color: #CBD5E1;">Listings over 20k characters split by headings; merged without silent truncation.</div>
+              </div>
+              <div class="card" style="padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 700; color: #fff;"><span style="color: var(--orange);">04.</span> Schema Extraction</div>
+                <div style="font-size: 10.5px; color: #CBD5E1;">Groq/Gemini JSON-schema output; strictly bounded to 5 items max; no tools.</div>
+              </div>
+              <div class="card" style="padding: 10px 14px;">
+                <div style="font-size: 12px; font-weight: 700; color: #fff;"><span style="color: var(--orange);">05.</span> Validate Evidence</div>
+                <div style="font-size: 10.5px; color: #CBD5E1;">Every fact verified with literal quote; dates, timezones, and ranges checked.</div>
+              </div>
+            </div>
+
+            <div class="card" style="border: 1px solid var(--orange);">
+              <div class="card-title" style="color: var(--orange);">FOUR REQUIREMENT CLASSES</div>
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+                <div>
+                  <div style="font-weight: 700; font-size: 12px; color: #fff;">1. mandatory_eligibility</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Hard constraints (degree, branch, CGPA, graduation year).</div>
+                </div>
+                <div>
+                  <div style="font-weight: 700; font-size: 12px; color: #fff;">2. required_skill</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Core technical competencies essential for the role.</div>
+                </div>
+                <div>
+                  <div style="font-weight: 700; font-size: 12px; color: #fff;">3. preferred_skill</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Bonus skills; NEVER cause a hard eligibility failure.</div>
+                </div>
+                <div>
+                  <div style="font-weight: 700; font-size: 12px; color: #fff;">4. other_requirement</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">Benefits, visa rules, or non-technical requirements.</div>
+                </div>
+              </div>
+              <div style="margin-top: 14px; font-size: 10.5px; color: var(--orange); font-style: italic;">
+                Rule: Unstated criteria are marked NOT_STATED, never failed.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Evidence Provenance</span>
+          <span>Slide 8 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 9: Deterministic Decision Engine -->
+      <div class="slide light" data-slide="9">
+        <div>
+          <div class="kicker">DECISION POLICY</div>
+          <h2 class="slide-title">Deterministic Decision Engine</h2>
+        </div>
+        <div class="slide-body">
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px;">
+            <div class="card" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 16px;">
+              <span style="font-size: 12px; font-weight: 600;">1. Deadline already expired</span>
+              <span class="badge badge-gray" style="background: #FEF2F2; color: var(--red); border-color: var(--red);">IGNORE</span>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 16px;">
+              <span style="font-size: 12px; font-weight: 600;">2. A stated mandatory requirement fails</span>
+              <span class="badge badge-gray" style="background: #FEF2F2; color: var(--red); border-color: var(--red);">IGNORE</span>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 16px;">
+              <span style="font-size: 12px; font-weight: 600;">3. Eligibility is UNKNOWN (missing student fact)</span>
+              <span class="badge badge-blue">ASK</span>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 16px;">
+              <span style="font-size: 12px; font-weight: 600;">4. Eligible, but match score is below 40</span>
+              <span class="badge badge-gray" style="background: #FEF2F2; color: var(--red); border-color: var(--red);">IGNORE</span>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 16px;">
+              <span style="font-size: 12px; font-weight: 600;">5. Score and confidence meet active autonomy mode threshold</span>
+              <span class="badge badge-green">ACT</span>
+            </div>
+            <div class="card" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 16px;">
+              <span style="font-size: 12px; font-weight: 600;">6. Otherwise (borderline match or confidence)</span>
+              <span class="badge badge-blue">ASK</span>
+            </div>
+          </div>
+
+          <div class="card" style="background: #F1F5F9; border: 1px solid var(--orange);">
+            <div style="font-size: 10px; font-weight: 800; color: var(--orange); font-family: var(--font-mono); margin-bottom: 4px;">
+              MATHEMATICAL CONFIDENCE FORMULA
+            </div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-dark); font-family: var(--font-mono);">
+              Confidence = min( model_confidence,  0.30 × completeness + 0.30 × verified_evidence + 0.25 × clarity + 0.15 × model_confidence )
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>First Match Wins Hierarchy</span>
+          <span>Slide 9 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 10: Autonomy Modes and Outcomes -->
+      <div class="slide dark" data-slide="10">
+        <div>
+          <div class="kicker">STUDENT AUTONOMY</div>
+          <h2 class="slide-title">Autonomy Modes and Outcomes</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-3" style="margin-bottom: 20px;">
+            <div class="card">
+              <div class="card-title">Cautious</div>
+              <div style="font-size: 12px; color: var(--orange); font-weight: 700;">Score 80+ · Conf 0.85+</div>
+              <div class="card-desc" style="font-size: 11px;">High barrier. Ideal for final-round candidates seeking precise matches.</div>
+            </div>
+            <div class="card" style="border: 2px solid var(--orange);">
+              <div class="card-title" style="color: var(--orange);">Balanced (Default)</div>
+              <div style="font-size: 12px; color: var(--orange); font-weight: 700;">Score 70+ · Conf 0.75+</div>
+              <div class="card-desc" style="font-size: 11px;">Standard operating mode. Balanced precision and discovery throughput.</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Autopilot</div>
+              <div style="font-size: 12px; color: var(--orange); font-weight: 700;">Score 60+ · Conf 0.65+</div>
+              <div class="card-desc" style="font-size: 11px;">Broadest net. Automatically handles tracking for all viable opportunities.</div>
+            </div>
+          </div>
+
+          <div class="grid-3">
+            <div class="card" style="border-left: 3px solid var(--green);">
+              <div style="font-size: 18px; font-weight: 900; color: var(--green);">ACT</div>
+              <div style="font-weight: 700; font-size: 12px; color: #fff;">Eligible &amp; Confident</div>
+              <div class="card-desc" style="font-size: 11px;">Queues permitted low-risk actions: tracker task, notification, calendar event. Never submits application.</div>
+            </div>
+            <div class="card" style="border-left: 3px solid var(--blue);">
+              <div style="font-size: 18px; font-weight: 900; color: var(--blue);">ASK</div>
+              <div style="font-weight: 700; font-size: 12px; color: #fff;">Missing Facts or Borderline</div>
+              <div class="card-desc" style="font-size: 11px;">Enters the Approval Center. Asks student once; explicit approval immediately resumes execution.</div>
+            </div>
+            <div class="card" style="border-left: 3px solid var(--text-muted);">
+              <div style="font-size: 18px; font-weight: 900; color: var(--text-muted);">IGNORE</div>
+              <div style="font-weight: 700; font-size: 12px; color: #fff;">Ineligible or Expired</div>
+              <div class="card-desc" style="font-size: 11px;">Archived with full transparency. Exact disqualification quotes visible to the student.</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Three-Valued Logic (TRUE / FALSE / UNKNOWN)</span>
+          <span>Slide 10 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 11: 15 n8n Workflows at a Glance -->
+      <div class="slide light" data-slide="11">
+        <div>
+          <div class="kicker">ORCHESTRATION TOPOLOGY</div>
+          <h2 class="slide-title">15 n8n Workflows at a Glance</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-4" style="margin-bottom: 18px;">
+            <div class="card" style="text-align: center;">
+              <div style="font-size: 24px; font-weight: 900; color: var(--orange);">15</div>
+              <div style="font-size: 10px; font-weight: 700; color: #64748B;">TOTAL WORKFLOWS</div>
+            </div>
+            <div class="card" style="text-align: center;">
+              <div style="font-size: 24px; font-weight: 900; color: var(--blue);">10</div>
+              <div style="font-size: 10px; font-weight: 700; color: #64748B;">PIPELINE (01–10)</div>
+            </div>
+            <div class="card" style="text-align: center;">
+              <div style="font-size: 24px; font-weight: 900; color: var(--green);">5</div>
+              <div style="font-size: 10px; font-weight: 700; color: #64748B;">SETUP CHECKS (00)</div>
+            </div>
+            <div class="card" style="text-align: center;">
+              <div style="font-size: 24px; font-weight: 900; color: var(--text-dark);">168</div>
+              <div style="font-size: 10px; font-weight: 700; color: #64748B;">TOTAL NODES</div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div class="card" style="flex-direction: row; justify-content: space-between; padding: 8px 14px; font-size: 11px;">
+              <span style="font-weight: 700; color: var(--orange); min-width: 120px;">01 Ingest</span>
+              <span style="flex: 1; color: var(--text-dark);">Webhook &amp; IMAP receiver, session validation, atomic raw store</span>
+              <span class="badge badge-gray">Webhook / IMAP</span>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; padding: 8px 14px; font-size: 11px;">
+              <span style="font-weight: 700; color: var(--orange); min-width: 120px;">02 Understand</span>
+              <span style="flex: 1; color: var(--text-dark);">DNS-pinned fetch, text hashing, Groq/Gemini fact &amp; quote extraction</span>
+              <span class="badge badge-gray">Call / Queue Poll</span>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; padding: 8px 14px; font-size: 11px;">
+              <span style="font-weight: 700; color: var(--orange); min-width: 120px;">03 Evaluate</span>
+              <span style="flex: 1; color: var(--text-dark);">Eligibility in code, AI quote matching, deterministic scoring &amp; routing</span>
+              <span class="badge badge-gray">Call / Queue Poll</span>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; padding: 8px 14px; font-size: 11px;">
+              <span style="font-weight: 700; color: var(--orange); min-width: 120px;">04 Act</span>
+              <span style="flex: 1; color: var(--text-dark);">Permitted low-risk execution: tracker, calendar reconciliation, SMTP</span>
+              <span class="badge badge-gray">Call / Recovery Poll</span>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; padding: 8px 14px; font-size: 11px;">
+              <span style="font-weight: 700; color: var(--orange); min-width: 120px;">05 Ask &amp; Approve</span>
+              <span style="flex: 1; color: var(--text-dark);">Private Wait node; resumes only upon student approval with private nonce</span>
+              <span class="badge badge-gray">Wait (48h ceiling)</span>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Chained with Execute Workflow &amp; Supabase state</span>
+          <span>Slide 11 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 12: Workflow 01: Ingest -->
+      <div class="slide dark" data-slide="12">
+        <div>
+          <div class="kicker">FRONT DOOR OF THE PIPELINE</div>
+          <h2 class="slide-title">Workflow 01: Ingest</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-2" style="gap: 24px;">
+            <div class="card" style="border: 1px solid var(--orange);">
+              <div class="card-title" style="color: var(--orange);">WEBHOOK POST (Web &amp; Extension)</div>
+              <div class="card-desc" style="font-size: 11.5px; line-height: 1.6;">
+                1. Webhook POST received from web app or extension.<br>
+                2. Payload validated against strict Zod intake schema.<br>
+                3. User session verified directly with Supabase Auth.<br>
+                4. Atomic raw item created in public.raw_items.<br>
+                5. Returns confirmed HTTP 201 response with queued ID.<br>
+                6. Triggers 02 Understand asynchronously.
+              </div>
+            </div>
+            <div class="card" style="border: 1px solid var(--blue);">
+              <div class="card-title" style="color: var(--blue);">IMAP (Forwarded Email Alerts)</div>
+              <div class="card-desc" style="font-size: 11.5px; line-height: 1.6;">
+                1. IMAP trigger polls dedicated agent mailbox.<br>
+                2. Recipient alias token validated before AI parsing.<br>
+                3. Email body parsed into discrete opportunity items.<br>
+                4. Owner identity resolved via email_alias_token in DB.<br>
+                5. Discovered raw text stored with attributed provenance.<br>
+                6. Enqueued for evaluation in 02 Understand.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Owner verified from session, never request body</span>
+          <span>Slide 12 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 13: Workflow 02: Understand -->
+      <div class="slide light" data-slide="13">
+        <div>
+          <div class="kicker">FACT EXTRACTION</div>
+          <h2 class="slide-title">Workflow 02: Understand</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-2" style="gap: 16px;">
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">1. Atomic Lease Claim</div>
+              <div class="card-desc">Claims one queued submission with a 10-minute lease token to prevent parallel race conditions.</div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">2. SSRF-Fenced Fetch</div>
+              <div class="card-desc">Safely reads static web page; DNS pinned, internal IP ranges blocked, robots.txt honored.</div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">3. Text Hash &amp; Cache</div>
+              <div class="card-desc">Source markdown is hashed; identical opportunities across multiple users reuse cached facts (0 AI tokens).</div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">4. AI Budget Reservation</div>
+              <div class="card-desc">Daily quota reserved before calling Groq gpt-oss-120b with Gemini 3.5 Flash Lite fallback.</div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">5. Schema Extraction</div>
+              <div class="card-desc">Model extracts title, organization, deadline, and eligibility criteria with literal source quotes.</div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">6. Quote Validation Gate</div>
+              <div class="card-desc">Code verifies quotes match source text 100%. Missing facts stay NULL, never guessed.</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Turns raw submissions into verified facts</span>
+          <span>Slide 13 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 14: Workflow 03: Evaluate and Decide -->
+      <div class="slide dark" data-slide="14">
+        <div>
+          <div class="kicker">DECISION CONTRACT</div>
+          <h2 class="slide-title">Workflow 03: Evaluate and Decide</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-3" style="gap: 20px;">
+            <div class="card" style="border-top: 3px solid var(--orange);">
+              <div class="card-title" style="color: var(--orange);">HARD ELIGIBILITY</div>
+              <div class="card-desc">
+                Deterministic code checks student profile (degree, branch, CGPA, graduation year) against mandatory requirements.<br><br>
+                • Mandatory fail → IGNORE<br>
+                • Mandatory unstated → ASK
+              </div>
+            </div>
+            <div class="card" style="border-top: 3px solid var(--blue);">
+              <div class="card-title" style="color: var(--blue);">DOUBLE-SIDED QUOTES</div>
+              <div class="card-desc">
+                AI proposes semantic match evidence. Code validates quotes exist on BOTH sides: verbatim quote from job listing AND verbatim quote from student profile.<br><br>
+                Zero hallucinated fit claims.
+              </div>
+            </div>
+            <div class="card" style="border-top: 3px solid var(--green);">
+              <div class="card-title" style="color: var(--green);">DETERMINISTIC ROUTING</div>
+              <div class="card-desc">
+                Computes composite score and mathematical confidence.<br><br>
+                • ACT: Starts 04 Act<br>
+                • ASK: Starts 05 Ask &amp; Approve<br>
+                • IGNORE: Saved with reasons
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Code, never the model, decides</span>
+          <span>Slide 14 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 15: Workflow 04: Act -->
+      <div class="slide light" data-slide="15">
+        <div>
+          <div class="kicker">PERMITTED LOW-RISK EXECUTION</div>
+          <h2 class="slide-title">Workflow 04: Act</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-2" style="gap: 16px; margin-bottom: 20px;">
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">Tracker Tasks</div>
+              <div class="card-desc">Adds opportunity to student application pipeline (public.applications) with status "To Apply".</div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">Google Calendar Events</div>
+              <div class="card-desc">Reconciles existing event IDs before creation. Updates time if shifted; never creates duplicate calendar spam.</div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">Offline .ics Download Link</div>
+              <div class="card-desc">For students without Google Calendar OAuth, generates signed .ics files for Apple Calendar / Outlook.</div>
+            </div>
+            <div class="card">
+              <div class="card-title" style="color: var(--orange);">Agent Email Notifications</div>
+              <div class="card-desc">Sends clean notifications from the student's personal agent mailbox. No blind retries on uncertain socket states.</div>
+            </div>
+          </div>
+          <div class="card" style="background: var(--orange-light); border: 1px solid var(--orange); text-align: center;">
+            <div style="font-weight: 800; font-size: 12px; color: var(--orange);">
+              GUARANTEE: Workflow 04 NEVER auto-submits an application or impersonates students.
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Durable execution queue with idempotent keys</span>
+          <span>Slide 15 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 16: Workflow 05: Ask and Approve -->
+      <div class="slide dark" data-slide="16">
+        <div>
+          <div class="kicker">HUMAN-IN-THE-LOOP CONTROL</div>
+          <h2 class="slide-title">Workflow 05: Ask and Approve</h2>
+        </div>
+        <div class="slide-body">
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="card" style="flex-direction: row; gap: 16px; align-items: center;">
+              <div class="step-num" style="margin: 0;">1</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Private n8n Wait Node</div>
+                <div style="font-size: 11px; color: #CBD5E1;">Execution halts safely in a private Wait node. No background polling or busy loops.</div>
+              </div>
+            </div>
+            <div class="card" style="flex-direction: row; gap: 16px; align-items: center;">
+              <div class="step-num" style="margin: 0;">2</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Approval Center Review</div>
+                <div style="font-size: 11px; color: #CBD5E1;">Opportunity displays in the student's authenticated Approval Center with exact missing facts or borderline scores.</div>
+              </div>
+            </div>
+            <div class="card" style="flex-direction: row; gap: 16px; align-items: center;">
+              <div class="step-num" style="margin: 0;">3</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Cryptographic Resume Nonce</div>
+                <div style="font-size: 11px; color: #CBD5E1;">Resuming requires a verified server-side one-time nonce. Replay attacks and unauthorized calls are rejected.</div>
+              </div>
+            </div>
+            <div class="card" style="flex-direction: row; gap: 16px; align-items: center;">
+              <div class="step-num" style="margin: 0;">4</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 700; font-size: 13px; color: #fff;">Immutable Expiration</div>
+                <div style="font-size: 11px; color: #CBD5E1;">Approval strictly expires at 48 hours or when the job deadline passes, whichever is earlier.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Stale revisions cannot authorize</span>
+          <span>Slide 16 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 17: Workflows 06 and 07: Autopilot and Errors -->
+      <div class="slide light" data-slide="17">
+        <div>
+          <div class="kicker">BACKGROUND STABILITY</div>
+          <h2 class="slide-title">Workflows 06 &amp; 07: Autopilot and Error Handling</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-2" style="gap: 20px;">
+            <div class="card" style="border-top: 3px solid var(--orange);">
+              <div class="card-title" style="color: var(--orange);">06 AUTOPILOT (DAILY RUNNER)</div>
+              <div class="card-desc" style="font-size: 12px; line-height: 1.6;">
+                • Scans every student daily at 09:00 IST.<br>
+                • Recovers missed days automatically if server was asleep.<br>
+                • Records an immutable Agent Heartbeat in student activity.<br>
+                • Queues daily reminders for upcoming deadlines.<br>
+                • Idempotent keys guarantee zero duplicate alerts.
+              </div>
+            </div>
+            <div class="card" style="border-top: 3px solid var(--red);">
+              <div class="card-title" style="color: var(--red);">07 ERROR HANDLER (SELF-HEALING)</div>
+              <div class="card-desc" style="font-size: 12px; line-height: 1.6;">
+                • Global Error Trigger catches any failing workflow node.<br>
+                • Shared Sanitizer strips JWTs, passwords, and API keys.<br>
+                • Maps failures to their specific resource owner only.<br>
+                • Logs visible diagnostics in student activity log—never silent failure.<br>
+                • Unattributed system errors remain private from public exposure.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Honest execution state &amp; secret sanitation</span>
+          <span>Slide 17 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 18: Workflow 08: Discovery -->
+      <div class="slide dark" data-slide="18">
+        <div>
+          <div class="kicker">DISCOVERY ADAPTERS</div>
+          <h2 class="slide-title">Workflow 08: Discovery</h2>
+        </div>
+        <div class="slide-body">
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 16px;">
+              <span style="font-weight: 700; color: #fff;">Lever Postings API</span>
+              <span class="badge badge-green">Corroborated Trust</span>
+              <span style="font-size: 11px; color: #CBD5E1;">Direct employer endpoints. High trust, structured salary &amp; deadline fields.</span>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 16px;">
+              <span style="font-weight: 700; color: #fff;">Greenhouse Boards API</span>
+              <span class="badge badge-green">Corroborated Trust</span>
+              <span style="font-size: 11px; color: #CBD5E1;">Official company career pages. Zero scraping required; clean JSON.</span>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 16px;">
+              <span style="font-weight: 700; color: #fff;">Ashby Job-Board API</span>
+              <span class="badge badge-green">Corroborated Trust</span>
+              <span style="font-size: 11px; color: #CBD5E1;">Modern tech startups. Full markdown job specifications.</span>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 16px;">
+              <span style="font-weight: 700; color: #fff;">Devpost Hackathons</span>
+              <span class="badge badge-blue">Attributed Trust</span>
+              <span style="font-size: 11px; color: #CBD5E1;">Student hackathons, prize pools, submission dates, and developer themes.</span>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 10px 16px;">
+              <span style="font-weight: 700; color: #fff;">JSearch India Feeds</span>
+              <span class="badge badge-blue">Attributed Trust</span>
+              <span style="font-size: 11px; color: #CBD5E1;">Aggregated tech internships across Indian metropolitan hubs.</span>
+            </div>
+          </div>
+          <div style="font-size: 11.5px; color: var(--orange); font-weight: 700;">
+            Key Efficiency: Structured feeds use deterministic code normalization—ZERO LLM tokens spent.
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Runs every 15 minutes</span>
+          <span>Slide 18 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 19: Workflows 09 and 10: Plan and Resume -->
+      <div class="slide light" data-slide="19">
+        <div>
+          <div class="kicker">SPECIALIZED PIPELINE CAPABILITIES</div>
+          <h2 class="slide-title">Workflows 09 &amp; 10: Plan and Resume</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-2" style="gap: 20px;">
+            <div class="card">
+              <div class="badge badge-gray" style="align-self: flex-start;">PRD A-05 ARCHITECTURE DECISION</div>
+              <div class="card-title" style="color: #64748B;">09 Weekly Plan (Retired)</div>
+              <div class="card-desc" style="font-size: 12px; line-height: 1.6;">
+                • Originally planned 30-minute blocks for application preparation.<br>
+                • Retired in favor of direct 7-stage Kanban execution in /applications.<br>
+                • API routes return 410 GONE.<br>
+                • Route /plan cleanly redirects to /applications.
+              </div>
+            </div>
+            <div class="card" style="border: 2px solid var(--orange);">
+              <div class="badge badge-orange" style="align-self: flex-start;">OFFLINE SAFE EXTRACTION</div>
+              <div class="card-title" style="color: var(--orange);">10 Resume Processing</div>
+              <div class="card-desc" style="font-size: 12px; line-height: 1.6;">
+                • Deterministic in-process PDF parsing via unpdf library.<br>
+                • Zero external LLM dependency—immune to quotas or rate limits.<br>
+                • Extracts branch, CGPA, graduation year, skills, and projects.<br>
+                • Student reviews and confirms in onboarding Step 1.<br>
+                • <strong>PRIVACY GUARANTEE:</strong> Raw resume PDF is permanently purged upon confirmation.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Data retention &amp; architectural honesty</span>
+          <span>Slide 19 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 20: The 00-Series: Connectivity Checks -->
+      <div class="slide dark" data-slide="20">
+        <div>
+          <div class="kicker">INTEGRATION PROOFS</div>
+          <h2 class="slide-title">The 00-Series: Connectivity Checks</h2>
+        </div>
+        <div class="slide-body">
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 12px 16px;">
+              <div>
+                <div style="font-weight: 700; color: var(--orange);">00 Foundation</div>
+                <div style="font-size: 10px; color: var(--text-muted);">Webhook to database</div>
+              </div>
+              <div style="font-size: 11px; color: #CBD5E1; max-width: 580px;">Authenticated webhook delivery, test user validation, and atomic write confirmation.</div>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 12px 16px;">
+              <div>
+                <div style="font-weight: 700; color: var(--orange);">00 Gemini Connection</div>
+                <div style="font-size: 10px; color: var(--text-muted);">AI credential validation</div>
+              </div>
+              <div style="font-size: 11px; color: #CBD5E1; max-width: 580px;">Validates Google AI Studio / Gemini API credentials with a live LLM chain test.</div>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 12px 16px;">
+              <div>
+                <div style="font-weight: 700; color: var(--orange);">00 Email Out</div>
+                <div style="font-size: 10px; color: var(--text-muted);">SMTP gateway check</div>
+              </div>
+              <div style="font-size: 11px; color: #CBD5E1; max-width: 580px;">Verifies Gmail SMTP credentials by dispatching a test message to the configured address.</div>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 12px 16px;">
+              <div>
+                <div style="font-weight: 700; color: var(--orange);">00 Email In</div>
+                <div style="font-size: 10px; color: var(--text-muted);">IMAP receive &amp; route</div>
+              </div>
+              <div style="font-size: 11px; color: #CBD5E1; max-width: 580px;">Checks IMAP authentication, mailbox access, and plus-addressed forwarding routing.</div>
+            </div>
+            <div class="card" style="flex-direction: row; justify-content: space-between; align-items: center; padding: 12px 16px;">
+              <div>
+                <div style="font-weight: 700; color: var(--orange);">00 Calendar</div>
+                <div style="font-size: 10px; color: var(--text-muted);">Google Calendar API write</div>
+              </div>
+              <div style="font-size: 11px; color: #CBD5E1; max-width: 580px;">Executes authenticated calendar write, confirms event creation, and verifies cleanup.</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Proves each integration end-to-end during setup</span>
+          <span>Slide 20 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 21: Built to Fail Safely -->
+      <div class="slide light" data-slide="21">
+        <div>
+          <div class="kicker">DEFENSIVE ARCHITECTURE</div>
+          <h2 class="slide-title">Built to Fail Safely</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-3" style="gap: 16px;">
+            <div class="card">
+              <div class="card-title">🔄 Idempotent Intake</div>
+              <div class="card-desc">Unique request IDs ensure duplicate or overlapping submissions create exactly one database row.</div>
+            </div>
+            <div class="card">
+              <div class="card-title">🔒 Fenced Work Claims</div>
+              <div class="card-desc">Claim tokens and revisions prevent stale background runs from overwriting current decisions.</div>
+            </div>
+            <div class="card">
+              <div class="card-title">👁️ Visible Failures</div>
+              <div class="card-desc">Quota limits and interrupted states are shown transparently in the UI—never silent success.</div>
+            </div>
+            <div class="card">
+              <div class="card-title">✉️ Safe Retries</div>
+              <div class="card-desc">No blind retries after uncertain socket sends. Calendar events reconcile state before create.</div>
+            </div>
+            <div class="card">
+              <div class="card-title">🔑 Redacted Secrets</div>
+              <div class="card-desc">A shared sanitizer strips API keys and credentials before logging errors to the student activity stream.</div>
+            </div>
+            <div class="card">
+              <div class="card-title">🔔 Separate Consents</div>
+              <div class="card-desc">Email notifications and Google Calendar sync have independent opt-ins. Downloadable .ics links always work.</div>
+            </div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Reliability Engineering</span>
+          <span>Slide 21 of 22</span>
+        </div>
+      </div>
+
+      <!-- SLIDE 22: Verified, Honest, Next -->
+      <div class="slide dark" data-slide="22">
+        <div>
+          <div class="kicker">STATUS &amp; ROADMAP</div>
+          <h2 class="slide-title">Verified, Honest, Next</h2>
+        </div>
+        <div class="slide-body">
+          <div class="grid-4" style="margin-bottom: 20px;">
+            <div class="card" style="text-align: center; border: 1px solid var(--orange);">
+              <div style="font-size: 24px; font-weight: 900; color: var(--orange);">246</div>
+              <div style="font-size: 10px; color: var(--text-muted);">CONTRACT TESTS PASSING</div>
+            </div>
+            <div class="card" style="text-align: center; border: 1px solid var(--orange);">
+              <div style="font-size: 24px; font-weight: 900; color: var(--orange);">21</div>
+              <div style="font-size: 10px; color: var(--text-muted);">SQL TEST SUITES</div>
+            </div>
+            <div class="card" style="text-align: center; border: 1px solid var(--orange);">
+              <div style="font-size: 24px; font-weight: 900; color: var(--orange);">70</div>
+              <div style="font-size: 10px; color: var(--text-muted);">DATABASE MIGRATIONS</div>
+            </div>
+            <div class="card" style="text-align: center; border: 1px solid var(--orange);">
+              <div style="font-size: 24px; font-weight: 900; color: var(--orange);">18</div>
+              <div style="font-size: 10px; color: var(--text-muted);">OPTIMIZED WEB ROUTES</div>
+            </div>
+          </div>
+
+          <div class="grid-3" style="gap: 16px; margin-bottom: 16px;">
+            <div class="card" style="border-top: 3px solid var(--green);">
+              <div class="card-title" style="color: var(--green);">WORKING TODAY</div>
+              <div class="card-desc" style="font-size: 11px;">
+                • Full autonomous loop: discover, extract, evaluate, ACT/ASK/SKIP.<br>
+                • Resume-first onboarding with verified fact extraction.<br>
+                • Approval Center with private n8n Wait resumption.<br>
+                • Earned Autonomy: 3 decisions propose active standing rules.
+              </div>
+            </div>
+            <div class="card" style="border-top: 3px solid #F59E0B;">
+              <div class="card-title" style="color: #F59E0B;">BOUNDARIES (HONEST)</div>
+              <div class="card-desc" style="font-size: 11px;">
+                • Demo running on localhost, Docker n8n, cloud Supabase.<br>
+                • Free-tier AI rate limits enforce daily quota guards.<br>
+                • LinkedIn, Unstop, Internshala via alerts and capture only.<br>
+                • Never auto-submits applications to employers.
+              </div>
+            </div>
+            <div class="card" style="border-top: 3px solid var(--blue);">
+              <div class="card-title" style="color: var(--blue);">NEXT ROADMAP</div>
+              <div class="card-desc" style="font-size: 11px;">
+                • Stable hosted multi-tenant cloud deployment.<br>
+                • Expanded official ATS integration (Workday, SmartRecruiters).<br>
+                • Direct college training and placement cell (TPO) integration.<br>
+                • Autonomous mock interview preparation tailored to matches.
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="background: var(--orange); border: none; padding: 12px 20px; display: flex; flex-direction: row; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 14px; font-weight: 800; color: #fff;">“AI reads. Code decides. n8n orchestrates. The student stays in control.”</div>
+              <div style="font-size: 11px; color: #FFE3D6;">Thank you! Questions? Happy to inspect any node, workflow, or SQL migration.</div>
+            </div>
+            <div style="font-size: 20px; font-weight: 900; color: #fff;">Trajectory</div>
+          </div>
+        </div>
+        <div class="slide-footer">
+          <span>Thank You!</span>
+          <span>Slide 22 of 22</span>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Progress Bar at Bottom -->
+  <div class="progress-bar">
+    <div class="progress-fill" id="progress"></div>
+  </div>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 22;
+
+    function showSlide(n) {
+      if (n < 1) n = 1;
+      if (n > totalSlides) n = totalSlides;
+      currentSlide = n;
+
+      document.querySelectorAll('.slide').forEach(slide => {
+        slide.classList.remove('active');
+        if (parseInt(slide.getAttribute('data-slide')) === currentSlide) {
+          slide.classList.add('active');
+        }
+      });
+
+      document.getElementById('counter').innerText = `${currentSlide} / ${totalSlides}`;
+      document.getElementById('progress').style.width = `${(currentSlide / totalSlides) * 100}%`;
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) showSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) showSlide(currentSlide - 1);
+    }
+
+    function toggleFullscreen() {
+      const elem = document.getElementById('viewport');
+      if (!document.fullscreenElement) {
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen();
+        } else if (elem.webkitRequestFullscreen) {
+          elem.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Keyboard navigation
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      } else if (e.key === 'Home') {
+        showSlide(1);
+      } else if (e.key === 'End') {
+        showSlide(totalSlides);
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullscreen();
+      }
+    });
+
+    // Touch swipe support
+    let touchStartX = 0;
+    let touchEndX = 0;
+    const viewport = document.getElementById('viewport');
+
+    viewport.addEventListener('touchstart', e => {
+      touchStartX = e.changedTouches[0].screenX;
+    }, false);
+
+    viewport.addEventListener('touchend', e => {
+      touchEndX = e.changedTouches[0].screenX;
+      if (touchStartX - touchEndX > 50) nextSlide();
+      if (touchEndX - touchStartX > 50) prevSlide();
+    }, false);
+  </script>
+</body>
+</html>
